@@ -338,6 +338,37 @@ textarea.field{resize:vertical;width:100%;line-height:1.55}
 a.btn{text-decoration:none;color:inherit}
 .ptext{max-height:12rem}
 .kc-reply{color:var(--amber)}
+.kc-p{color:var(--green)} .kc-adm{color:var(--amber)}
+.citems{flex-direction:row!important;flex-wrap:wrap;gap:3px!important}
+.ci2{width:1.7rem;height:1.7rem;border-radius:7px;display:inline-grid;place-items:center;background:var(--surface);border:1px solid var(--line);flex:none}
+.ci2 .ic{width:1.1rem;height:1.1rem}
+.ci2.g{background:transparent;border:1.5px solid var(--gc,var(--k-g))}
+.ci2.task{border-style:dashed;border-color:var(--muted)}
+.ci2.synced{box-shadow:inset 0 -2px 0 var(--k-g)}
+.ci2.hot{background:var(--red-soft);border-color:var(--red)}
+.ci2.hot .ic{color:var(--red)}
+.ci2.warn{background:var(--amber-soft);border-color:var(--amber)}
+.ci2.warn .ic{color:var(--amber)}
+.ci2.busy{background:repeating-linear-gradient(135deg,var(--surface) 0 3px,var(--hatch) 3px 6px);border-color:transparent}
+.ci2.busy .ic{color:var(--muted)}
+.ci2.dim{opacity:.5}
+@media (min-width:1100px){.ci2{width:2.05rem;height:2.05rem;border-radius:8px}.ci2 .ic{width:1.3rem;height:1.3rem}.citems{gap:4px!important}}
+@media (max-width:700px){.ci2{width:1.3rem;height:1.3rem;border-radius:5px}.ci2 .ic{width:.85rem;height:.85rem}}
+.legend .ci2{width:1.35rem;height:1.35rem}
+.legend .ci2 .ic{width:.9rem;height:.9rem}
+.iconhelp{position:relative}
+.iconhelp summary{cursor:pointer;color:var(--accent);list-style:none}
+.iconhelp summary::-webkit-details-marker{display:none}
+.iconlist{position:absolute;right:0;top:1.6rem;z-index:15;width:min(34rem,90vw);background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:.7rem;display:grid;grid-template-columns:repeat(auto-fill,minmax(7rem,1fr));gap:.35rem .6rem;box-shadow:0 10px 30px rgb(0 0 0 / .5)}
+.iconlist span{display:flex;align-items:center;gap:.35rem;font-size:.8rem;color:var(--ink)}
+.iconlist .ic{width:1.1rem;height:1.1rem}
+.callist{display:flex;flex-direction:column;gap:.3rem;max-height:12rem;overflow:auto;background:var(--surface-2);border-radius:8px;padding:.5rem .6rem}
+.cdot{width:.7rem;height:.7rem;border-radius:50%;display:inline-block;flex:none}
+.gslist{display:flex;flex-direction:column;gap:3px;max-height:50vh;overflow:auto}
+.gsrow{display:grid;grid-template-columns:auto 1.2rem 7rem minmax(0,1fr);gap:.5rem;align-items:center;padding:.45rem .55rem;border-radius:8px;background:var(--surface-2);cursor:pointer;font-size:.9rem;color:var(--ink)!important}
+.gsrow .t{font-family:var(--mono);font-size:.8rem;color:var(--muted)}
+.gsrow input{accent-color:var(--accent);width:1rem;height:1rem}
+
 .mail{display:grid;grid-template-columns:4px minmax(0,1fr);gap:.75rem;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:.65rem .8rem .7rem 0;overflow:hidden;cursor:default}
 .mail:hover{border-color:var(--line)}
 .mhead{all:unset;cursor:pointer;display:flex;flex-direction:column;gap:.1rem;min-width:0}
@@ -416,17 +447,7 @@ a.btn{text-decoration:none;color:inherit}
         <button class="iconbtn" data-act="thisMonth" type="button">오늘</button>
         <span class="vtog" role="group" aria-label="보기"><button type="button" data-act="view" data-v="weeks" id="v-weeks">5주</button><button type="button" data-act="view" data-v="month" id="v-month">월</button></span>
         <span class="grow"></span>
-        <div class="legend">
-          <span><span data-ic="학사" data-c="kc-학사"></span>학사</span>
-          <span><span data-ic="회의" data-c="kc-회의"></span>회의</span>
-          <span><span data-ic="행사" data-c="kc-행사"></span>행사</span>
-          <span><span data-ic="마감" data-c="kc-마감"></span>마감</span>
-          <span><span data-ic="할일" data-c="kc-할일"></span>할 일</span>
-          <span><span data-ic="reply" data-c="kc-reply"></span>답장 기한</span>
-          <span><span data-ic="gcal" data-c="kc-g"></span>구글</span>
-          <span><span data-ic="lock"></span>불가</span>
-          <span><span class="free f-good">빈 4h</span>근무시간 중 빈 시간</span>
-        </div>
+        <div class="legend" id="legend"></div>
       </div>
       <div class="mgrid" id="cal"></div>
     </section>
@@ -480,9 +501,9 @@ a.btn{text-decoration:none;color:inherit}
 <script>
 (() => {
 const DEFAULTS = { semesterLabel: '2026학년도 2학기', semesterStart: '2026-08-31', signature: '컴퓨터공학과 학과장 드림', assistant: '학과 조교',
-  workStart: '09:00', workEnd: '18:00', workDays: [1, 2, 3, 4, 5], weekly: [], googleShow: true, googleBusy: true, googlePush: true };
+  workStart: '09:00', workEnd: '18:00', workDays: [1, 2, 3, 4, 5], weekly: [], googleShow: true, googleBusy: true, googlePush: false, gCals: null, gPushCal: 'primary' };
 const S = { tasks: [], events: [], emails: [], blocks: [], settings: { ...DEFAULTS }, settingsU: 0, deleted: {} };
-const UI = { view: 'weeks', wOff: 0, tf: 'open', mf: 'open', month: null, selDay: null, rail: 'day', dayForm: null, prefill: null, finder: null, bd: null, dlg: null, cap: 6, openId: null, edits: {}, analyzeCtl: null, draftCtl: null, confirmDel: false };
+const UI = { view: 'weeks', wOff: 0, tf: 'open', mf: 'open', month: null, selDay: null, rail: 'day', dayForm: null, prefill: null, finder: null, bd: null, dlg: null, cap: 14, openId: null, edits: {}, analyzeCtl: null, draftCtl: null, confirmDel: false };
 
 
 /* ---------- icons (inline SVG, stroke = currentColor) ---------- */
@@ -522,6 +543,97 @@ const IP = {
   pin:'<path d="M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11z"/><circle cx="12" cy="10" r="2"/>'
 };
 const ic = (n, cls = '') => `<svg class="ic ${cls}" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${IP[n] || ''}</svg>`;
+/* ---------- topic icons: pick an icon from the words in a title ---------- */
+Object.assign(IP, {
+  interview: '<circle cx="8" cy="9" r="3.5"/><path d="M2 21a6 6 0 0 1 12 0"/><path d="M14 3h8v6h-4l-2 2V9h-2z"/>',
+  hire: '<circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0"/><path d="M19 8v6M16 11h6"/>',
+  gavel: '<path d="m14 4 6 6M11 7l6 6M12.5 5.5l-4 4M17.5 10.5l-4 4"/><path d="m10.5 11.5-7 7"/><path d="M13 21h8"/>',
+  video: '<rect x="2" y="6" width="14" height="12" rx="2"/><path d="m16 10 6-3v10l-6-3"/>',
+  lecture: '<rect x="3" y="4" width="18" height="12" rx="1"/><path d="M8 20l4-4 4 4M7 8h6M7 11h4"/>',
+  mic: '<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4M8 22h8"/>',
+  paper: '<path d="M6 2h9l5 5v15H6z"/><path d="M14 2v6h6M9 13h8M9 17h6"/>',
+  exam: '<rect x="4" y="3" width="12" height="18" rx="1"/><path d="M7 8h6M7 12h6M7 16h3"/><path d="m20 6-4 9-1.5 1 .2-1.8 4-9z"/>',
+  grade: '<rect x="3" y="3" width="18" height="18" rx="3"/><path d="M6.5 16l3-8 3 8M7.5 13.5h4M17 9v5M14.5 11.5h5"/>',
+  door: '<path d="M3 21h18M6 21V3h10v18"/><circle cx="13" cy="12" r="1"/><path d="M16 7h3v14"/>',
+  medal: '<circle cx="12" cy="15" r="5"/><path d="M8.5 10.5 6 3h4l2 5 2-5h4l-2.5 7.5"/>',
+  won: '<circle cx="12" cy="12" r="9"/><path d="M7 8l2 8 3-6 3 6 2-8M6 11.5h12"/>',
+  pen: '<path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+  plane: '<path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/>',
+  train: '<rect x="5" y="3" width="14" height="14" rx="3"/><path d="M5 11h14M9 21l1.5-4M15 21l-1.5-4M9 14h.01M15 14h.01"/>',
+  car: '<path d="M3 13l2-6h14l2 6v4H3z"/><path d="M5 17v2M19 17v2M7.5 14h.01M16.5 14h.01"/>',
+  hospital: '<rect x="3" y="3" width="18" height="18" rx="3"/><path d="M12 8v8M8 12h8"/>',
+  cake: '<path d="M4 21v-9h16v9M2 21h20M4 15c2 1.5 4 1.5 5.3 0 1.4 1.5 4 1.5 5.4 0 1.3 1.5 3.3 1.5 5.3 0M12 12V8"/><path d="M12 4.5c.7.8.7 1.8 0 2.5-.7-.7-.7-1.7 0-2.5z"/>',
+  food: '<path d="M5 2v7a3 3 0 0 0 6 0V2M8 2v20M18 22V2c-2 1.5-3 4-3 7v4h3"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  shield: '<path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/>',
+  sword: '<path d="M14.5 17.5 3 6V3h3l11.5 11.5M13 19l6-6M16 16l4 4M19 21l2-2"/>',
+  dumbbell: '<path d="M6 6v12M18 6v12M3 9v6M21 9v6M6 12h12"/>',
+  fish: '<path d="M6.5 12c3-5 9.5-5 12.5 0-3 5-9.5 5-12.5 0z"/><path d="M6.5 12 2 8.5v7z"/><path d="M15.5 11h.01"/>',
+  chat: '<path d="M21 12a8 8 0 0 1-11.5 7.2L4 21l1.8-5A8 8 0 1 1 21 12z"/><path d="M8 12h.01M12 12h.01M16 12h.01"/>',
+  users: '<circle cx="12" cy="7" r="3"/><circle cx="5" cy="10" r="2"/><circle cx="19" cy="10" r="2"/><path d="M6 21a6 6 0 0 1 12 0M1 19a4 4 0 0 1 6-3.5M23 19a4 4 0 0 0-6-3.5"/>',
+  doc: '<path d="M6 2h9l5 5v15H6z"/><path d="M14 2v6h6"/><path d="m9 15 2 2 4-4"/>',
+  phone: '<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/>',
+  flask: '<path d="M9 2h6M10 2v7L4 20a1 1 0 0 0 .9 1.5h14.2A1 1 0 0 0 20 20L14 9V2M7 15h10"/>',
+  book: '<path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v17H6.5A2.5 2.5 0 0 0 4 21.5z"/><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>',
+  server: '<rect x="3" y="3" width="18" height="7" rx="2"/><rect x="3" y="14" width="18" height="7" rx="2"/><path d="M7 6.5h.01M7 17.5h.01"/>',
+  vote: '<path d="M4 21h16M6 21V11h12v10M9 7l2 2 4-4"/>',
+  home: '<path d="m3 11 9-8 9 8M5 9v12h14V9"/><path d="M10 21v-6h4v6"/>'
+});
+const ICON_RULES = [
+  [/면접|인터뷰|interview/i, 'interview'],
+  [/채용|임용|공채|공개\s*발표|초빙/, 'hire'],
+  [/위원회|심의|협의회|운영위|총회|이사회|평의원/, 'gavel'],
+  [/줌|zoom|온라인|화상|웨비나|webinar|teams/i, 'video'],
+  [/특강|강의|수업|강연|lecture|class/i, 'lecture'],
+  [/학회|세미나|컨퍼런스|conference|심포지엄|워크숍|workshop|포럼|colloquium|발표/i, 'mic'],
+  [/논문|원고|저널|journal|심사|리뷰|review|게재/i, 'paper'],
+  [/시험|중간고사|기말고사|퀴즈|평가/, 'exam'],
+  [/성적/, 'grade'],
+  [/졸업|학위|디펜스|defense/i, '학사'],
+  [/입학|입시|수시|정시|모집|admission/i, 'door'],
+  [/장학|포상|수상|시상/, 'medal'],
+  [/보험|세금|납부|만기|은행|연말정산/, 'shield'],
+  [/예산|정산|구매|비용|결제|회계|견적|발주|지출/, 'won'],
+  [/결재|서명|날인|승인/, 'pen'],
+  [/출장|항공|비행|공항|해외|flight/i, 'plane'],
+  [/ktx|srt|기차|열차|예매/i, 'train'],
+  [/운전|차량|자동차|주차/, 'car'],
+  [/병원|진료|검진|치과|의원/, 'hospital'],
+  [/생일|축하|기념일|결혼|웨딩/, 'cake'],
+  [/식사|점심|저녁|만찬|회식|오찬|조찬|커피|티타임/, 'food'],
+  [/휴가|휴무|연가|방학|휴일|공휴일|연휴/, 'sun'],
+  [/검도|본국검|검법|무술/, 'sword'],
+  [/운동|헬스|체육|골프|등산|마라톤/, 'dumbbell'],
+  [/낚시/, 'fish'],
+  [/상담|면담|멘토링/, 'chat'],
+  [/학생|동문|신입생|재학생|대학원생/, 'users'],
+  [/제출|보고서|보고|서류|공문|신청|등록|양식/, 'doc'],
+  [/전화|통화/, 'phone'],
+  [/연구|실험|과제|프로젝트|r&d|국책/i, 'flask'],
+  [/교육|연수|훈련|오리엔테이션|설명회/, 'book'],
+  [/서버|시스템|점검|전산|홈페이지|네트워크/, 'server'],
+  [/투표|선거/, 'vote'],
+  [/어머니|아버지|부모|가족|이사|집안/, 'home'],
+  [/회의|미팅|meeting|협의|논의/i, '회의'],
+  [/행사|축제|전시|개막|기념식/, '행사'],
+  [/마감|deadline|기한/i, '마감']
+];
+const ICON_GROUP = {
+  interview: 'kc-회의', hire: 'kc-회의', users: 'kc-회의', chat: 'kc-회의', 회의: 'kc-회의', video: 'kc-회의', phone: 'kc-회의',
+  lecture: 'kc-학사', mic: 'kc-학사', paper: 'kc-학사', exam: 'kc-학사', grade: 'kc-학사', 학사: 'kc-학사', door: 'kc-학사', book: 'kc-학사', flask: 'kc-학사', medal: 'kc-학사',
+  plane: 'kc-행사', train: 'kc-행사', car: 'kc-행사', 행사: 'kc-행사',
+  hospital: 'kc-p', cake: 'kc-p', food: 'kc-p', sun: 'kc-p', home: 'kc-p', sword: 'kc-p', dumbbell: 'kc-p', fish: 'kc-p',
+  won: 'kc-adm', pen: 'kc-adm', shield: 'kc-adm', doc: 'kc-adm', gavel: 'kc-adm', vote: 'kc-adm', server: 'kc-adm',
+  마감: 'kc-마감'
+};
+const GENERIC_ICONS = new Set(['학사', '회의', '행사', '마감', 'gcal', '할일', 'lock']);
+function iconFor(text, fallback) {
+  const t = String(text || '');
+  for (const [re, k] of ICON_RULES) if (re.test(t)) return k;
+  return fallback;
+}
+const ICON_LEGEND = [['interview', '면접'], ['hire', '채용'], ['회의', '회의'], ['gavel', '위원회'], ['video', '온라인'], ['lecture', '강의'], ['mic', '학회·세미나'], ['paper', '논문·심사'], ['exam', '시험'], ['grade', '성적'], ['학사', '졸업·학위'], ['door', '입시'], ['medal', '장학·시상'], ['users', '학생'], ['chat', '상담'], ['book', '교육'], ['flask', '연구'], ['doc', '제출·보고'], ['pen', '결재'], ['won', '예산·정산'], ['shield', '보험·세금'], ['server', '전산'], ['vote', '선거'], ['plane', '출장'], ['train', '기차'], ['car', '차량'], ['hospital', '병원'], ['food', '식사'], ['cake', '축하'], ['sun', '휴가'], ['home', '가족'], ['sword', '검도'], ['dumbbell', '운동'], ['fish', '낚시'], ['phone', '전화'], ['행사', '행사'], ['마감', '마감'], ['할일', '할 일'], ['reply', '답장 기한'], ['lock', '불가 시간']];
+
 const PRIO_IC = { high: ['flame', 'p-high', '높음'], mid: ['flag', 'p-mid', '보통'], low: ['dash', 'p-low', '낮음'] };
 const prioIc = p => { const [n, c, l] = PRIO_IC[p] || PRIO_IC.mid; return `<span class="pi ${c}" title="중요도 ${l}">${ic(n)}</span>`; };
 
@@ -619,7 +731,7 @@ function renderFocus() {
   const top = items.slice(0, 8);
   $('focus').innerHTML = top.length ? top.map(f => {
     const lv = f.sc >= 85 ? 'lv3' : f.sc >= 65 ? 'lv2' : 'lv1';
-    return `<button type="button" class="fcard ${lv}" ${f.act || 'data-act="noop"'}><span class="fi">${ic(f.icon, f.icon === 'gcal' ? 'kc-g' : '')}</span><span style="min-width:0"><div class="why">${esc(f.why)}</div><div class="ft">${esc(f.title)}</div></span></button>`;
+    return `<button type="button" class="fcard ${lv}" ${f.act || 'data-act="noop"'}><span class="fi">${(() => { const k = GENERIC_ICONS.has(f.icon) ? iconFor(f.title, f.icon) : f.icon; return ic(k, k === 'gcal' ? 'kc-g' : ''); })()}</span><span style="min-width:0"><div class="why">${esc(f.why)}</div><div class="ft">${esc(f.title)}</div></span></button>`;
   }).join('') : `<div class="empty" style="grid-column:1/-1">${ic('check')} 급한 일이 없습니다.</div>`;
 }
 
@@ -837,8 +949,8 @@ function gridRange() { const a = gridStart(); return [a, addDays(a, gridRows() *
 
 /* ---------- Google sign-in (Drive storage + Calendar) ---------- */
 const CFG = window.DASH_CONFIG || {};
-const SCOPES = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/calendar.events';
-const G = { state: 'init', events: [], storedAt: 0, partial: false, key: '', token: null, exp: 0, tc: null };
+const SCOPES = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.calendarlist.readonly';
+const G = { state: 'init', events: [], cals: [], storedAt: 0, partial: false, key: '', token: null, exp: 0, tc: null };
 function clientId() { try { return localStorage.getItem('gClientId') || CFG.googleClientId || ''; } catch { return CFG.googleClientId || ''; } }
 const gReady = () => !!G.token && Date.now() < G.exp;
 const gisLoaded = () => !!(window.google && google.accounts && google.accounts.oauth2);
@@ -852,7 +964,7 @@ function initTokenClient() {
       G.token = r.access_token; G.exp = Date.now() + (Number(r.expires_in) || 3600) * 1000 - 60000;
       try { localStorage.setItem('gWasSigned', '1'); } catch {}
       G.state = 'loading'; renderGChip();
-      syncNow(); gLoad(true);
+      syncNow(); gLoadCals().then(() => gLoad(true));
     },
     error_callback: () => { G.state = 'signin'; renderGChip(); renderSync(); }
   });
@@ -911,23 +1023,49 @@ function gWindow() {
   const [a, b] = gridRange(), t = todayStr(), t22 = addDays(t, 22);
   return [a < t ? a : t, b > t22 ? b : t22];
 }
+async function gLoadCals() {
+  if (!gReady()) return;
+  try {
+    const r = await gapi('https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=reader&maxResults=100');
+    G.cals = (r.items || []).filter(c => !c.deleted && !c.hidden).map(c => ({ id: String(c.id), name: String(c.summaryOverride || c.summary || c.id), color: /^#[0-9a-f]{6}$/i.test(c.backgroundColor || '') ? c.backgroundColor : '', primary: !!c.primary, write: c.accessRole === 'owner' || c.accessRole === 'writer' }));
+  } catch (e) { if (e.status === 403) toast('캘린더 목록을 읽지 못했습니다. 구글 로그인을 다시 하면 권한을 새로 묻습니다.'); }
+  if (UI.dlg === 'settings') openSettings();
+}
+function selectedCals() {
+  const sel = S.settings.gCals;
+  if (Array.isArray(sel)) return sel;
+  const p = G.cals.find(c => c.primary);
+  return [p ? p.id : 'primary'];
+}
+const calInfo = id => G.cals.find(c => c.id === id) || (id === 'primary' ? G.cals.find(c => c.primary) : null) || { id, name: id === 'primary' ? '기본 캘린더' : id, color: '' };
 async function gLoad(force) {
   if (!gReady()) return;
   if (S.settings.googleShow === false) { G.events = []; G.state = 'hidden'; renderAll(); return; }
-  const [a, b] = gWindow(), key = a + b;
+  const cals = selectedCals();
+  const [a, b] = gWindow(), key = a + b + cals.join(',');
   if (!force && key === G.key && Date.now() - G.storedAt < 300000) return;
   G.key = key;
   try {
-    let items = [], pageToken = '', n = 0;
-    do {
-      const q = new URLSearchParams({ timeMin: new Date(a + 'T00:00:00').toISOString(), timeMax: new Date(b + 'T00:00:00').toISOString(), singleEvents: 'true', orderBy: 'startTime', maxResults: '250', timeZone: TZ });
-      if (pageToken) q.set('pageToken', pageToken);
-      const r = await gapi('https://www.googleapis.com/calendar/v3/calendars/primary/events?' + q);
-      items = items.concat(r.items || []); pageToken = r.nextPageToken || ''; n++;
-    } while (pageToken && n < 4);
-    G.events = parseG({ events: items }); G.partial = !!pageToken; G.storedAt = Date.now(); G.state = 'ok';
+    let all = [], partial = false;
+    for (const cid of cals) {
+      let items = [], pageToken = '', n = 0;
+      do {
+        const q = new URLSearchParams({ timeMin: new Date(a + 'T00:00:00').toISOString(), timeMax: new Date(b + 'T00:00:00').toISOString(), singleEvents: 'true', orderBy: 'startTime', maxResults: '250', timeZone: TZ });
+        if (pageToken) q.set('pageToken', pageToken);
+        const r = await gapi(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(cid)}/events?` + q);
+        items = items.concat(r.items || []); pageToken = r.nextPageToken || ''; n++;
+      } while (pageToken && n < 4);
+      if (pageToken) partial = true;
+      const ci = calInfo(cid);
+      all = all.concat(parseG({ events: items }).map(g => ({ ...g, cal: cid, calName: ci.name, color: ci.color })));
+    }
+    G.events = all; G.partial = partial; G.storedAt = Date.now(); G.state = 'ok';
   } catch (e) {
-    if (e.code !== 'signin') { G.state = G.events.length ? 'stale' : 'error'; if (e.status === 403) toast('구글 캘린더를 읽지 못했습니다. Google Cloud에서 Calendar API를 사용 설정했는지 확인해 주세요.'); }
+    if (e.code !== 'signin') {
+      G.state = G.events.length ? 'stale' : 'error';
+      if (e.status === 403) toast('구글 캘린더를 읽지 못했습니다. Google Cloud에서 Calendar API를 사용 설정했는지 확인해 주세요.');
+      if (e.status === 404) toast('선택한 캘린더 중 찾을 수 없는 것이 있습니다. 설정에서 다시 골라 주세요.');
+    }
   }
   renderAll();
 }
@@ -949,7 +1087,7 @@ function renderGChip() {
   el.innerHTML = `${ic(G.state === 'loading' ? 'refresh' : 'gcal')}<span>${esc(label)}</span>`;
   el.title = G.state === 'ok' ? '눌러서 새로 불러오기' : '';
 }
-async function pushGoogle(doc, id) {
+async function pushGoogle(doc, id, calId, quiet) {
   if (!gReady()) { toast('구글에 로그인한 뒤 "구글로" 버튼으로 다시 보내세요.'); return; }
   const body = { summary: doc.title, description: '학과장실 대시보드에서 추가' + (doc.emailId ? ' (메일에서 가져온 일정)' : '') };
   if (doc.location) body.location = doc.location;
@@ -961,12 +1099,48 @@ async function pushGoogle(doc, id) {
     body.start = { date: doc.date }; body.end = { date: addDays(last, 1) };
   }
   try {
-    const r = await gapi('https://www.googleapis.com/calendar/v3/calendars/primary/events', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    await patch('events', id, { googleId: String(r.id || 'pushed'), googleLink: typeof r.htmlLink === 'string' ? r.htmlLink : '' });
-    toast('구글 캘린더에도 추가했습니다.'); gLoad(true);
+    const target = calId || S.settings.gPushCal || 'primary';
+    const r = await gapi(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(target)}/events`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    await patch('events', id, { googleId: String(r.id || 'pushed'), googleCal: target, googleLink: typeof r.htmlLink === 'string' ? r.htmlLink : '' });
+    if (!quiet) { toast(`구글 캘린더 "${calInfo(target).name}"에 추가했습니다.`); gLoad(true); }
+    return true;
   } catch (e) {
+    if (quiet) return false;
     toast(e.code === 'signin' ? '구글 로그인이 만료되었습니다. 다시 로그인한 뒤 보내세요.' : e.status === 403 ? '구글 캘린더에 쓸 권한이 없습니다. Calendar API 사용 설정을 확인해 주세요.' : '구글 캘린더에 추가하지 못했습니다' + (e.message ? ': ' + e.message.slice(0, 80) : '.'));
   }
+}
+
+/* ---------- choose events → add to Google Calendar ---------- */
+function openGSend(preId) {
+  if (!gReady()) { signIn(); return; }
+  const list = S.events.filter(e => isDate(e.date) && (e.endDate || e.date) >= todayStr() && !e.googleId).sort((a, b) => a.date.localeCompare(b.date) || (a.time || '').localeCompare(b.time || ''));
+  UI.gsend = { sel: new Set(preId ? [preId] : []), cal: S.settings.gPushCal || 'primary', ids: list.map(e => e.id) };
+  if (preId && !UI.gsend.ids.includes(preId)) UI.gsend.ids.unshift(preId);
+  UI.dlg = 'gsend'; renderGSend();
+}
+function renderGSend() {
+  const g = UI.gsend; if (!g) return;
+  const list = g.ids.map(id => S.events.find(e => e.id === id)).filter(e => e && !e.googleId);
+  const writable = G.cals.filter(c => c.write);
+  const opts = writable.length ? writable : [{ id: 'primary', name: '기본 캘린더', primary: true }];
+  $('dlgRoot').innerHTML = `<div class="scrim" data-act="closeDlg"></div><div class="dlg"><div class="dlgbox wide" role="dialog" aria-modal="true" aria-labelledby="dlgT">
+    <h3 id="dlgT">${ic('gcal', 'kc-g')}구글 캘린더에 추가</h3>
+    <div class="count">오늘 이후 일정 가운데 아직 구글에 없는 것입니다. 보낼 일정을 고르세요.</div>
+    <label>추가할 캘린더<select class="field" id="gsCal">${opts.map(c => `<option value="${esc(c.id)}" ${c.id === g.cal || (g.cal === 'primary' && c.primary) ? 'selected' : ''}>${esc(c.name)}${c.primary ? ' (기본)' : ''}</option>`).join('')}</select></label>
+    <div class="row"><button class="btn small" type="button" data-act="gsAll">모두 선택</button><button class="btn small" type="button" data-act="gsNone">선택 해제</button><span class="count">${g.sel.size}개 선택</span></div>
+    <div class="gslist">${list.length ? list.map(e => { const k = e.kind === '마감' ? '마감' : iconFor(e.title, e.kind || '학사'); return `<label class="gsrow"><input type="checkbox" data-gs="${e.id}" ${g.sel.has(e.id) ? 'checked' : ''}>${ic(k, ICON_GROUP[k] || 'kc-' + (e.kind || '학사'))}<span class="t">${fmtShort(e.date)}${e.time ? ' ' + esc(e.time) : ''}</span><span class="tt">${esc(e.title)}${e.example ? ' <span class="tag ex">예시</span>' : ''}</span></label>`; }).join('') : '<div class="empty">구글로 보낼 일정이 없습니다.</div>'}</div>
+    <div class="row" style="justify-content:flex-end"><button class="btn" type="button" data-act="closeDlg">닫기</button><button class="btn primary" type="button" data-act="gsSend" ${g.sel.size ? '' : 'disabled'}>${ic('gcal')}선택한 ${g.sel.size}개 추가</button></div>
+  </div></div>`;
+}
+async function gsSend(btn) {
+  const g = UI.gsend; if (!g || !g.sel.size) return;
+  const sel = $('gsCal'); if (sel) g.cal = sel.value;
+  btn.disabled = true; btn.textContent = '추가하는 중…';
+  let ok = 0, fail = 0;
+  for (const id of [...g.sel]) { const e = S.events.find(x => x.id === id); if (!e || e.googleId) continue; (await pushGoogle(e, id, g.cal, true)) ? ok++ : fail++; }
+  $('dlgRoot').innerHTML = ''; UI.dlg = null; UI.gsend = null;
+  toast(`구글 캘린더 "${calInfo(g.cal).name}"에 ${ok}개 추가했습니다${fail ? `, ${fail}개는 실패했습니다` : ''}.`);
+  gLoad(true);
 }
 
 /* ---------- storage: browser cache + Google Drive file ---------- */
@@ -1137,19 +1311,23 @@ function expandEvents() {
   return out;
 }
 function cellItems(day) {
-  const items = [];
+  const items = [], grp = (k, d) => ICON_GROUP[k] || d;
   for (const e of expandEvents().filter(e => e.date === day)) {
-    const due = e.kind === '마감', timed = !e.span && toMin(e.time) != null;
-    items.push({ o: due ? 0 : timed ? 20 + toMin(e.time) / 1440 : 10, ic: e.kind || '학사', kc: 'kc-' + (e.kind || '학사'), tm: timed ? e.time : '', tx: e.title, cls: due ? 'hot' : '' });
+    const due = e.kind === '마감', timed = !e.span && toMin(e.time) != null, k = due ? '마감' : iconFor(e.title, e.kind || '학사');
+    items.push({ o: due ? 0 : timed ? 20 + toMin(e.time) / 1440 : 10, ic: k, kc: grp(k, 'kc-' + (e.kind || '학사')), tm: timed ? e.time : '', tx: e.title + (e.googleId ? ' (구글에도 있음)' : ''), cls: due ? 'hot' : e.googleId ? 'synced' : '' });
   }
-  for (const t of S.tasks.filter(t => !t.done && t.due === day))
-    items.push({ o: t.priority === 'high' ? 1 : 5, ic: t.priority === 'high' ? 'flame' : '할일', kc: 'kc-할일', tx: t.title, cls: t.priority === 'high' ? 'hot' : t.priority === 'low' ? 'dim' : '' });
+  for (const t of S.tasks.filter(t => !t.done && t.due === day)) {
+    const k = iconFor(t.title, '할일');
+    items.push({ o: t.priority === 'high' ? 1 : 5, ic: k, kc: grp(k, 'kc-할일'), tx: '할 일 · ' + t.title, cls: 'task' + (t.priority === 'high' ? ' hot' : t.priority === 'low' ? ' dim' : '') });
+  }
   for (const m of S.emails.filter(m => needsReplyNow(m) && m.replyDeadline === day))
-    items.push({ o: 2, ic: 'reply', tx: '답장 · ' + (m.subject || ''), cls: 'warn' });
-  for (const g of gAllDayOn(day)) items.push({ o: 9, ic: 'gcal', kc: 'kc-g', tx: g.title, cls: g.free ? 'dim' : '' });
-  for (const g of gOn(day)) items.push({ o: 20 + g.s / 1440, ic: 'gcal', kc: 'kc-g', tm: g.time, tx: g.title, cls: g.free ? 'dim' : '' });
-  if (day >= todayStr()) for (const b of [...blocksOn(day), ...weeklyOn(day)])
-    items.push({ o: 40 + b.s / 1440, ic: 'lock', tm: b.allDay ? '종일' : fromMin(b.s), tx: b.label, cls: 'busy' });
+    items.push({ o: 2, ic: 'reply', tx: '답장 기한 · ' + (m.subject || ''), cls: 'warn' });
+  for (const g of gAllDayOn(day)) { const k = iconFor(g.title, 'gcal'); items.push({ o: 9, ic: k, kc: grp(k, 'kc-g'), tx: `${g.title} (구글 · ${g.calName || ''})`, cls: 'g' + (g.free ? ' dim' : ''), gc: g.color }); }
+  for (const g of gOn(day)) { const k = iconFor(g.title, 'gcal'); items.push({ o: 20 + g.s / 1440, ic: k, kc: grp(k, 'kc-g'), tm: g.time, tx: `${g.title} (구글 · ${g.calName || ''})`, cls: 'g' + (g.free ? ' dim' : ''), gc: g.color }); }
+  if (day >= todayStr()) for (const b of [...blocksOn(day), ...weeklyOn(day)]) {
+    const k = iconFor(b.label, 'lock');
+    items.push({ o: 40 + b.s / 1440, ic: k, tm: b.allDay ? '종일' : fromMin(b.s) + '–' + fromMin(b.e), tx: '불가 · ' + b.label, cls: 'busy' });
+  }
   return items.sort((a, b) => a.o - b.o);
 }
 function freeBadge(day) {
@@ -1176,7 +1354,7 @@ function renderCal() {
       s === t ? 'today' : '', s === UI.selDay ? 'sel' : '', s < t ? 'past' : '', workWin(s) ? '' : 'off'].join(' ');
     html += `<button type="button" class="${cls}" data-act="pickDay" data-day="${s}" aria-label="${d.getMonth() + 1}월 ${d.getDate()}일, 항목 ${items.length}개">
       <span class="chead"><span class="dn">${wk && (d.getDate() === 1 || i === 0) ? `<b>${d.getMonth() + 1}월</b>` : ''}${d.getDate()}${s === t ? '<em>오늘</em>' : ''}</span>${freeBadge(s)}</span>
-      <span class="citems">${shown.map(x => `<span class="ci ${x.cls || ''}" title="${esc((x.tm ? x.tm + ' ' : '') + x.tx)}">${ic(x.ic, x.kc || '')}${x.tm ? `<span class="tm">${esc(x.tm)}</span>` : ''}<span class="tx">${esc(x.tx)}</span></span>`).join('')}${more > 0 ? `<span class="more">+${more}개 더</span>` : ''}</span>
+      <span class="citems">${shown.map(x => `<span class="ci2 ${x.cls || ''}" title="${esc((x.tm ? x.tm + ' ' : '') + x.tx)}"${x.gc ? ` style="--gc:${esc(x.gc)}"` : ''}>${ic(x.ic, x.kc || '')}</span>`).join('')}${more > 0 ? `<span class="more">+${more}</span>` : ''}</span>
     </button>`;
   }
   const g = $('cal'); g.style.setProperty('--rows', rows); g.innerHTML = html;
@@ -1187,10 +1365,11 @@ function renderCal() {
 
 /* ---------- day panel ---------- */
 function srow({ t, icon, kc, title, sub, cls, acts, tag }) {
+  if (GENERIC_ICONS.has(icon) && icon !== '마감') { const k = iconFor(title, icon); if (k !== icon) { icon = k; kc = ICON_GROUP[k] || kc; } }
   return `<div class="srow ${cls || ''}"><span class="t">${t || ''}</span>${ic(icon, kc || '')}<span class="tt">${esc(title)}${tag || ''}${sub ? `<span class="sub3">${sub}</span>` : ''}</span><span class="acts">${acts || ''}</span></div>`;
 }
 function eventActs(e) {
-  const sync = e.googleId ? `<span class="gtag" title="구글 캘린더에 있음">${ic('gcal')}✓</span>` : gReady() ? `<button class="btn small" type="button" data-act="pushG" data-id="${e.id}" title="구글 캘린더에 추가">${ic('gcal')}구글로</button>` : '';
+  const sync = e.googleId ? `<span class="gtag" title="구글 캘린더에 있음">${ic('gcal')}✓</span>` : gReady() ? `<button class="btn small" type="button" data-act="pushG" data-id="${e.id}" title="구글 캘린더에 추가">${ic('gcal')}구글에 추가</button>` : '';
   return `${sync}${e.emailId ? `<button class="x" type="button" data-act="openMail" data-id="${e.emailId}" aria-label="관련 메일" title="관련 메일">${ic('mail')}</button>` : ''}<button class="x" type="button" data-act="delEvent" data-id="${e.id}" aria-label="일정 삭제">✕</button>`;
 }
 function dayFormHtml(day) {
@@ -1202,7 +1381,7 @@ function dayFormHtml(day) {
       <label>시작<input class="field" type="time" id="fStart" value="${esc(pf.s || '')}"></label>
       <label>끝<input class="field" type="time" id="fEnd" value="${esc(pf.e || '')}"></label>
       <input class="field full" id="fLoc" placeholder="장소(선택)" autocomplete="off">
-      ${gReady() ? `<label class="full chk"><input type="checkbox" id="fG" ${S.settings.googlePush !== false ? 'checked' : ''}>구글 캘린더에도 추가</label>` : ''}
+      ${gReady() ? `<label class="full chk"><input type="checkbox" id="fG" ${S.settings.googlePush === true ? 'checked' : ''}>구글 캘린더 "${esc(calInfo(S.settings.gPushCal || 'primary').name)}"에도 추가</label>` : ''}
       <div class="full status err" id="fWarn"></div>
       <div class="full row" style="justify-content:flex-end"><button class="btn" type="button" data-act="dayForm" data-f="">취소</button><button class="btn primary" type="submit">${ic('plus')}일정 추가</button></div>
     </form>`;
@@ -1254,6 +1433,7 @@ function renderDay(force) {
       <button class="btn small ${UI.dayForm === 'event' ? 'primary' : ''}" type="button" data-act="dayForm" data-f="event">${ic('plus')}일정</button>
       <button class="btn small ${UI.dayForm === 'block' ? 'primary' : ''}" type="button" data-act="dayForm" data-f="block">${ic('lock')}불가 시간</button>
       <button class="btn small" type="button" data-act="openFinder">${ic('search')}빈 시간 찾기</button>
+      <button class="btn small" type="button" data-act="${gReady() ? 'gsOpen' : 'gSignin'}">${ic('gcal', 'kc-g')}구글에 추가할 일정 고르기</button>
     </div>
     ${dayFormHtml(day)}
     ${ad.length ? `<div class="sgrp">종일 · 마감 · 할 일</div><div class="sched">${ad.join('')}</div>` : ''}
@@ -1720,7 +1900,7 @@ async function addFromItem(m, kind, i) {
     if (!time || !(toMin(endTime) > toMin(time))) endTime = time ? fromMin(Math.min(toMin(time) + 60, 1439)) : '';
     const doc = { title, date, time, endTime, location: UI.edits['ev-l-'+i] ?? it.location ?? '', kind: UI.edits['ev-k-'+i] ?? it.kind, emailId: m.id, source: 'email', createdAt: nowISO() };
     const nid = await add('events', doc);
-    if (S.settings.googlePush !== false && gReady()) pushGoogle(doc, nid);
+    if (S.settings.googlePush === true && gReady()) pushGoogle(doc, nid);
   } else {
     const title = (UI.edits['tk-t-'+i] ?? it.title).trim(), due = UI.edits['tk-d-'+i] ?? it.due;
     if (!title) { toast('할 일 내용을 입력해 주세요.'); return false; }
@@ -1748,11 +1928,11 @@ document.addEventListener('click', async ev0 => {
       case 'prevMonth': case 'nextMonth': {
         const k = act === 'prevMonth' ? -1 : 1;
         if (UI.view === 'month') UI.month = new Date(UI.month.getFullYear(), UI.month.getMonth() + k, 1); else UI.wOff += k;
-        UI.cap = 6; renderCal(); watchGoogle(); return;
+        UI.cap = 14; renderCal(); watchGoogle(); return;
       }
-      case 'thisMonth': { const d = new Date(); UI.month = new Date(d.getFullYear(), d.getMonth(), 1); UI.wOff = 0; UI.selDay = todayStr(); UI.rail = 'day'; UI.cap = 6; renderAll(); watchGoogle(); return; }
+      case 'thisMonth': { const d = new Date(); UI.month = new Date(d.getFullYear(), d.getMonth(), 1); UI.wOff = 0; UI.selDay = todayStr(); UI.rail = 'day'; UI.cap = 14; renderAll(); watchGoogle(); return; }
       case 'view': {
-        UI.view = el.dataset.v; UI.cap = 6;
+        UI.view = el.dataset.v; UI.cap = 14;
         const sd = parse(UI.selDay || todayStr());
         if (UI.view === 'month') UI.month = new Date(sd.getFullYear(), sd.getMonth(), 1);
         else { const now = new Date(); now.setDate(now.getDate() - now.getDay()); UI.wOff = Math.floor((sd - parse(ymd(now))) / (7 * 86400000)); if (UI.wOff >= 0 && UI.wOff <= 4) UI.wOff = 0; }
@@ -1775,12 +1955,18 @@ document.addEventListener('click', async ev0 => {
         renderDay(true); setTimeout(() => { const f = $('fTitle'); f && f.focus(); checkEventForm(); }, 0); return;
       }
       case 'delBlock': await del('blocks', id); if (UI.dlg === 'busy') renderBusy(); return;
-      case 'pushG': { const e = S.events.find(x => x.id === id); if (e) { el.disabled = true; await pushGoogle(e, id); } return; }
+      case 'pushG': return openGSend(id);
       case 'gchip':
         if (!gReady()) return signIn();
         if (G.state === 'hidden') { UI.dlg = 'settings'; return openSettings(); }
         syncNow(); return gLoad(true);
       case 'sync': if (!gReady()) return signIn(); return syncNow();
+      case 'gsOpen': return openGSend(el.dataset.id || null);
+      case 'gsAll': UI.gsend.ids.forEach(i => UI.gsend.sel.add(i)); return renderGSend();
+      case 'gsNone': UI.gsend.sel.clear(); return renderGSend();
+      case 'gsSend': return gsSend(el);
+      case 'gSignin': return signIn();
+      case 'gReloadCals': return gLoadCals();
       case 'relayCopy': return relayCopy();
       case 'relayApply': return relayApply();
       case 'relayCancel': return relayCancel();
@@ -1820,6 +2006,8 @@ document.addEventListener('click', async ev0 => {
       case 'saveSettings': {
         const data = { ...S.settings, semesterLabel: $('sLabel').value.trim() || DEFAULTS.semesterLabel, semesterStart: isDate($('sStart').value) ? $('sStart').value : DEFAULTS.semesterStart, signature: $('sSig').value.trim() || DEFAULTS.signature, assistant: $('sAsst').value.trim() || DEFAULTS.assistant,
           googleShow: $('sGShow').checked, googleBusy: $('sGBusy').checked, googlePush: $('sGPush').checked };
+        if (document.querySelector('input[name=gcal]')) data.gCals = [...document.querySelectorAll('input[name=gcal]:checked')].map(x => x.value);
+        if ($('sGPushCal')) data.gPushCal = $('sGPushCal').value;
         const cid = $('sCid').value.trim();
         try { if (cid && cid !== (CFG.googleClientId || '')) localStorage.setItem('gClientId', cid); else localStorage.removeItem('gClientId'); } catch {}
         if (cid !== (G.cidUsed || '')) { G.tc = null; G.cidUsed = cid; }
@@ -1957,9 +2145,11 @@ document.addEventListener('change', e => {
     if (isDate($('fdFrom').value)) UI.finder.from = $('fdFrom').value < todayStr() ? todayStr() : $('fdFrom').value;
     UI.finder.sel = null; renderFinder();
   }
+  if (UI.dlg === 'gsend' && t.dataset.gs) { t.checked ? UI.gsend.sel.add(t.dataset.gs) : UI.gsend.sel.delete(t.dataset.gs); return renderGSend(); }
+  if (UI.dlg === 'gsend' && t.id === 'gsCal') { UI.gsend.cal = t.value; return; }
   if (t.id === 'bAll') { $('bStart').disabled = $('bEnd').disabled = $('bWeekly').disabled = t.checked; }
 });
-let rsT; window.addEventListener('resize', () => { clearTimeout(rsT); rsT = setTimeout(() => { UI.cap = 6; renderCal(); renderRail(); }, 200); });
+let rsT; window.addEventListener('resize', () => { clearTimeout(rsT); rsT = setTimeout(() => { UI.cap = 14; renderCal(); renderRail(); }, 200); });
 function openSettings() {
   const s = S.settings;
   $('dlgRoot').innerHTML = `<div class="scrim" data-act="closeDlg"></div><div class="dlg"><div class="dlgbox" role="dialog" aria-modal="true" aria-labelledby="dlgT">
@@ -1968,10 +2158,16 @@ function openSettings() {
     <label>개강 주 월요일 (주차 계산 기준)<input class="field" type="date" id="sStart" value="${esc(s.semesterStart)}"></label>
     <label>답장 서명<textarea class="field" id="sSig" rows="3">${esc(s.signature)}</textarea></label>
     <label>업무를 받는 조교 (이름·호칭)<input class="field" id="sAsst" value="${esc(s.assistant)}" placeholder="예: 김OO 조교"></label>
-    <div class="bsec"><b>${ic('gcal', 'kc-g')} 구글 캘린더</b>
+    <div class="bsec"><b>${ic('gcal', 'kc-g')} 구글 캘린더 연결</b>
+      ${!clientId() ? `<span class="count">먼저 아래에 OAuth 클라이언트 ID를 넣고 저장한 뒤 로그인하세요.</span>` : !gReady() ? `<div><button class="btn small primary" type="button" data-act="gSignin">${ic('gcal')}구글 로그인</button></div>` : ''}
+      ${gReady() ? (G.cals.length ? `<span class="count">달력에 가져올 캘린더만 고르세요. 고르지 않은 캘린더는 읽지 않습니다.</span>
+        <div class="callist">${G.cals.map(c => `<label class="chk"><input type="checkbox" name="gcal" value="${esc(c.id)}" ${selectedCals().includes(c.id) || (c.primary && selectedCals().includes('primary')) ? 'checked' : ''}><i class="cdot" style="background:${esc(c.color || '#7DB6D4')}"></i>${esc(c.name)}${c.primary ? ' (기본)' : ''}</label>`).join('')}</div>
+        <label>"구글에 추가"로 보낼 캘린더<select class="field" id="sGPushCal">${G.cals.filter(c => c.write).map(c => `<option value="${esc(c.id)}" ${c.id === s.gPushCal || (s.gPushCal === 'primary' && c.primary) ? 'selected' : ''}>${esc(c.name)}${c.primary ? ' (기본)' : ''}</option>`).join('')}</select></label>`
+        : `<div class="row"><span class="count">캘린더 목록을 아직 못 읽었습니다.</span><button class="btn small" type="button" data-act="gReloadCals">다시 읽기</button></div>`) : ''}
       <label class="chk"><input type="checkbox" id="sGShow" ${s.googleShow !== false ? 'checked' : ''}>달력에 구글 일정 표시</label>
       <label class="chk"><input type="checkbox" id="sGBusy" ${s.googleBusy !== false ? 'checked' : ''}>구글 일정 시간을 빈 시간에서 빼기</label>
-      <label class="chk"><input type="checkbox" id="sGPush" ${s.googlePush !== false ? 'checked' : ''}>여기서 추가한 일정을 구글 캘린더에도 넣기</label>
+      <label class="chk"><input type="checkbox" id="sGPush" ${s.googlePush === true ? 'checked' : ''}>새로 만든 일정을 자동으로 구글에도 넣기 (끄면 "구글에 추가"로 골라서 보냄)</label>
+
       <label>OAuth 클라이언트 ID<input class="field" id="sCid" value="${esc(clientId())}" placeholder="...apps.googleusercontent.com" autocomplete="off"></label>
       <span class="count">로그인하면 내 드라이브의 "학과장실 대시보드" 폴더에 데이터가 저장되고, 다른 PC에서도 로그인하면 같은 데이터를 봅니다. 이 페이지는 직접 만든 파일만 읽고 쓸 수 있습니다.</span>
       <span class="count">근무시간과 반복 불가 시간은 상단의 "불가 시간"에서 정합니다.</span>
@@ -1984,6 +2180,9 @@ function openSettings() {
 }
 
 document.querySelectorAll('[data-ic]').forEach(el => el.outerHTML = ic(el.dataset.ic, el.dataset.c || ''));
+$('legend').innerHTML = `<span><span class="ci2">${ic('회의', 'kc-회의')}</span>내 일정</span><span><span class="ci2 g" style="--gc:#7DB6D4">${ic('gcal', 'kc-g')}</span>구글</span><span><span class="ci2 task">${ic('할일', 'kc-할일')}</span>할 일</span><span><span class="ci2 hot">${ic('마감', 'kc-마감')}</span>마감·중요</span><span><span class="ci2 warn">${ic('reply')}</span>답장 기한</span><span><span class="ci2 busy">${ic('lock')}</span>불가</span><span><span class="free f-good">빈 4h</span>빈 시간</span>
+  <details class="iconhelp"><summary>아이콘 ${ICON_LEGEND.length}종 보기</summary><div class="iconlist">${ICON_LEGEND.map(([k, l]) => `<span>${ic(k, ICON_GROUP[k] || '')}${l}</span>`).join('')}<span class="count" style="grid-column:1/-1">일정 제목의 단어로 아이콘을 고릅니다. 아이콘에 마우스를 올리거나 날짜를 누르면 내용이 보입니다.</span></div></details>`;
+
 UI.selDay = todayStr();
 try { if (localStorage.getItem('calView') === 'month') UI.view = 'month'; } catch {}
 function renderAll() { renderHeader(); renderTasks(); renderMails(); renderCal(); renderDay(false); renderRail(); renderGChip(); renderSync(); renderSheet(false); }
