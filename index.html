@@ -368,6 +368,7 @@ a.btn{text-decoration:none;color:inherit}
 .gsrow{display:grid;grid-template-columns:auto 1.2rem 7rem minmax(0,1fr);gap:.5rem;align-items:center;padding:.45rem .55rem;border-radius:8px;background:var(--surface-2);cursor:pointer;font-size:.9rem;color:var(--ink)!important}
 .gsrow .t{font-family:var(--mono);font-size:.8rem;color:var(--muted)}
 .gsrow input{accent-color:var(--accent);width:1rem;height:1rem}
+.gasbox{display:flex;flex-direction:column;gap:.4rem;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:.65rem .75rem}
 .gsrow.tpl{grid-template-columns:1.2rem 7rem minmax(0,1fr) auto;cursor:default}
 
 .mail{display:grid;grid-template-columns:4px minmax(0,1fr);gap:.75rem;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:.65rem .8rem .7rem 0;overflow:hidden;cursor:default}
@@ -962,7 +963,18 @@ function cidProblem(v) {
   if (!CID_RE.test(v)) return '클라이언트 ID 형식이 아닙니다. "숫자-영문.apps.googleusercontent.com" 형태 전체를 그대로 복사해 넣어 주세요.';
   return '';
 }
-const gReady = () => !!G.token && Date.now() < G.exp;
+const oauthReady = () => !!G.token && Date.now() < G.exp;
+const gasOn = () => !!(S.settings.gasUrl && S.settings.gasKey);
+const gReady = () => gasOn() || oauthReady();
+async function gas(params) {
+  const q = new URLSearchParams({ ...params, key: S.settings.gasKey, t: Date.now() });
+  let r;
+  try { r = await fetch(S.settings.gasUrl + (S.settings.gasUrl.includes('?') ? '&' : '?') + q, { redirect: 'follow', cache: 'no-store' }); }
+  catch { throw { code: 'net', message: '스크립트에 연결하지 못했습니다. 배포할 때 "액세스 권한: 모든 사용자"로 했는지 확인해 주세요.' }; }
+  let j; try { j = await r.json(); } catch { throw { code: 'badjson', message: '스크립트 응답을 읽지 못했습니다. 웹 앱 주소(…/exec)와 "모든 사용자" 액세스 설정을 확인해 주세요.' }; }
+  if (!j || !j.ok) throw { code: (j && j.error) || 'gas', message: j && j.error === 'key' ? '비밀 키가 스크립트와 다릅니다.' : j && j.error === 'nokey' ? '스크립트의 KEY를 아직 바꾸지 않았습니다.' : (j && j.message) || '스크립트가 오류를 냈습니다.' };
+  return j;
+}
 const gisLoaded = () => !!(window.google && google.accounts && google.accounts.oauth2);
 function initTokenClient() {
   if (G.tc) return true;
@@ -981,6 +993,7 @@ function initTokenClient() {
   return true;
 }
 function signIn() {
+  if (gasOn()) { G.state = 'loading'; renderGChip(); gLoadCals().then(() => gLoad(true)); return; }
   const bad = clientId() && cidProblem(clientId());
   if (bad) { G.state = 'noclient'; renderGChip(); UI.dlg = 'settings'; openSettings(); toast(bad); return; }
   if (!clientId()) { G.state = 'noclient'; renderGChip(); UI.dlg = 'settings'; openSettings(); toast('구글 일정을 달력에 띄우는 것은 선택 기능입니다. 설정 맨 아래 안내를 봐 주세요. 일정을 구글에 추가하는 것은 설정 없이 됩니다.'); return; }
@@ -989,7 +1002,7 @@ function signIn() {
   G.tc.requestAccessToken({ prompt: '' });
 }
 async function gapi(url, opts = {}) {
-  if (!gReady()) { if (G.token) { G.token = null; G.state = 'signin'; renderGChip(); renderSync(); } throw { code: 'signin' }; }
+  if (!oauthReady()) { if (G.token) { G.token = null; G.state = 'signin'; renderGChip(); renderSync(); } throw { code: 'signin' }; }
   const r = await fetch(url, { ...opts, headers: { Authorization: 'Bearer ' + G.token, ...(opts.headers || {}) } });
   if (r.status === 401) { G.token = null; G.state = 'signin'; renderGChip(); renderSync(); throw { code: 'signin' }; }
   if (!r.ok) { let msg = ''; try { msg = (await r.json()).error.message; } catch {} throw { code: 'http', status: r.status, message: msg }; }
@@ -1037,6 +1050,12 @@ function gWindow() {
 }
 async function gLoadCals() {
   if (!gReady()) return;
+  if (gasOn()) {
+    try { const j = await gas({ action: 'calendars' }); G.cals = (j.calendars || []).map(c => ({ id: String(c.id), name: String(c.name || c.id), color: /^#[0-9a-f]{6}$/i.test(c.color || '') ? c.color : '', primary: !!c.primary, write: c.write !== false })); }
+    catch (e) { G.state = 'error'; renderGChip(); toast(e.message || '캘린더 목록을 읽지 못했습니다.'); }
+    if (UI.dlg === 'settings') openSettings();
+    return;
+  }
   try {
     const r = await gapi('https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=reader&maxResults=100');
     G.cals = (r.items || []).filter(c => !c.deleted && !c.hidden).map(c => ({ id: String(c.id), name: String(c.summaryOverride || c.summary || c.id), color: /^#[0-9a-f]{6}$/i.test(c.backgroundColor || '') ? c.backgroundColor : '', primary: !!c.primary, write: c.accessRole === 'owner' || c.accessRole === 'writer' }));
@@ -1061,7 +1080,8 @@ async function gLoad(force) {
     let all = [], partial = false;
     for (const cid of cals) {
       let items = [], pageToken = '', n = 0;
-      do {
+      if (gasOn()) { const j = await gas({ action: 'events', cal: cid, from: a, to: b }); items = j.events || []; }
+      else do {
         const q = new URLSearchParams({ timeMin: new Date(a + 'T00:00:00').toISOString(), timeMax: new Date(b + 'T00:00:00').toISOString(), singleEvents: 'true', orderBy: 'startTime', maxResults: '250', timeZone: TZ });
         if (pageToken) q.set('pageToken', pageToken);
         const r = await gapi(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(cid)}/events?` + q);
@@ -1075,6 +1095,7 @@ async function gLoad(force) {
   } catch (e) {
     if (e.code !== 'signin') {
       G.state = G.events.length ? 'stale' : 'error';
+      if (gasOn() && e.message) toast(e.message);
       if (e.status === 403) toast('구글 캘린더를 읽지 못했습니다. Google Cloud에서 Calendar API를 사용 설정했는지 확인해 주세요.');
       if (e.status === 404) toast('선택한 캘린더 중 찾을 수 없는 것이 있습니다. 설정에서 다시 골라 주세요.');
     }
@@ -1086,6 +1107,7 @@ function renderGChip() {
   const el = $('gchip'); if (!el) return;
   if (gReady() && (G.state === 'signin' || G.state === 'init')) G.state = 'ok';
   if (!gReady() && G.state !== 'noclient') G.state = clientId() ? 'signin' : 'noclient';
+  if (gasOn() && G.state === 'init') G.state = 'loading';
   const n = G.events.length, t = G.storedAt ? new Date(G.storedAt) : null;
   const M = {
     loading: ['', '구글 캘린더 불러오는 중'],
@@ -1112,12 +1134,19 @@ async function pushGoogle(doc, id, calId, quiet) {
   }
   try {
     const target = calId || S.settings.gPushCal || 'primary';
+    if (gasOn()) {
+      const j = await gas({ action: 'create', cal: target, title: doc.title, date: doc.date, time: toMin(doc.time) != null ? doc.time : '', endTime: toMin(doc.time) != null ? fromMin(Math.min(evEnd(doc), 1439)) : '', endDate: doc.endDate || '', location: doc.location || '', description: body.description });
+      await patch('events', id, { googleId: String((j.event && j.event.id) || 'pushed'), googleCal: target });
+      if (!quiet) { toast(`구글 캘린더 "${calInfo(target).name}"에 추가했습니다.`); gLoad(true); }
+      return true;
+    }
     const r = await gapi(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(target)}/events`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     await patch('events', id, { googleId: String(r.id || 'pushed'), googleCal: target, googleLink: typeof r.htmlLink === 'string' ? r.htmlLink : '' });
     if (!quiet) { toast(`구글 캘린더 "${calInfo(target).name}"에 추가했습니다.`); gLoad(true); }
     return true;
   } catch (e) {
     if (quiet) return false;
+    if (gasOn()) { toast('구글 캘린더에 추가하지 못했습니다. ' + (e.message || '')); return false; }
     toast(e.code === 'signin' ? '구글 로그인이 만료되었습니다. 다시 로그인한 뒤 보내세요.' : e.status === 403 ? '구글 캘린더에 쓸 권한이 없습니다. Calendar API 사용 설정을 확인해 주세요.' : '구글 캘린더에 추가하지 못했습니다' + (e.message ? ': ' + e.message.slice(0, 80) : '.'));
   }
 }
@@ -2042,9 +2071,21 @@ document.addEventListener('click', async ev0 => {
       case 'delBlock': await del('blocks', id); if (UI.dlg === 'busy') renderBusy(); return;
       case 'pushG': return openGSend(id);
       case 'gchip':
+        if (gasOn()) { G.state = 'loading'; renderGChip(); await gLoadCals(); return gLoad(true); }
         if (!gReady()) return signIn();
         if (G.state === 'hidden') { UI.dlg = 'settings'; return openSettings(); }
         syncNow(); return gLoad(true);
+      case 'gasTest': {
+        const url = $('sGasUrl').value.trim(), key = $('sGasKey').value.trim();
+        if (!/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(url)) return toast('웹 앱 주소는 https://script.google.com/macros/s/…/exec 형태여야 합니다.');
+        if (!key) return toast('비밀 키를 넣어 주세요.');
+        const keep = { url: S.settings.gasUrl, key: S.settings.gasKey };
+        S.settings.gasUrl = url; S.settings.gasKey = key;
+        try { const j = await gas({ action: 'ping' }); toast(`연결됐습니다: ${j.email || '내 계정'}. 저장을 누르면 캘린더를 불러옵니다.`); }
+        catch (e) { toast(e.message || '연결하지 못했습니다.'); }
+        S.settings.gasUrl = keep.url; S.settings.gasKey = keep.key;
+        return;
+      }
       case 'sync':
         if (!fsOK) return toast('이 브라우저는 폴더 저장을 지원하지 않습니다. 크롬이나 엣지에서 열면 구글 드라이브 폴더에 저장됩니다.');
         if (!FS.handle) return fsPick();
@@ -2097,6 +2138,10 @@ document.addEventListener('click', async ev0 => {
       case 'saveSettings': {
         const data = { ...S.settings, semesterLabel: $('sLabel').value.trim() || DEFAULTS.semesterLabel, semesterStart: isDate($('sStart').value) ? $('sStart').value : DEFAULTS.semesterStart, signature: $('sSig').value.trim() || DEFAULTS.signature, assistant: $('sAsst').value.trim() || DEFAULTS.assistant,
           googleShow: $('sGShow').checked, googleBusy: $('sGBusy').checked, googlePush: $('sGPush').checked };
+        { const gu = $('sGasUrl').value.trim(), gk = $('sGasKey').value.trim();
+          if (gu && !/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(gu)) { toast('웹 앱 주소는 https://script.google.com/macros/s/…/exec 형태여야 합니다.'); return; }
+          const changedGas = gu !== (S.settings.gasUrl || '') || gk !== (S.settings.gasKey || '');
+          data.gasUrl = gu; data.gasKey = gk; if (changedGas) { G.cals = []; G.events = []; G.key = ''; setTimeout(() => { if (gasOn()) signIn(); else renderAll(); }, 50); } }
         if (document.querySelector('input[name=gcal]')) data.gCals = [...document.querySelectorAll('input[name=gcal]:checked')].map(x => x.value);
         if ($('sGPushCal')) data.gPushCal = $('sGPushCal').value;
         const cid = cleanCid($('sCid').value);
@@ -2259,7 +2304,14 @@ function openSettings() {
       <span class="count">예전 Claude 대시보드에서 내보낸 파일도 가져올 수 있습니다. 가져온 항목은 지금 데이터에 합쳐집니다.</span></div>
     <div class="bsec"><b>${ic('gcal', 'kc-g')} 구글 캘린더</b>
       <span class="count">일정을 구글 캘린더에 <b>추가</b>하는 것은 설정 없이 됩니다(일정 옆 "구글에 추가"). 아래는 구글 일정을 이 달력에 <b>띄우고</b> 싶을 때만 필요합니다.</span>
-      ${!clientId() ? `<details><summary class="count" style="cursor:pointer">구글 일정을 달력에 띄우려면 (선택)</summary><span class="count">구글은 웹페이지가 캘린더를 읽을 때 Google Cloud Console에서 만든 "OAuth 클라이언트 ID"를 요구합니다. 무료이고 한 번만 만들면 됩니다. 만들었다면 아래 칸에 넣고 저장한 뒤 "구글 일정 불러오기"를 누르세요.</span></details>` : !gReady() ? `<div><button class="btn small primary" type="button" data-act="gSignin">${ic('gcal')}구글 로그인</button></div>` : ''}
+      <div class="gasbox">
+        <b style="font-size:.88rem">Apps Script로 연결 (추천)</b>
+        <span class="count">내 구글 계정에 작은 스크립트를 하나 설치하면, 구글 일정을 달력에 띄우고 여기서 바로 구글에 추가할 수 있습니다. 설치 방법은 스크립트 파일 맨 위에 있습니다.</span>
+        <label>웹 앱 주소<input class="field" id="sGasUrl" value="${esc(s.gasUrl || '')}" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off"></label>
+        <label>비밀 키<input class="field" id="sGasKey" value="${esc(s.gasKey || '')}" placeholder="스크립트의 KEY와 같은 값" autocomplete="off"></label>
+        <div class="row"><button class="btn small" type="button" data-act="gasTest">${ic('refresh')}연결 확인</button>${gasOn() ? `<span class="gtag">${ic('check')}연결 설정됨</span>` : ''}</div>
+      </div>
+      ${!clientId() && !gasOn() ? `<details><summary class="count" style="cursor:pointer">다른 방법: OAuth 클라이언트 ID (고급)</summary><span class="count">구글은 웹페이지가 캘린더를 읽을 때 Google Cloud Console에서 만든 "OAuth 클라이언트 ID"를 요구합니다. 무료이고 한 번만 만들면 됩니다. 만들었다면 아래 칸에 넣고 저장한 뒤 "구글 일정 불러오기"를 누르세요.</span></details>` : !gReady() ? `<div><button class="btn small primary" type="button" data-act="gSignin">${ic('gcal')}구글 로그인</button></div>` : ''}
       ${gReady() ? (G.cals.length ? `<span class="count">달력에 가져올 캘린더만 고르세요. 고르지 않은 캘린더는 읽지 않습니다.</span>
         <div class="callist">${G.cals.map(c => `<label class="chk"><input type="checkbox" name="gcal" value="${esc(c.id)}" ${selectedCals().includes(c.id) || (c.primary && selectedCals().includes('primary')) ? 'checked' : ''}><i class="cdot" style="background:${esc(c.color || '#7DB6D4')}"></i>${esc(c.name)}${c.primary ? ' (기본)' : ''}</label>`).join('')}</div>
         <label>"구글에 추가"로 보낼 캘린더<select class="field" id="sGPushCal">${G.cals.filter(c => c.write).map(c => `<option value="${esc(c.id)}" ${c.id === s.gPushCal || (s.gPushCal === 'primary' && c.primary) ? 'selected' : ''}>${esc(c.name)}${c.primary ? ' (기본)' : ''}</option>`).join('')}</select></label>`
@@ -2291,7 +2343,8 @@ document.body.insertAdjacentHTML('beforeend', '<input type="file" id="importFile
 $('importFile').addEventListener('change', e => { const f = e.target.files[0]; if (f) importFile(f); e.target.value = ''; });
 (function waitGis(n) { if (gisLoaded()) { initTokenClient(); G.cidUsed = clientId(); renderGChip(); } else if (n < 60) setTimeout(() => waitGis(n + 1), 250); })(0);
 fsRestore();
-setInterval(() => { syncNow(); if (gReady()) gLoad(false); else renderAll(); }, 60000);
+setTimeout(() => { if (gasOn()) signIn(); }, 400);
+setInterval(() => { syncNow(); if (gasOn() && !G.cals.length && G.state !== 'loading') signIn(); else if (gReady()) gLoad(false); else renderAll(); }, 60000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { syncNow(); if (gReady()) gLoad(false); } });
 window.addEventListener('beforeunload', e => { if (DRIVE.dirty && fsReady()) { syncNow(); e.preventDefault(); e.returnValue = ''; } });
 })();
