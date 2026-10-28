@@ -368,6 +368,7 @@ a.btn{text-decoration:none;color:inherit}
 .gsrow{display:grid;grid-template-columns:auto 1.2rem 7rem minmax(0,1fr);gap:.5rem;align-items:center;padding:.45rem .55rem;border-radius:8px;background:var(--surface-2);cursor:pointer;font-size:.9rem;color:var(--ink)!important}
 .gsrow .t{font-family:var(--mono);font-size:.8rem;color:var(--muted)}
 .gsrow input{accent-color:var(--accent);width:1rem;height:1rem}
+.gsrow.tpl{grid-template-columns:1.2rem 7rem minmax(0,1fr) auto;cursor:default}
 
 .mail{display:grid;grid-template-columns:4px minmax(0,1fr);gap:.75rem;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:.65rem .8rem .7rem 0;overflow:hidden;cursor:default}
 .mail:hover{border-color:var(--line)}
@@ -949,7 +950,7 @@ function gridRange() { const a = gridStart(); return [a, addDays(a, gridRows() *
 
 /* ---------- Google sign-in (Drive storage + Calendar) ---------- */
 const CFG = window.DASH_CONFIG || {};
-const SCOPES = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.calendarlist.readonly';
+const SCOPES = 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.calendarlist.readonly';
 const G = { state: 'init', events: [], cals: [], storedAt: 0, partial: false, key: '', token: null, exp: 0, tc: null };
 const cleanCid = v => String(v || '').replace(/[\s"'`<>]/g, '').replace(/^https?:\/\//, '');
 const CID_RE = /^\d+-[a-z0-9]+\.apps\.googleusercontent\.com$/;
@@ -973,7 +974,7 @@ function initTokenClient() {
       G.token = r.access_token; G.exp = Date.now() + (Number(r.expires_in) || 3600) * 1000 - 60000;
       try { localStorage.setItem('gWasSigned', '1'); } catch {}
       G.state = 'loading'; renderGChip();
-      syncNow(); gLoadCals().then(() => gLoad(true));
+      gLoadCals().then(() => gLoad(true));
     },
     error_callback: () => { G.state = 'signin'; renderGChip(); renderSync(); }
   });
@@ -982,7 +983,7 @@ function initTokenClient() {
 function signIn() {
   const bad = clientId() && cidProblem(clientId());
   if (bad) { G.state = 'noclient'; renderGChip(); UI.dlg = 'settings'; openSettings(); toast(bad); return; }
-  if (!clientId()) { G.state = 'noclient'; renderGChip(); UI.dlg = 'settings'; openSettings(); toast('설정에 구글 OAuth 클라이언트 ID를 넣어 주세요.'); return; }
+  if (!clientId()) { G.state = 'noclient'; renderGChip(); UI.dlg = 'settings'; openSettings(); toast('구글 일정을 달력에 띄우는 것은 선택 기능입니다. 설정 맨 아래 안내를 봐 주세요. 일정을 구글에 추가하는 것은 설정 없이 됩니다.'); return; }
   if (!gisLoaded()) { toast('구글 로그인 스크립트를 불러오는 중입니다. 잠시 후 다시 눌러 주세요.'); return; }
   initTokenClient();
   G.tc.requestAccessToken({ prompt: '' });
@@ -1090,7 +1091,7 @@ function renderGChip() {
     loading: ['', '구글 캘린더 불러오는 중'],
     ok: ['ok', `캘린더 ${n}건${t ? ' · ' + pad(t.getHours()) + ':' + pad(t.getMinutes()) : ''}${G.partial ? ' (일부)' : ''}`],
     stale: ['warn', '캘린더 응답 없음 · 다시 시도'], error: ['warn', '캘린더 불러오기 실패 · 다시 시도'],
-    signin: ['ask', '구글 로그인 (드라이브 저장 · 캘린더)'], noclient: ['warn', '구글 연결 설정 필요'],
+    signin: ['', '구글 일정 불러오기'], noclient: ['', '구글 일정 보기 (선택)'],
     hidden: ['', '구글 일정 표시 꺼짐']
   };
   const [cls, label] = M[G.state] || M.signin;
@@ -1123,14 +1124,24 @@ async function pushGoogle(doc, id, calId, quiet) {
 
 /* ---------- choose events → add to Google Calendar ---------- */
 function openGSend(preId) {
-  if (!gReady()) { signIn(); return; }
-  const list = S.events.filter(e => isDate(e.date) && (e.endDate || e.date) >= todayStr() && !e.googleId).sort((a, b) => a.date.localeCompare(b.date) || (a.time || '').localeCompare(b.time || ''));
+  const list = S.events.filter(e => isDate(e.date) && (e.endDate || e.date) >= todayStr() && !e.googleId && (gReady() || !e.googleSent || e.id === preId)).sort((a, b) => a.date.localeCompare(b.date) || (a.time || '').localeCompare(b.time || ''));
   UI.gsend = { sel: new Set(preId ? [preId] : []), cal: S.settings.gPushCal || 'primary', ids: list.map(e => e.id) };
   if (preId && !UI.gsend.ids.includes(preId)) UI.gsend.ids.unshift(preId);
   UI.dlg = 'gsend'; renderGSend();
 }
 function renderGSend() {
   const g = UI.gsend; if (!g) return;
+  if (!gReady()) {
+    const rows = g.ids.map(id => S.events.find(e => e.id === id)).filter(e => e && !e.googleId);
+    rows.sort((a, b) => (g.sel.has(b.id) ? 1 : 0) - (g.sel.has(a.id) ? 1 : 0));
+    $('dlgRoot').innerHTML = `<div class="scrim" data-act="closeDlg"></div><div class="dlg"><div class="dlgbox wide" role="dialog" aria-modal="true" aria-labelledby="dlgT">
+      <h3 id="dlgT">${ic('gcal', 'kc-g')}구글 캘린더에 추가</h3>
+      <div class="count">"구글에 추가"를 누르면 구글 캘린더의 일정 만들기 화면이 내용이 채워진 채 새 탭으로 열립니다. 캘린더를 고르고 <b>저장</b>을 누르세요.</div>
+      <div class="gslist">${rows.length ? rows.map(e => { const k = e.kind === '마감' ? '마감' : iconFor(e.title, e.kind || '학사'); return `<div class="gsrow tpl">${ic(k, ICON_GROUP[k] || 'kc-' + (e.kind || '학사'))}<span class="t">${fmtShort(e.date)}${e.time ? ' ' + esc(e.time) : ''}</span><span class="tt">${esc(e.title)}${e.example ? ' <span class="tag ex">예시</span>' : ''}</span>${e.googleSent ? `<span class="gtag">${ic('check')}보냄</span>` : `<a class="btn small primary" href="${esc(gTemplateUrl(e))}" target="_blank" rel="noopener" data-act="gTpl" data-id="${e.id}">${ic('ext')}구글에 추가</a>`}</div>`; }).join('') : '<div class="empty">구글로 보낼 일정이 없습니다.</div>'}</div>
+      <div class="row" style="justify-content:flex-end"><button class="btn" type="button" data-act="closeDlg">닫기</button></div>
+    </div></div>`;
+    return;
+  }
   const list = g.ids.map(id => S.events.find(e => e.id === id)).filter(e => e && !e.googleId);
   const writable = G.cals.filter(c => c.write);
   const opts = writable.length ? writable : [{ id: 'primary', name: '기본 캘린더', primary: true }];
@@ -1190,59 +1201,120 @@ async function patch(col, id, data) { const x = S[col].find(r => r.id === id); i
 async function del(col, id) { S[col] = S[col].filter(r => r.id !== id); (S.deleted[col] ||= {})[id] = Date.now(); changed(); }
 async function saveSettings(data) { S.settings = data; S.settingsU = Date.now(); changed(); }
 function dbErr() { toast('저장하지 못했습니다. 다시 시도해 주세요.'); }
-async function driveUpload(method, id, meta, data) {
-  const bd = 'dd' + Math.random().toString(36).slice(2);
-  const body = `--${bd}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta || {})}\r\n--${bd}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(data)}\r\n--${bd}--`;
-  const url = `https://www.googleapis.com/upload/drive/v3/files${id ? '/' + id : ''}?uploadType=multipart&fields=id,modifiedTime`;
-  return gapi(url, { method, headers: { 'Content-Type': `multipart/related; boundary=${bd}` }, body });
+/* ---------- folder storage (Google Drive desktop folder, File System Access API) ---------- */
+const FS = { handle: null, perm: 'none' };
+const fsOK = typeof window.showDirectoryPicker === 'function';
+const fsReady = () => FS.perm === 'granted' && !!FS.handle;
+function idb() { return new Promise((res, rej) => { const r = indexedDB.open('deptdash', 1); r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
+async function kvGet(k) { try { const d = await idb(); return await new Promise(res => { const q = d.transaction('kv').objectStore('kv').get(k); q.onsuccess = () => res(q.result || null); q.onerror = () => res(null); }); } catch { return null; } }
+async function kvSet(k, v) { try { const d = await idb(); await new Promise(res => { const t = d.transaction('kv', 'readwrite'); t.objectStore('kv').put(v, k); t.oncomplete = res; t.onerror = res; }); } catch {} }
+async function fsRestore() {
+  if (!fsOK) { FS.perm = 'unsupported'; renderSync(); return; }
+  const h = await kvGet('dir');
+  if (!h) { FS.perm = 'none'; renderSync(); return; }
+  FS.handle = h;
+  try { FS.perm = await h.queryPermission({ mode: 'readwrite' }); } catch { FS.perm = 'prompt'; }
+  renderSync();
+  if (FS.perm === 'granted') syncNow();
 }
-async function driveEnsure() {
-  if (DRIVE.fileId) return;
-  const list = q => gapi(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,modifiedTime)&spaces=drive&orderBy=modifiedTime desc`);
-  let r = await list(`name='${FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false`);
-  DRIVE.folderId = r.files && r.files[0] && r.files[0].id;
-  if (!DRIVE.folderId) {
-    r = await gapi('https://www.googleapis.com/drive/v3/files?fields=id', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: FOLDER_NAME, mimeType: 'application/vnd.google-apps.folder' }) });
-    DRIVE.folderId = r.id;
-  }
-  r = await list(`name='${FILE_NAME}' and '${DRIVE.folderId}' in parents and trashed=false`);
-  if (r.files && r.files[0]) DRIVE.fileId = r.files[0].id;
-  else {
-    const res = await driveUpload('POST', null, { name: FILE_NAME, parents: [DRIVE.folderId], mimeType: 'application/json' }, snapshot());
-    DRIVE.fileId = res.id; DRIVE.remoteMod = res.modifiedTime; DRIVE.dirty = false;
-  }
+async function fsPick() {
+  if (!fsOK) { toast('이 브라우저는 폴더 저장을 지원하지 않습니다. 크롬이나 엣지에서 열어 주세요.'); return; }
+  try {
+    const h = await window.showDirectoryPicker({ id: 'deptdash', mode: 'readwrite', startIn: 'documents' });
+    FS.handle = h; FS.perm = 'granted'; await kvSet('dir', h);
+    DRIVE.remoteMod = null; DRIVE.last = 0;
+    toast(`"${h.name}" 폴더에 저장합니다.`);
+    await syncNow();
+    if (UI.dlg === 'settings') openSettings();
+  } catch (e) { if (!e || e.name !== 'AbortError') toast('폴더를 열지 못했습니다. 다른 폴더를 골라 보세요.'); }
+}
+async function fsAllow() {
+  if (!FS.handle) return fsPick();
+  try { FS.perm = await FS.handle.requestPermission({ mode: 'readwrite' }); } catch { FS.perm = 'prompt'; }
+  renderSync();
+  if (FS.perm === 'granted') syncNow();
 }
 async function syncNow() {
-  if (!gReady()) { renderSync(); return; }
+  if (!fsReady()) { renderSync(); return; }
   if (DRIVE.saving) { DRIVE.again = true; return; }
   DRIVE.saving = true; DRIVE.state = 'saving'; renderSync();
   try {
-    await driveEnsure();
-    const meta = await gapi(`https://www.googleapis.com/drive/v3/files/${DRIVE.fileId}?fields=modifiedTime`);
-    if (meta.modifiedTime !== DRIVE.remoteMod) {
-      const remote = await gapi(`https://www.googleapis.com/drive/v3/files/${DRIVE.fileId}?alt=media`);
-      const before = dataOnly(remote);
-      if (mergeIn(remote)) renderAll();
-      DRIVE.remoteMod = meta.modifiedTime;
-      if (dataOnly(snapshot()) !== before) DRIVE.dirty = true;
-      cacheLocal();
+    const fh = await FS.handle.getFileHandle(FILE_NAME, { create: true });
+    const f = await fh.getFile();
+    let blocked = false;
+    if (f.size && f.lastModified !== DRIVE.remoteMod) {
+      let remote = null;
+      try { remote = JSON.parse(await f.text()); } catch { remote = null; }
+      if (remote && typeof remote === 'object') {
+        const before = dataOnly(remote);
+        if (mergeIn(remote)) renderAll();
+        if (dataOnly(snapshot()) !== before) DRIVE.dirty = true;
+        cacheLocal();
+        DRIVE.remoteMod = f.lastModified;
+      } else { blocked = true; }
+    } else if (!f.size) DRIVE.dirty = true;
+    if (blocked) {
+      DRIVE.state = 'broken';
+    } else {
+      if (DRIVE.dirty) {
+        DRIVE.dirty = false;
+        const w = await fh.createWritable(); await w.write(JSON.stringify(snapshot(), null, 1)); await w.close();
+        DRIVE.remoteMod = (await fh.getFile()).lastModified;
+        dailyBackup();
+      }
+      DRIVE.state = 'ok'; DRIVE.last = Date.now();
     }
-    if (DRIVE.dirty) { DRIVE.dirty = false; const res = await driveUpload('PATCH', DRIVE.fileId, {}, snapshot()); DRIVE.remoteMod = res.modifiedTime; }
-    DRIVE.state = 'ok'; DRIVE.last = Date.now();
-  } catch (e) { DRIVE.state = e.code === 'signin' ? 'signin' : 'error'; DRIVE.dirty = true; }
+  } catch (e) {
+    if (e && e.name === 'NotAllowedError') FS.perm = 'prompt';
+    DRIVE.state = 'error'; DRIVE.dirty = true;
+  }
   DRIVE.saving = false; renderSync();
   if (DRIVE.again) { DRIVE.again = false; syncNow(); }
+}
+async function dailyBackup() {
+  const name = `dashboard-${todayStr()}.json`;
+  if (DRIVE.bk === name) return;
+  try {
+    const dir = await FS.handle.getDirectoryHandle('backup', { create: true });
+    try { await dir.getFileHandle(name); DRIVE.bk = name; return; } catch {}
+    const fh = await dir.getFileHandle(name, { create: true });
+    const w = await fh.createWritable(); await w.write(JSON.stringify(snapshot())); await w.close();
+    DRIVE.bk = name;
+  } catch {}
 }
 function renderSync() {
   const el = $('syncchip'); if (!el) return;
   const t = DRIVE.last ? new Date(DRIVE.last) : null;
-  const st = !gReady() ? 'local' : DRIVE.state;
-  const M = { local: ['warn', '이 브라우저에만 저장됨'], saving: ['', '드라이브에 저장 중'], ok: ['ok', `드라이브 저장됨${t ? ' ' + pad(t.getHours()) + ':' + pad(t.getMinutes()) : ''}`], error: ['warn', '드라이브 저장 실패 · 다시 시도'], signin: ['warn', '이 브라우저에만 저장됨'] };
-  const [cls, label] = M[st] || M.local;
+  const st = !fsOK ? 'unsupported' : !FS.handle ? 'none' : FS.perm !== 'granted' ? 'prompt' : DRIVE.state;
+  const M = {
+    unsupported: ['warn', '이 브라우저에만 저장됨 (크롬·엣지에서 폴더 저장)'],
+    none: ['ask', '저장 폴더 고르기'],
+    prompt: ['ask', '저장 폴더 다시 허용'],
+    saving: ['', '폴더에 저장 중'],
+    ok: ['ok', `${FS.handle ? FS.handle.name : '폴더'}에 저장됨${t ? ' ' + pad(t.getHours()) + ':' + pad(t.getMinutes()) : ''}`],
+    error: ['warn', '폴더 저장 실패 · 다시 시도'],
+    broken: ['warn', '폴더의 데이터 파일을 읽지 못함']
+  };
+  const [cls, label] = M[st] || M.ok;
   el.className = 'gchip ' + cls;
   el.innerHTML = `${ic(st === 'saving' ? 'refresh' : 'drive')}<span>${esc(label)}</span>`;
-  el.title = st === 'local' || st === 'signin' ? '구글에 로그인하면 내 드라이브 "학과장실 대시보드" 폴더에 저장되어 다른 PC에서도 같은 데이터를 봅니다' : '눌러서 지금 동기화';
+  el.title = st === 'none' ? '구글 드라이브 데스크톱 앱의 폴더(예: G:\\내 드라이브\\학과장실 대시보드)를 고르면 다른 PC에서도 같은 데이터를 봅니다'
+    : st === 'broken' ? `${FILE_NAME}이 깨져 있어 덮어쓰지 않았습니다. 폴더의 backup 안 파일을 확인해 주세요.` : '눌러서 지금 저장·불러오기';
 }
+function gTemplateUrl(e) {
+  const q = new URLSearchParams({ action: 'TEMPLATE', text: e.title || '', details: '학과장실 대시보드에서 추가', ctz: TZ });
+  if (e.location) q.set('location', e.location);
+  const d = s => s.replace(/-/g, '');
+  if (toMin(e.time) != null) {
+    const en = fromMin(Math.min(evEnd(e), 1439));
+    q.set('dates', `${d(e.date)}T${e.time.replace(':', '')}00/${d(e.date)}T${en.replace(':', '')}00`);
+  } else {
+    const last = isDate(e.endDate) && e.endDate > e.date ? e.endDate : e.date;
+    q.set('dates', `${d(e.date)}/${d(addDays(last, 1))}`);
+  }
+  return 'https://calendar.google.com/calendar/render?' + q.toString();
+}
+
 function exportData() {
   const blob = new Blob([JSON.stringify(snapshot(), null, 1)], { type: 'application/json' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `dashboard-data-${todayStr()}.json`;
@@ -1325,7 +1397,7 @@ function cellItems(day) {
   const items = [], grp = (k, d) => ICON_GROUP[k] || d;
   for (const e of expandEvents().filter(e => e.date === day)) {
     const due = e.kind === '마감', timed = !e.span && toMin(e.time) != null, k = due ? '마감' : iconFor(e.title, e.kind || '학사');
-    items.push({ o: due ? 0 : timed ? 20 + toMin(e.time) / 1440 : 10, ic: k, kc: grp(k, 'kc-' + (e.kind || '학사')), tm: timed ? e.time : '', tx: e.title + (e.googleId ? ' (구글에도 있음)' : ''), cls: due ? 'hot' : e.googleId ? 'synced' : '' });
+    items.push({ o: due ? 0 : timed ? 20 + toMin(e.time) / 1440 : 10, ic: k, kc: grp(k, 'kc-' + (e.kind || '학사')), tm: timed ? e.time : '', tx: e.title + (e.googleId ? ' (구글에도 있음)' : ''), cls: due ? 'hot' : (e.googleId || e.googleSent) ? 'synced' : '' });
   }
   for (const t of S.tasks.filter(t => !t.done && t.due === day)) {
     const k = iconFor(t.title, '할일');
@@ -1380,7 +1452,9 @@ function srow({ t, icon, kc, title, sub, cls, acts, tag }) {
   return `<div class="srow ${cls || ''}"><span class="t">${t || ''}</span>${ic(icon, kc || '')}<span class="tt">${esc(title)}${tag || ''}${sub ? `<span class="sub3">${sub}</span>` : ''}</span><span class="acts">${acts || ''}</span></div>`;
 }
 function eventActs(e) {
-  const sync = e.googleId ? `<span class="gtag" title="구글 캘린더에 있음">${ic('gcal')}✓</span>` : gReady() ? `<button class="btn small" type="button" data-act="pushG" data-id="${e.id}" title="구글 캘린더에 추가">${ic('gcal')}구글에 추가</button>` : '';
+  const sync = e.googleId ? `<span class="gtag" title="구글 캘린더에 있음">${ic('gcal')}✓</span>`
+    : gReady() ? `<button class="btn small" type="button" data-act="pushG" data-id="${e.id}" title="구글 캘린더에 추가">${ic('gcal')}구글에 추가</button>`
+    : `<a class="btn small" href="${esc(gTemplateUrl(e))}" target="_blank" rel="noopener" data-act="gTpl" data-id="${e.id}" title="구글 캘린더 일정 만들기 화면 열기">${ic('gcal')}${e.googleSent ? '다시 보내기' : '구글에 추가'}</a>`;
   return `${sync}${e.emailId ? `<button class="x" type="button" data-act="openMail" data-id="${e.emailId}" aria-label="관련 메일" title="관련 메일">${ic('mail')}</button>` : ''}<button class="x" type="button" data-act="delEvent" data-id="${e.id}" aria-label="일정 삭제">✕</button>`;
 }
 function dayFormHtml(day) {
@@ -1444,7 +1518,7 @@ function renderDay(force) {
       <button class="btn small ${UI.dayForm === 'event' ? 'primary' : ''}" type="button" data-act="dayForm" data-f="event">${ic('plus')}일정</button>
       <button class="btn small ${UI.dayForm === 'block' ? 'primary' : ''}" type="button" data-act="dayForm" data-f="block">${ic('lock')}불가 시간</button>
       <button class="btn small" type="button" data-act="openFinder">${ic('search')}빈 시간 찾기</button>
-      <button class="btn small" type="button" data-act="${gReady() ? 'gsOpen' : 'gSignin'}">${ic('gcal', 'kc-g')}구글에 추가할 일정 고르기</button>
+      <button class="btn small" type="button" data-act="gsOpen">${ic('gcal', 'kc-g')}구글에 추가할 일정 고르기</button>
     </div>
     ${dayFormHtml(day)}
     ${ad.length ? `<div class="sgrp">종일 · 마감 · 할 일</div><div class="sched">${ad.join('')}</div>` : ''}
@@ -1971,7 +2045,13 @@ document.addEventListener('click', async ev0 => {
         if (!gReady()) return signIn();
         if (G.state === 'hidden') { UI.dlg = 'settings'; return openSettings(); }
         syncNow(); return gLoad(true);
-      case 'sync': if (!gReady()) return signIn(); return syncNow();
+      case 'sync':
+        if (!fsOK) return toast('이 브라우저는 폴더 저장을 지원하지 않습니다. 크롬이나 엣지에서 열면 구글 드라이브 폴더에 저장됩니다.');
+        if (!FS.handle) return fsPick();
+        if (FS.perm !== 'granted') return fsAllow();
+        return syncNow();
+      case 'fsPick': return fsPick();
+      case 'gTpl': { const e = S.events.find(x => x.id === id); if (e && !e.googleSent) await patch('events', id, { googleSent: true }); if (UI.dlg === 'gsend') setTimeout(renderGSend, 50); return; }
       case 'gsOpen': return openGSend(el.dataset.id || null);
       case 'gsAll': UI.gsend.ids.forEach(i => UI.gsend.sel.add(i)); return renderGSend();
       case 'gsNone': UI.gsend.sel.clear(); return renderGSend();
@@ -2171,8 +2251,15 @@ function openSettings() {
     <label>개강 주 월요일 (주차 계산 기준)<input class="field" type="date" id="sStart" value="${esc(s.semesterStart)}"></label>
     <label>답장 서명<textarea class="field" id="sSig" rows="3">${esc(s.signature)}</textarea></label>
     <label>업무를 받는 조교 (이름·호칭)<input class="field" id="sAsst" value="${esc(s.assistant)}" placeholder="예: 김OO 조교"></label>
-    <div class="bsec"><b>${ic('gcal', 'kc-g')} 구글 캘린더 연결</b>
-      ${!clientId() ? `<span class="count">먼저 아래에 OAuth 클라이언트 ID를 넣고 저장한 뒤 로그인하세요.</span>` : !gReady() ? `<div><button class="btn small primary" type="button" data-act="gSignin">${ic('gcal')}구글 로그인</button></div>` : ''}
+    <div class="bsec"><b>${ic('drive')} 저장 폴더</b>
+      <span class="count">PC에 <b>Google Drive 데스크톱 앱</b>을 설치하면 내 드라이브가 일반 폴더(예: G:\\내 드라이브)로 보입니다. 그 안에 "학과장실 대시보드" 폴더를 만들어 고르면 데이터가 그 폴더의 ${FILE_NAME}에 저장되고, 드라이브가 다른 PC로 동기화합니다. 다른 PC에서도 같은 폴더를 한 번 고르면 됩니다.</span>
+      ${!fsOK ? `<span class="count" style="color:var(--amber)">이 브라우저는 폴더 저장을 지원하지 않습니다. 크롬이나 엣지에서 열어 주세요.</span>` : `<div class="row"><span>${FS.handle ? `현재 폴더: <b>${esc(FS.handle.name)}</b>` : '아직 고른 폴더가 없습니다.'}</span><button class="btn small ${FS.handle ? '' : 'primary'}" type="button" data-act="fsPick">${ic('drive')}${FS.handle ? '폴더 바꾸기' : '폴더 고르기'}</button></div>`}
+      <span class="count">하루 한 번 폴더 안 backup 폴더에 날짜별 사본도 남깁니다.</span>
+      <div class="row"><button class="btn small" type="button" data-act="exportData">${ic('copy')}파일로 내보내기</button><button class="btn small" type="button" data-act="importData">${ic('plus')}파일에서 가져오기</button></div>
+      <span class="count">예전 Claude 대시보드에서 내보낸 파일도 가져올 수 있습니다. 가져온 항목은 지금 데이터에 합쳐집니다.</span></div>
+    <div class="bsec"><b>${ic('gcal', 'kc-g')} 구글 캘린더</b>
+      <span class="count">일정을 구글 캘린더에 <b>추가</b>하는 것은 설정 없이 됩니다(일정 옆 "구글에 추가"). 아래는 구글 일정을 이 달력에 <b>띄우고</b> 싶을 때만 필요합니다.</span>
+      ${!clientId() ? `<details><summary class="count" style="cursor:pointer">구글 일정을 달력에 띄우려면 (선택)</summary><span class="count">구글은 웹페이지가 캘린더를 읽을 때 Google Cloud Console에서 만든 "OAuth 클라이언트 ID"를 요구합니다. 무료이고 한 번만 만들면 됩니다. 만들었다면 아래 칸에 넣고 저장한 뒤 "구글 일정 불러오기"를 누르세요.</span></details>` : !gReady() ? `<div><button class="btn small primary" type="button" data-act="gSignin">${ic('gcal')}구글 로그인</button></div>` : ''}
       ${gReady() ? (G.cals.length ? `<span class="count">달력에 가져올 캘린더만 고르세요. 고르지 않은 캘린더는 읽지 않습니다.</span>
         <div class="callist">${G.cals.map(c => `<label class="chk"><input type="checkbox" name="gcal" value="${esc(c.id)}" ${selectedCals().includes(c.id) || (c.primary && selectedCals().includes('primary')) ? 'checked' : ''}><i class="cdot" style="background:${esc(c.color || '#7DB6D4')}"></i>${esc(c.name)}${c.primary ? ' (기본)' : ''}</label>`).join('')}</div>
         <label>"구글에 추가"로 보낼 캘린더<select class="field" id="sGPushCal">${G.cals.filter(c => c.write).map(c => `<option value="${esc(c.id)}" ${c.id === s.gPushCal || (s.gPushCal === 'primary' && c.primary) ? 'selected' : ''}>${esc(c.name)}${c.primary ? ' (기본)' : ''}</option>`).join('')}</select></label>`
@@ -2182,12 +2269,7 @@ function openSettings() {
       <label class="chk"><input type="checkbox" id="sGPush" ${s.googlePush === true ? 'checked' : ''}>새로 만든 일정을 자동으로 구글에도 넣기 (끄면 "구글에 추가"로 골라서 보냄)</label>
 
       <label>OAuth 클라이언트 ID<input class="field" id="sCid" value="${esc(clientId())}" placeholder="...apps.googleusercontent.com" autocomplete="off"></label>
-      <span class="count">로그인하면 내 드라이브의 "학과장실 대시보드" 폴더에 데이터가 저장되고, 다른 PC에서도 로그인하면 같은 데이터를 봅니다. 이 페이지는 직접 만든 파일만 읽고 쓸 수 있습니다.</span>
-      <span class="count">근무시간과 반복 불가 시간은 상단의 "불가 시간"에서 정합니다.</span>
       ${gReady() ? `<div><button class="btn small" type="button" data-act="signOut">구글 연결 해제</button></div>` : ''}</div>
-    <div class="bsec"><b>${ic('drive')} 데이터</b>
-      <div class="row"><button class="btn small" type="button" data-act="exportData">${ic('copy')}파일로 내보내기</button><button class="btn small" type="button" data-act="importData">${ic('plus')}파일에서 가져오기</button></div>
-      <span class="count">예전 Claude 대시보드에서 내보낸 파일도 가져올 수 있습니다. 가져온 항목은 지금 데이터에 합쳐집니다.</span></div>
     <div class="row" style="justify-content:flex-end"><button class="btn" type="button" data-act="closeDlg">취소</button><button class="btn primary" type="button" data-act="saveSettings">저장</button></div>
   </div></div>`;
 }
@@ -2208,9 +2290,10 @@ renderAll();
 document.body.insertAdjacentHTML('beforeend', '<input type="file" id="importFile" accept="application/json,.json" hidden>');
 $('importFile').addEventListener('change', e => { const f = e.target.files[0]; if (f) importFile(f); e.target.value = ''; });
 (function waitGis(n) { if (gisLoaded()) { initTokenClient(); G.cidUsed = clientId(); renderGChip(); } else if (n < 60) setTimeout(() => waitGis(n + 1), 250); })(0);
-setInterval(() => { if (gReady()) { syncNow(); gLoad(false); } else renderAll(); }, 120000);
-document.addEventListener('visibilitychange', () => { if (!document.hidden && gReady()) { syncNow(); gLoad(false); } });
-window.addEventListener('beforeunload', e => { if (DRIVE.dirty && gReady()) { syncNow(); e.preventDefault(); e.returnValue = ''; } });
+fsRestore();
+setInterval(() => { syncNow(); if (gReady()) gLoad(false); else renderAll(); }, 60000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { syncNow(); if (gReady()) gLoad(false); } });
+window.addEventListener('beforeunload', e => { if (DRIVE.dirty && fsReady()) { syncNow(); e.preventDefault(); e.returnValue = ''; } });
 })();
 </script>
 </body>
