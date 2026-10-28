@@ -1326,12 +1326,22 @@ const CFG = window.DASH_CONFIG || {};
 const SCOPES = 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.calendarlist.readonly';
 const G = { state: 'init', events: [], cals: [], storedAt: 0, partial: false, key: '', token: null, exp: 0, tc: null, refreshing: false, fromCache: false };
 // last Google result is kept in this browser so the calendar shows at once; a fresh read then updates it in the background
-function gCacheSave() { try { localStorage.setItem('gCache', JSON.stringify({ src: (S.settings.gasUrl || '') + '|' + (clientId() || ''), cals: G.cals, events: G.events, storedAt: G.storedAt, partial: G.partial })); } catch {} }
+const gSrc = () => (S.settings.gasUrl || '') + '|' + (clientId() || '');
+function gCacheObj() { return G.changedAt ? { src: gSrc(), cals: G.cals, events: G.events, storedAt: G.storedAt, changedAt: G.changedAt, partial: G.partial } : null; }
+function gCacheSave() { try { localStorage.setItem('gCache', JSON.stringify(gCacheObj())); } catch {} }
+// a newer copy from the Drive data file (written by another PC) replaces what is shown, until the next fresh read
+function gCacheAdopt(c) {
+  if (!isObj(c) || c.src !== gSrc() || !Array.isArray(c.events) || (c.changedAt || 0) <= (G.changedAt || 0) || G.refreshing) return false;
+  if (Array.isArray(c.cals) && c.cals.length) G.cals = c.cals;
+  G.events = c.events; G.changedAt = c.changedAt; G.storedAt = Math.max(G.storedAt || 0, c.storedAt || 0); G.partial = !!c.partial;
+  if (G.state !== 'hidden') G.state = 'ok';
+  gCacheSave(); return true;
+}
 function gCacheLoad() {
   try {
     const c = JSON.parse(localStorage.getItem('gCache') || 'null');
-    if (!c || c.src !== (S.settings.gasUrl || '') + '|' + (clientId() || '') || !Array.isArray(c.events)) return;
-    G.cals = Array.isArray(c.cals) ? c.cals : []; G.events = c.events; G.storedAt = c.storedAt || 0; G.partial = !!c.partial; G.fromCache = true;
+    if (!c || c.src !== gSrc() || !Array.isArray(c.events)) return;
+    G.cals = Array.isArray(c.cals) ? c.cals : []; G.events = c.events; G.storedAt = c.storedAt || 0; G.changedAt = c.changedAt || c.storedAt || 0; G.partial = !!c.partial; G.fromCache = true;
     if (G.events.length || G.cals.length) G.state = 'ok';
   } catch {}
 }
@@ -1455,7 +1465,7 @@ function selectedCals() {
 const calInfo = id => G.cals.find(c => c.id === id) || (id === 'primary' ? G.cals.find(c => c.primary) : null) || { id, name: id === 'primary' ? '기본 캘린더' : id, color: '' };
 async function gLoad(force) {
   if (!gReady()) return;
-  if (S.settings.googleShow === false) { G.events = []; G.storedAt = 0; gCacheClear(); G.state = 'hidden'; renderAll(); return; }
+  if (S.settings.googleShow === false) { G.events = []; G.storedAt = 0; G.changedAt = 0; gCacheClear(); G.state = 'hidden'; renderAll(); return; }
   const cals = selectedCals();
   const [a, b] = gWindow(), key = a + b + cals.join(',');
   if (!force && key === G.key && Date.now() - G.storedAt < 300000) return;
@@ -1482,6 +1492,8 @@ async function gLoad(force) {
     const keepOutside = G.events.filter(g => !inWin(g) && cals.includes(g.cal));
     const hadData = G.storedAt > 0;
     G.events = [...keepOutside.filter(g => !all.some(x => gKey(x) === gKey(g))), ...all]; G.partial = partial; G.storedAt = Date.now(); G.state = 'ok';
+    const diff0 = added || changedN || removed || !G.changedAt;
+    if (diff0) { G.changedAt = Date.now(); if (fsReady()) { DRIVE.dirty = true; clearTimeout(DRIVE.timer); DRIVE.timer = setTimeout(syncNow, 1500); } }
     gCacheSave();
     const diff = [added && `새 일정 ${added}건`, changedN && `바뀐 일정 ${changedN}건`, removed && `없어진 일정 ${removed}건`].filter(Boolean).join(' · ');
     if (hadData && diff && (G.fromCache || !force)) toast('구글 캘린더 업데이트: ' + diff);
@@ -1599,7 +1611,7 @@ const DRIVE = { folderId: null, fileId: null, remoteMod: null, dirty: false, sav
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 const isObj = v => v && typeof v === 'object' && !Array.isArray(v);
 function deepMerge(t, s) { for (const k of Object.keys(s)) { if (isObj(s[k]) && isObj(t[k])) deepMerge(t[k], s[k]); else t[k] = s[k]; } }
-function snapshot() { return { app: 'dept-dashboard', version: 2, savedAt: new Date().toISOString(), settings: S.settings, settingsU: S.settingsU || 0, tasks: S.tasks, events: S.events, emails: S.emails, blocks: S.blocks, deleted: S.deleted }; }
+function snapshot() { return { app: 'dept-dashboard', version: 2, savedAt: new Date().toISOString(), settings: S.settings, settingsU: S.settingsU || 0, tasks: S.tasks, events: S.events, emails: S.emails, blocks: S.blocks, marks: S.marks, deleted: S.deleted, gcache: gCacheObj() }; }
 function dataOnly(d) { const o = {}; for (const c of COLS) o[c] = (d && d[c]) || []; o.settings = d && d.settings; o.deleted = d && d.deleted; return JSON.stringify(o); }
 function mergeIn(r) {
   if (!isObj(r)) return false;
@@ -1618,9 +1630,10 @@ function mergeIn(r) {
     S[col] = [...map.values()];
   }
   if (isObj(r.settings) && (r.settingsU || 0) > (S.settingsU || 0)) { S.settings = { ...DEFAULTS, ...r.settings }; S.settingsU = r.settingsU; changed = true; }
+  if (r.gcache && gCacheAdopt(r.gcache)) changed = true;
   return changed;
 }
-function cacheLocal() { try { localStorage.setItem('deptDash', JSON.stringify(snapshot())); } catch {} }
+function cacheLocal() { try { const o = snapshot(); delete o.gcache; localStorage.setItem('deptDash', JSON.stringify(o)); } catch {} }
 function loadLocal() { try { const d = JSON.parse(localStorage.getItem('deptDash') || 'null'); if (d) mergeIn(d); } catch {} }
 function changed() { undoCommit(); renderAll(); cacheLocal(); DRIVE.dirty = true; clearTimeout(DRIVE.timer); DRIVE.timer = setTimeout(syncNow, 1500); }
 async function add(col, data) { const id = uid(); S[col].push({ id, ...data, _u: Date.now() }); changed(); return id; }
@@ -1675,7 +1688,7 @@ async function syncNow() {
       if (remote && typeof remote === 'object') {
         const before = dataOnly(remote);
         if (mergeIn(remote)) renderAll();
-        if (dataOnly(snapshot()) !== before) DRIVE.dirty = true;
+        if (dataOnly(snapshot()) !== before || (G.changedAt || 0) > ((remote.gcache && remote.gcache.changedAt) || 0)) DRIVE.dirty = true;
         cacheLocal();
         DRIVE.remoteMod = f.lastModified;
       } else { blocked = true; }
@@ -3039,7 +3052,7 @@ document.addEventListener('click', async ev0 => {
       case 'relayCancel': return relayCancel();
       case 'exportData': return exportData();
       case 'importData': return $('importFile').click();
-      case 'signOut': if (G.token && gisLoaded()) google.accounts.oauth2.revoke(G.token, () => {}); G.token = null; G.exp = 0; G.events = []; G.storedAt = 0; gCacheClear(); DRIVE.fileId = null; DRIVE.remoteMod = null; renderAll(); toast('구글 연결을 해제했습니다. 데이터는 드라이브와 이 브라우저에 남아 있습니다.'); return;
+      case 'signOut': if (G.token && gisLoaded()) google.accounts.oauth2.revoke(G.token, () => {}); G.token = null; G.exp = 0; G.events = []; G.storedAt = 0; G.changedAt = 0; gCacheClear(); DRIVE.fileId = null; DRIVE.remoteMod = null; renderAll(); toast('구글 연결을 해제했습니다. 데이터는 드라이브와 이 브라우저에 남아 있습니다.'); return;
       case 'openFinder': UI.dlg = 'finder'; return openFinder(el.dataset.ctx || null);
       case 'slotTog': { const k = el.dataset.k; UI.finder.sel.has(k) ? UI.finder.sel.delete(k) : UI.finder.sel.add(k); return renderFinder(); }
       case 'slotCopy': {
@@ -3078,7 +3091,7 @@ document.addEventListener('click', async ev0 => {
         { const gu = $('sGasUrl').value.trim(), gk = $('sGasKey').value.trim();
           if (gu && !/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(gu)) { toast('웹 앱 주소는 https://script.google.com/macros/s/…/exec 형태여야 합니다.'); return; }
           const changedGas = gu !== (S.settings.gasUrl || '') || gk !== (S.settings.gasKey || '');
-          data.gasUrl = gu; data.gasKey = gk; if (changedGas) { G.cals = []; G.events = []; G.key = ''; G.storedAt = 0; gCacheClear(); setTimeout(() => { if (gasOn()) signIn(); else renderAll(); }, 50); } }
+          data.gasUrl = gu; data.gasKey = gk; if (changedGas) { G.cals = []; G.events = []; G.key = ''; G.storedAt = 0; G.changedAt = 0; gCacheClear(); setTimeout(() => { if (gasOn()) signIn(); else renderAll(); }, 50); } }
         if (document.querySelector('input[name=gcal]')) data.gCals = [...document.querySelectorAll('input[name=gcal]:checked')].map(x => x.value);
         if ($('sGPushCal')) data.gPushCal = $('sGPushCal').value;
         const cid = cleanCid($('sCid').value);
@@ -3324,7 +3337,7 @@ setTimeout(() => { if (gasOn()) signIn(); }, 400);
 setInterval(() => { syncNow(); if (gasOn() && !G.cals.length && G.state !== 'loading') signIn(); else if (gReady()) gLoad(false); else renderAll(); }, 60000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { syncNow(); if (gReady()) gLoad(false); } });
 window.addEventListener('beforeunload', e => { if (DRIVE.dirty && fsReady()) { syncNow(); e.preventDefault(); e.returnValue = ''; } });
-if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__dd = { S, add, UNDO };
+if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__dd = { S, add, UNDO, snapshot, mergeIn, renderAll };
 })();
 </script>
 </body>
