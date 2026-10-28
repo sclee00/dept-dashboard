@@ -87,6 +87,21 @@ function createEvent(p) {
   if (p.location) opt.location = p.location;
   if (p.description) opt.description = p.description;
   let ev;
+  if (p.days) {
+    const W = [CalendarApp.Weekday.SUNDAY, CalendarApp.Weekday.MONDAY, CalendarApp.Weekday.TUESDAY, CalendarApp.Weekday.WEDNESDAY, CalendarApp.Weekday.THURSDAY, CalendarApp.Weekday.FRIDAY, CalendarApp.Weekday.SATURDAY];
+    const days = String(p.days).split(',').map(Number).filter(function (n) { return n >= 0 && n <= 6; }).map(function (n) { return W[n]; });
+    let rule = CalendarApp.newRecurrence().addWeeklyRule().onlyOnWeekdays(days);
+    if (p.until) { const u = toDate(p.until); u.setDate(u.getDate() + 1); rule = rule.until(u); }
+    if (p.time) {
+      const st = toDate(p.date, p.time);
+      let en = p.endTime ? toDate(p.date, p.endTime) : null;
+      if (!en || en <= st) en = new Date(st.getTime() + 3600000);
+      const series = c.createEventSeries(p.title, st, en, rule, opt);
+      return { id: series.getId(), series: true };
+    }
+    const series = c.createAllDayEventSeries(p.title, toDate(p.date), rule, opt);
+    return { id: series.getId(), series: true };
+  }
   if (p.time) {
     const st = toDate(p.date, p.time);
     let en = p.endTime ? toDate(p.date, p.endTime) : null;

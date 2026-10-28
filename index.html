@@ -54,7 +54,7 @@ header.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:spac
 .qhead .ic{color:var(--accent);width:1.25rem;height:1.25rem}
 .qbody{display:grid;grid-template-columns:minmax(0,1fr) 25rem;gap:.6rem;align-items:start}
 .qbody textarea{min-height:5.2rem;height:5.2rem;background:var(--surface-2)}
-.qbody textarea:focus{min-height:9rem}
+.qbody textarea.big{min-height:9rem}
 .qctl{display:grid;grid-template-columns:1fr 1fr;gap:.4rem}
 .qctl .row{grid-column:1/-1}
 .qctl .row .grow{flex:1;justify-content:center}
@@ -380,6 +380,11 @@ a.btn{text-decoration:none;color:inherit}
 @keyframes calnext{from{transform:translateY(14px);opacity:.35}}
 @keyframes calprev{from{transform:translateY(-14px);opacity:.35}}
 @media (prefers-reduced-motion:reduce){.ci2.imp{animation:none}#cal.wnext,#cal.wprev{animation:none}}
+.cmdbox{display:flex;flex-direction:column;gap:.45rem;background:var(--surface-2);border:1px solid var(--accent);border-radius:10px;padding:.65rem .75rem;margin-top:.2rem;color:var(--ink)}
+.cmdhead{display:flex;align-items:center;gap:.4rem}
+.cmdhead .ic{color:var(--accent)}
+.cmdrow{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
+.cmdrow .ic{width:1.3rem;height:1.3rem}
 .icbtn{border:0;background:none;padding:.15rem;margin:-.15rem;border-radius:6px;cursor:pointer;display:grid;place-items:center;color:inherit}
 .icbtn:hover{background:var(--surface);outline:1px dashed var(--muted)}
 .ipgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(5.2rem,1fr));gap:.35rem;max-height:46vh;overflow:auto}
@@ -444,15 +449,15 @@ a.btn{text-decoration:none;color:inherit}
   </header>
 
   <section class="quick" aria-label="메일 붙여넣기">
-    <div class="qhead"><span class="qic" data-ic="inbox"></span><b>메일 붙여넣고 자동 처리</b><span class="count">요약 · 일정 · 할 일 · 답장 초안 · 조교 지시 메일을 한 번에 만듭니다</span></div>
+    <div class="qhead"><span class="qic" data-ic="inbox"></span><b>자동 처리</b><span class="count">메일을 붙여넣으면 요약·일정·할 일·답장·조교 지시를 만들고, 짧게 명령하면 바로 실행합니다</span></div>
     <div class="qbody">
-      <textarea class="field" id="rawMail" rows="3" placeholder="메일을 보낸 사람·제목·본문 그대로 붙여넣으세요. 회신·전달로 쌓인 스레드도 통째로 넣으면 앞선 메일까지 읽습니다. 시간을 정해야 하는 메일이면 빈 시간을 골라 답장에 넣습니다. (Ctrl+Enter로 분석)"></textarea>
+      <textarea class="field" id="rawMail" rows="3" placeholder="메일을 그대로 붙여넣거나 짧게 명령하세요 (Ctrl+Enter). 예: 매주 화요일 3시에 임원회의 일정 추가 · 금요일까지 예산서 제출 할 일 · 다음주 수요일 오후 출장 불가 · 11월 5일 2시~4시 교육과정위원회"></textarea>
       <div class="qctl">
         <select class="field" id="mailCat" aria-label="분류">
           <option>대학본부·행정</option><option>교원</option><option>학생</option><option>외부기관</option><option>기타</option>
         </select>
         <select class="field" id="threadOf" aria-label="이어지는 메일"><option value="">새 메일로 등록</option></select>
-        <div class="row"><button class="btn" type="button" data-act="cancelAnalyze" id="stopBtn" hidden>중지</button><button class="btn primary grow" type="button" data-act="analyze" id="analyzeBtn"><span data-ic="spark"></span>분석하고 자동 처리</button></div>
+        <div class="row"><button class="btn" type="button" data-act="cancelAnalyze" id="stopBtn" hidden>중지</button><button class="btn primary grow" type="button" data-act="analyze" id="analyzeBtn"><span data-ic="spark"></span>자동 처리</button></div>
       </div>
     </div>
     <div class="status" id="pasteStatus"></div>
@@ -995,7 +1000,7 @@ function blocksOn(day) {
 }
 function evEnd(e) { const s = toMin(e.time); const en = toMin(e.endTime); return en != null && en > s ? en : Math.min(s + 60, 1440); }
 function localTimedOn(day) {
-  return S.events.filter(e => e.date === day && !(isDate(e.endDate) && e.endDate > e.date) && toMin(e.time) != null)
+  return expandEvents().filter(e => e.date === day && !e.span && toMin(e.time) != null)
     .map(e => ({ s: toMin(e.time), e: evEnd(e), label: e.title, src: 'event', ev: e }));
 }
 function busyOn(day) {
@@ -1235,6 +1240,7 @@ async function pushGoogle(doc, id, calId, quiet) {
   if (toMin(doc.time) != null) {
     const en = fromMin(Math.min(evEnd(doc), 1439));
     body.start = { dateTime: `${doc.date}T${doc.time}:00`, timeZone: TZ }; body.end = { dateTime: `${doc.date}T${en}:00`, timeZone: TZ };
+    if (rrule(doc)) body.recurrence = [rrule(doc)];
   } else {
     const last = isDate(doc.endDate) && doc.endDate > doc.date ? doc.endDate : doc.date;
     body.start = { date: doc.date }; body.end = { date: addDays(last, 1) };
@@ -1242,7 +1248,7 @@ async function pushGoogle(doc, id, calId, quiet) {
   try {
     const target = calId || S.settings.gPushCal || 'primary';
     if (gasOn()) {
-      const j = await gas({ action: 'create', cal: target, title: doc.title, date: doc.date, time: toMin(doc.time) != null ? doc.time : '', endTime: toMin(doc.time) != null ? fromMin(Math.min(evEnd(doc), 1439)) : '', endDate: doc.endDate || '', location: doc.location || '', description: body.description });
+      const j = await gas({ action: 'create', cal: target, title: doc.title, date: doc.date, time: toMin(doc.time) != null ? doc.time : '', endTime: toMin(doc.time) != null ? fromMin(Math.min(evEnd(doc), 1439)) : '', endDate: doc.endDate || '', location: doc.location || '', description: body.description, days: repDays(doc) ? repDays(doc).join(',') : '', until: repDays(doc) && isDate(doc.repeat.until) ? doc.repeat.until : '' });
       await patch('events', id, { googleId: String((j.event && j.event.id) || 'pushed'), googleCal: target });
       if (!quiet) { toast(`구글 캘린더 "${calInfo(target).name}"에 추가했습니다.`); gLoad(true); }
       return true;
@@ -1260,7 +1266,7 @@ async function pushGoogle(doc, id, calId, quiet) {
 
 /* ---------- choose events → add to Google Calendar ---------- */
 function openGSend(preId) {
-  const list = S.events.filter(e => isDate(e.date) && (e.endDate || e.date) >= todayStr() && !e.googleId && (gReady() || !e.googleSent || e.id === preId)).sort((a, b) => a.date.localeCompare(b.date) || (a.time || '').localeCompare(b.time || ''));
+  const list = S.events.filter(e => isDate(e.date) && (repDays(e) || (e.endDate || e.date) >= todayStr()) && !e.googleId && (gReady() || !e.googleSent || e.id === preId)).sort((a, b) => a.date.localeCompare(b.date) || (a.time || '').localeCompare(b.time || ''));
   UI.gsend = { sel: new Set(preId ? [preId] : []), cal: S.settings.gPushCal || 'primary', ids: list.map(e => e.id) };
   if (preId && !UI.gsend.ids.includes(preId)) UI.gsend.ids.unshift(preId);
   UI.dlg = 'gsend'; renderGSend();
@@ -1437,8 +1443,11 @@ function renderSync() {
   el.title = st === 'none' ? '구글 드라이브 데스크톱 앱의 폴더(예: G:\\내 드라이브\\학과장실 대시보드)를 고르면 다른 PC에서도 같은 데이터를 봅니다'
     : st === 'broken' ? `${FILE_NAME}이 깨져 있어 덮어쓰지 않았습니다. 폴더의 backup 안 파일을 확인해 주세요.` : '눌러서 지금 저장·불러오기';
 }
+const BYDAY = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
+const rrule = e => repDays(e) ? `RRULE:FREQ=WEEKLY;BYDAY=${repDays(e).map(d => BYDAY[d]).join(',')}${isDate(e.repeat.until) ? ';UNTIL=' + e.repeat.until.replace(/-/g, '') + 'T235959' : ''}` : '';
 function gTemplateUrl(e) {
   const q = new URLSearchParams({ action: 'TEMPLATE', text: e.title || '', details: '학과장실 대시보드에서 추가', ctz: TZ });
+  if (rrule(e)) q.set('recur', rrule(e));
   if (e.location) q.set('location', e.location);
   const d = s => s.replace(/-/g, '');
   if (toMin(e.time) != null) {
@@ -1467,6 +1476,193 @@ async function importFile(file) {
     mergeIn(d); changed();
     toast(`${n}건을 가져왔습니다.`);
   } catch { toast('가져오지 못했습니다. 대시보드에서 내보낸 JSON 파일인지 확인해 주세요.'); }
+}
+
+/* ---------- short commands: "매주 화요일 3시에 임원회의 일정 추가" ---------- */
+const DOW = { 일: 0, 월: 1, 화: 2, 수: 3, 목: 4, 금: 5, 토: 6 };
+const DOW_KO = ['일', '월', '화', '수', '목', '금', '토'];
+function looksLikeCommand(t) {
+  const s = String(t || '').trim();
+  const lines = s.split('\n').filter(x => x.trim());
+  if (!s || s.length > 220 || lines.length > 3) return false;
+  if (/보낸\s*사람|받는\s*사람|^from:|^to:|subject:|제목\s*:|-----|[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/im.test(s)) return false;
+  return true;
+}
+function nextDow(dow, from, includeToday) {
+  let k = (dow - parse(from).getDay() + 7) % 7;
+  if (k === 0 && !includeToday) k = 7;
+  return addDays(from, k);
+}
+function toHour(ap, h) {
+  h = +h;
+  if (ap === '오후' || ap === '저녁' || ap === '밤') { if (h < 12) h += 12; }
+  else if (ap === '오전' || ap === '아침' || ap === '새벽') { if (h === 12) h = 0; }
+  else if (h >= 1 && h <= 7) h += 12;
+  return h;
+}
+const hm = (h, m) => `${pad(Math.min(23, h))}:${pad(m || 0)}`;
+function parseCommand(raw) {
+  const today = todayStr();
+  let t = ' ' + String(raw).replace(/\s+/g, ' ').trim() + ' ';
+  const cut = re => { const m = t.match(re); if (m) t = t.replace(m[0], ' '); return m; };
+  const r = { type: 'event', title: '', date: '', due: '', time: '', endTime: '', allDay: false, repeat: null, kind: '', imp: '', notes: [] };
+  if (/불가|안\s*됨|안\s*되는|못\s*(가|감|함|해)|막아|비워\s*둬/.test(t)) r.type = 'block';
+  else if (/할\s*일|해야\s*(함|해|돼|한다)|투두|todo/i.test(t) || /까지\s*\S*\s*(제출|보내|작성|완료|검토|확인|처리|준비)/.test(t)) r.type = 'task';
+
+  // repeat
+  let m = cut(/(매주|매 주|주마다)\s*((?:[월화수목금토일](?:요일)?\s*(?:[,·\/]|및|와|과|랑)?\s*)+)(마다)?/);
+  if (m) r.repeat = { days: [...new Set([...m[2].replace(/요일/g, '')].filter(c => c in DOW).map(c => DOW[c]))] };
+  else if (cut(/평일\s*(마다|매일)|매\s*평일/)) r.repeat = { days: [1, 2, 3, 4, 5] };
+  else if (cut(/매일/)) r.repeat = { days: [0, 1, 2, 3, 4, 5, 6] };
+
+  // dates (each may be followed by 까지 / 부터)
+  const dates = [];
+  const take = (re, fn) => {
+    let mm;
+    while ((mm = t.match(re))) {
+      const after = t.slice(t.indexOf(mm[0]) + mm[0].length);
+      const tail = after.match(/^\s*(까지|부터|에|에는|에서)?/);
+      const d = fn(mm);
+      t = t.replace(mm[0] + (tail ? tail[0] : ''), ' ');
+      if (d) dates.push({ d, until: !!(tail && tail[1] === '까지') });
+    }
+  };
+  const ymdOf = (mo, d) => { const y = parse(today).getFullYear(); let s = `${y}-${pad(mo)}-${pad(d)}`; if (s < addDays(today, -60)) s = `${y + 1}-${pad(mo)}-${pad(d)}`; return isDate(s) ? s : ''; };
+  take(/(\d{4})[-.](\d{1,2})[-.](\d{1,2})/, x => `${x[1]}-${pad(x[2])}-${pad(x[3])}`);
+  take(/(\d{1,2})\s*월\s*(\d{1,2})\s*일/, x => ymdOf(+x[1], +x[2]));
+  take(/(?<![\d:])(\d{1,2})\/(\d{1,2})(?![\d:])/, x => ymdOf(+x[1], +x[2]));
+  take(/(오늘|내일|모레|글피)/, x => addDays(today, { 오늘: 0, 내일: 1, 모레: 2, 글피: 3 }[x[1]]));
+  take(/(다음\s*주|담주|차주|다다음\s*주|이번\s*주|금주)?\s*([월화수목금토일])요일/, x => {
+    const dow = DOW[x[2]], w = x[1] ? x[1].replace(/\s/g, '') : '';
+    const sun = addDays(today, -parse(today).getDay());
+    if (w === '다음주' || w === '담주' || w === '차주') return addDays(sun, 7 + dow);
+    if (w === '다다음주') return addDays(sun, 14 + dow);
+    if (w === '이번주' || w === '금주') return addDays(sun, dow);
+    return nextDow(dow, today, true);
+  });
+  take(/(?<![\d월])(\d{1,2})\s*일(?!\s*(간|동안|씩))/, x => { const now = parse(today); let s = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(+x[1])}`; if (s < today) { const n = new Date(now.getFullYear(), now.getMonth() + 1, +x[1]); s = ymd(n); } return isDate(s) ? s : ''; });
+  m = cut(/(\d{1,2})\s*월\s*(말|까지)/);
+  if (m) { const y = parse(today).getFullYear(); const last = new Date(y, +m[1], 0); dates.push({ d: ymd(last < parse(today) ? new Date(y + 1, +m[1], 0) : last), until: true }); }
+
+  // times
+  const T = '(오전|오후|저녁|아침|낮|밤|새벽)?\\s*(\\d{1,2})(?::(\\d{2})|\\s*시\\s*(?:(\\d{1,2})\\s*분|(반))?)';
+  m = cut(new RegExp(T + '\\s*(?:부터|~|-|–|에서)\\s*' + T + '\\s*(?:까지)?'));
+  if (m) {
+    const sh = toHour(m[1], m[2]), smi = m[3] ? +m[3] : m[4] ? +m[4] : m[5] ? 30 : 0;
+    let eh = toHour(m[6] || (m[1] && /오후|저녁|밤/.test(m[1]) ? '오후' : ''), m[7]); const emi = m[8] ? +m[8] : m[9] ? +m[9] : m[10] ? 30 : 0;
+    if (eh * 60 + emi <= sh * 60 + smi && eh < 12) eh += 12;
+    r.time = hm(sh, smi); r.endTime = hm(eh, emi);
+  } else if ((m = cut(new RegExp(T + '(?:\\s*에)?(?!\\s*(간|동안))')))) {
+    const h = toHour(m[1], m[2]), mi = m[3] ? +m[3] : m[4] ? +m[4] : m[5] ? 30 : 0;
+    r.time = hm(h, mi);
+  } else if (cut(/정오/)) r.time = '12:00';
+  if (cut(/(하루\s*)?종일/)) r.allDay = true;
+  if (!r.time && !r.allDay) {
+    if (cut(/오전(\s*중)?/)) { r.time = '09:00'; r.endTime = '12:00'; }
+    else if (cut(/오후(\s*중)?/)) { r.time = '13:00'; r.endTime = '18:00'; }
+  }
+  m = cut(/(\d+(?:\.\d+)?)\s*시간\s*(?:(\d+)\s*분)?\s*(?:동안|짜리|간)?/);
+  if (m && r.time) { const st = toMin(r.time), du = Math.round(parseFloat(m[1]) * 60 + (m[2] ? +m[2] : 0)); r.endTime = fromMin(Math.min(st + du, 1439)); }
+  m = cut(/(\d{1,3})\s*분\s*(?:동안|간|짜리)/);
+  if (m && r.time && !r.endTime) r.endTime = fromMin(Math.min(toMin(r.time) + +m[1], 1439));
+  if (r.time && !r.endTime) r.endTime = fromMin(Math.min(toMin(r.time) + 60, 1439));
+
+  // assign dates
+  for (const x of dates) {
+    if (r.repeat && x.until) r.repeat.until = x.d;
+    else if (r.type === 'task' && (x.until || !r.due)) r.due = x.d;
+    else if (!r.date) r.date = x.d;
+  }
+  if (r.type === 'task' && !r.due && r.date) { r.due = r.date; r.date = ''; }
+  if (r.repeat && r.repeat.days.length) {
+    const first = r.repeat.days.map(dw => nextDow(dw, r.date || today, true)).sort()[0];
+    r.date = r.date && r.repeat.days.includes(parse(r.date).getDay()) ? r.date : first;
+  }
+
+  // title
+  let title = t
+    .replace(/(일정|약속|이벤트|스케줄|미팅\s*일정)?\s*(을|를)?\s*(추가|등록|넣어|잡아|만들어|생성)\s*(해\s*줘|해줘|해주세요|해 주세요|하기|해|줘|요)?/g, ' ')
+    .replace(/할\s*일\s*(로|을|를|에)?/g, ' ')
+    .replace(/(시간\s*)?불가\s*(시간)?\s*(으로|로)?\s*(표시|처리)?/g, ' ')
+    .replace(/(으로|로)?\s*(막아|비워)\s*(둬|줘|두기)?/g, ' ')
+    .replace(/(해야\s*(함|해|돼|한다))/g, ' ')
+    .replace(/\s(에|에는|부터|까지|에서|은|는|을|를|이|가|도|으로|로)(?=\s)/g, ' ')
+    .replace(/[\s,.:!~]+/g, ' ').trim()
+    .replace(/(을|를|은|는|이|가|에|으로|로|도)$/, '').trim();
+  r.title = title || (r.type === 'block' ? '불가' : r.type === 'task' ? '할 일' : '일정');
+  if (r.type === 'event') r.kind = /마감|제출/.test(r.title) ? '마감' : /강의|수업|학사|시험|개강|종강|졸업|입학/.test(r.title) ? '학사' : /행사|세미나|학회|전시|축제|식사|회식|발표회|설명회/.test(r.title) ? '행사' : '회의';
+  r.imp = autoImp(r.title, r.kind);
+  if (r.type === 'event' && !r.date) { r.date = today; r.notes.push('날짜를 찾지 못해 오늘로 넣었습니다'); }
+  if (r.type === 'block' && !r.date && !r.repeat) { r.date = today; r.notes.push('날짜를 찾지 못해 오늘로 넣었습니다'); }
+  if (r.type === 'block' && !r.time && !r.allDay) r.allDay = true;
+  r.sure = !!title && !r.notes.length;
+  return r;
+}
+function describeAction(a) {
+  const rep = a.repeat && a.repeat.days && a.repeat.days.length ? `매주 ${a.repeat.days.map(d => DOW_KO[d]).join('·')}요일` + (a.repeat.until ? ` (${fmtShort(a.repeat.until)}까지)` : '') : '';
+  const when = a.type === 'task' ? (a.due ? `${fmtShort(a.due)}까지` : '기한 없음')
+    : [rep || (a.date ? fmtShort(a.date) : ''), a.allDay ? '종일' : a.time ? `${a.time}–${a.endTime || ''}` : ''].filter(Boolean).join(' ');
+  const typeKo = { event: '일정', task: '할 일', block: '불가 시간' }[a.type] || '일정';
+  return { typeKo, when, title: a.title };
+}
+function renderCmdPreview(actions, sourceText, fromAI) {
+  UI.cmd = { actions, text: sourceText };
+  const st = $('pasteStatus');
+  st.className = 'status';
+  st.innerHTML = `<div class="cmdbox">
+    <div class="cmdhead">${ic('spark')}<b>${fromAI ? 'AI가 해석한 내용' : '이렇게 처리할까요?'}</b></div>
+    ${actions.map((a, i) => { const d = describeAction(a); const k = a.type === 'block' ? 'lock' : a.type === 'task' ? iconFor(a.title, '할일') : iconFor(a.title, a.kind || '회의');
+      return `<div class="cmdrow">${ic(k, ICON_GROUP[k] || '')}<span class="pill pend">${d.typeKo}</span><b>${esc(d.title)}</b><span class="count">${esc(d.when)}</span>${a.type === 'event' && a.imp === 'high' ? '<span class="impbtn on">중요</span>' : ''}${(a.notes || []).map(n => `<span class="warnline">${esc(n)}</span>`).join('')}</div>`; }).join('')}
+    <div class="row"><button class="btn small primary" type="button" data-act="cmdApply">${ic('check')}${actions.length > 1 ? `${actions.length}개 모두 ` : ''}추가</button>
+      ${fromAI ? '' : `<button class="btn small" type="button" data-act="cmdAI">${ic('spark')}다르게 이해했어요 · AI에게 맡기기</button>`}
+      <button class="btn small" type="button" data-act="cmdCancel">취소</button></div>
+  </div>`;
+}
+function commandPrompt(text) {
+  return `당신은 한국 대학교 컴퓨터공학과 학과장의 일정 비서입니다. 학과장이 대시보드에 짧은 명령을 입력했습니다. 명령을 실행할 동작 목록으로 바꾸세요.
+${ctxLine()}
+요일 번호: 일0 월1 화2 수3 목4 금5 토6. "3시"처럼 오전/오후가 없으면 근무시간 기준으로 1~7시는 오후로 보세요.
+
+아래 형식의 JSON 객체 하나로만 답하세요.
+{"actions": [{"type": "event | task | block", "title": "짧은 제목", "date": "YYYY-MM-DD 또는 null (반복이면 첫 날짜)", "time": "HH:MM 또는 null", "endTime": "HH:MM 또는 null", "allDay": true 또는 false, "repeat": {"days": [요일 번호], "until": "YYYY-MM-DD 또는 null"} 또는 null, "due": "할 일 기한 YYYY-MM-DD 또는 null", "kind": "회의 | 행사 | 마감 | 학사", "important": true 또는 false}], "note": "학과장에게 알릴 한 줄 (없으면 null)"}
+type: event는 일정, task는 할 일, block은 학과장이 안 되는 시간(불가 시간).
+
+명령: ${text}`;
+}
+function cleanActions(arr) {
+  const kinds = ['회의', '행사', '마감', '학사'], hmRe = /^\d{2}:\d{2}$/;
+  return (Array.isArray(arr) ? arr : []).filter(a => a && a.title).slice(0, 20).map(a => {
+    const x = { type: ['event', 'task', 'block'].includes(a.type) ? a.type : 'event', title: String(a.title).slice(0, 120), date: isDate(a.date) ? a.date : '', time: hmRe.test(a.time || '') ? a.time : '', endTime: hmRe.test(a.endTime || '') ? a.endTime : '', allDay: !!a.allDay, due: isDate(a.due) ? a.due : '', kind: kinds.includes(a.kind) ? a.kind : '회의', notes: [] };
+    if (a.repeat && Array.isArray(a.repeat.days)) { const days = a.repeat.days.map(Number).filter(n => n >= 0 && n <= 6); if (days.length) x.repeat = { days: [...new Set(days)], ...(isDate(a.repeat.until) ? { until: a.repeat.until } : {}) }; }
+    if (x.repeat && !x.date) x.date = x.repeat.days.map(dw => nextDow(dw, todayStr(), true)).sort()[0];
+    if (x.time && !x.endTime) x.endTime = fromMin(Math.min(toMin(x.time) + 60, 1439));
+    if (x.type === 'event' && !x.date) x.date = todayStr();
+    x.imp = typeof a.important === 'boolean' ? (a.important ? 'high' : 'normal') : autoImp(x.title, x.kind);
+    return x;
+  });
+}
+async function applyActions(actions) {
+  let first = '', n = 0;
+  for (const a of actions) {
+    if (a.type === 'task') { await add('tasks', { title: a.title, due: a.due || '', priority: a.imp === 'high' ? 'high' : 'mid', done: false, source: 'command', createdAt: nowISO() }); n++; if (a.due) first = first || a.due; continue; }
+    if (a.type === 'block') {
+      if (a.repeat && !a.allDay && a.time) {
+        const weekly = [...(S.settings.weekly || []), { id: 'w' + Math.random().toString(36).slice(2, 8), days: a.repeat.days, start: a.time, end: a.endTime || fromMin(Math.min(toMin(a.time) + 60, 1439)), label: a.title }];
+        await saveSettings({ ...S.settings, weekly });
+      } else if (a.repeat) {
+        for (let d = a.date, i = 0; i < 60 && (!a.repeat.until || d <= a.repeat.until); d = addDays(d, 1)) if (a.repeat.days.includes(parse(d).getDay())) { await add('blocks', { date: d, allDay: true, start: '', end: '', label: a.title, createdAt: nowISO() }); i += 7; }
+      } else await add('blocks', { date: a.date, allDay: a.allDay || !a.time, start: a.allDay ? '' : a.time, end: a.allDay ? '' : a.endTime, label: a.title, createdAt: nowISO() });
+      n++; first = first || a.date; continue;
+    }
+    const doc = { title: a.title, date: a.date, time: a.allDay ? '' : a.time, endTime: a.allDay ? '' : a.endTime, location: '', kind: a.kind || '회의', imp: a.imp, source: 'command', createdAt: nowISO() };
+    if (a.repeat) doc.repeat = { days: a.repeat.days, ...(a.repeat.until ? { until: a.repeat.until } : {}) };
+    const nid = await add('events', doc);
+    if (S.settings.googlePush === true && gReady()) pushGoogle(doc, nid);
+    n++; first = first || a.date;
+  }
+  if (first) { UI.selDay = first; UI.rail = 'day'; const fd = parse(first); if (UI.view === 'month') UI.month = new Date(fd.getFullYear(), fd.getMonth(), 1); }
+  renderAll();
+  return n;
 }
 
 /* ---------- AI relay: copy prompt → paste answer ---------- */
@@ -1518,15 +1714,30 @@ const sample = Object.assign(
 );
 
 /* ---------- calendar (main) ---------- */
+const repDays = e => e.repeat && Array.isArray(e.repeat.days) && e.repeat.days.length ? e.repeat.days : null;
+const repText = e => repDays(e) ? `매주 ${repDays(e).slice().sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7)).map(d => '일월화수목금토'[d]).join('·')}요일${isDate(e.repeat.until) ? ` · ${fmtShort(e.repeat.until)}까지` : ''}` : '';
+let _expMemo = { key: '', out: [] };
 function expandEvents() {
+  const t = todayStr();
+  const key = t + '|' + S.events.length + '|' + S.events.reduce((m, e) => Math.max(m, e._u || 0), 0);
+  if (_expMemo.key === key) return _expMemo.out;
   const out = [];
   for (const e of S.events) {
     if (!isDate(e.date)) continue;
+    const days = repDays(e);
+    if (days) {
+      const end = isDate(e.repeat.until) ? e.repeat.until : addDays(t, 400);
+      const skip = new Set(e.skip || []);
+      let d = e.date < addDays(t, -150) ? addDays(t, -150) : e.date;
+      for (let i = 0; d <= end && i < 600; i++, d = addDays(d, 1)) if (days.includes(parse(d).getDay()) && !skip.has(d)) out.push({ ...e, date: d, occ: true, seriesStart: e.date });
+      continue;
+    }
     if (isDate(e.endDate) && e.endDate > e.date) {
       let d = e.date, i = 0;
       while (d <= e.endDate && i < 62) { out.push({ ...e, date: d, span: true }); d = addDays(d, 1); i++; }
     } else out.push(e);
   }
+  _expMemo = { key, out };
   return out;
 }
 function cellItems(day) {
@@ -1593,7 +1804,8 @@ function eventActs(e) {
   const sync = e.googleId ? `<span class="gtag" title="구글 캘린더에 있음">${ic('gcal')}✓</span>`
     : gReady() ? `<button class="btn small" type="button" data-act="pushG" data-id="${e.id}" title="구글 캘린더에 추가">${ic('gcal')}구글에 추가</button>`
     : `<a class="btn small" href="${esc(gTemplateUrl(e))}" target="_blank" rel="noopener" data-act="gTpl" data-id="${e.id}" title="구글 캘린더 일정 만들기 화면 열기">${ic('gcal')}${e.googleSent ? '다시 보내기' : '구글에 추가'}</a>`;
-  return `${imp}${sync}${e.emailId ? `<button class="x" type="button" data-act="openMail" data-id="${e.emailId}" aria-label="관련 메일" title="관련 메일">${ic('mail')}</button>` : ''}<button class="x" type="button" data-act="delEvent" data-id="${e.id}" aria-label="일정 삭제">✕</button>`;
+  const skip = e.occ ? `<button class="btn small" type="button" data-act="skipOcc" data-id="${e.id}" data-day="${e.date}" title="이 날짜만 반복에서 빼기">이번만 빼기</button>` : '';
+  return `${imp}${skip}${sync}${e.emailId ? `<button class="x" type="button" data-act="openMail" data-id="${e.emailId}" aria-label="관련 메일" title="관련 메일">${ic('mail')}</button>` : ''}<button class="x" type="button" data-act="delEvent" data-id="${e.id}" aria-label="${e.occ ? '반복 일정 전체 삭제' : '일정 삭제'}" title="${e.occ ? '반복 일정 전체 삭제' : '일정 삭제'}">✕</button>`;
 }
 function dayFormHtml(day) {
   const pf = UI.prefill || {};
@@ -1627,7 +1839,7 @@ function renderDay(force) {
   const ad = [];
   for (const e of expandEvents().filter(e => e.date === day && (e.span || toMin(e.time) == null))) {
     const range = e.span ? `${fmtShort(e.endDate === day ? e.date : e.date)}–${fmtShort(e.endDate)}` : '종일';
-    ad.push(srow({ t: e.kind === '마감' ? '마감' : range, icon: iconOfEvent(e), kc: iconKc(iconOfEvent(e), 'kc-' + (e.kind || '학사')), fixed: true, iconAct: `data-act="ipOpen" data-kind="e" data-id="${e.id}"`, title: e.title, sub: esc(e.location || ''), cls: (e.kind === '마감' ? 'hot' : '') + (impOfEvent(e) === 'high' ? ' improw' : ''), acts: eventActs(e), tag: e.example ? ' <span class="tag ex">예시</span>' : '' }));
+    ad.push(srow({ t: e.kind === '마감' ? '마감' : range, icon: iconOfEvent(e), kc: iconKc(iconOfEvent(e), 'kc-' + (e.kind || '학사')), fixed: true, iconAct: `data-act="ipOpen" data-kind="e" data-id="${e.id}"`, title: e.title, sub: esc([repText(e), e.location].filter(Boolean).join(' · ')), cls: (e.kind === '마감' ? 'hot' : '') + (impOfEvent(e) === 'high' ? ' improw' : ''), acts: eventActs(e), tag: e.example ? ' <span class="tag ex">예시</span>' : '' }));
   }
   for (const t of S.tasks.filter(t => !t.done && t.due === day))
     ad.push(srow({ t: '할 일', icon: t.priority === 'high' ? 'flame' : '할일', kc: 'kc-할일', title: t.title, cls: t.priority === 'high' ? 'hot' : '', sub: t.emailId ? '메일에서 나온 할 일' : '', acts: `<button class="x" type="button" data-act="toggleTask" data-id="${t.id}" aria-label="완료" title="완료">${ic('check')}</button>`, tag: t.example ? ' <span class="tag ex">예시</span>' : '' }));
@@ -1641,7 +1853,7 @@ function renderDay(force) {
   const timed = [];
   for (const b of weeklyOn(day)) timed.push({ s: b.s, h: srow({ t: `${fromMin(b.s)}–${fromMin(b.e)}`, icon: 'lock', title: b.label, sub: '매주 반복 불가 시간', cls: 'busy', acts: `<button class="btn small" type="button" data-act="openBusy">편집</button>`, tag: b.example ? ' <span class="tag ex">예시</span>' : '' }) });
   for (const b of blocksOn(day).filter(b => !b.allDay)) timed.push({ s: b.s, h: srow({ t: `${fromMin(b.s)}–${fromMin(b.e)}`, icon: 'lock', title: b.label, sub: '불가 시간', cls: 'busy', acts: `<button class="x" type="button" data-act="delBlock" data-id="${b.id}" aria-label="삭제">✕</button>`, tag: b.example ? ' <span class="tag ex">예시</span>' : '' }) });
-  for (const x of localTimedOn(day)) { const e = x.ev; timed.push({ s: x.s, h: srow({ t: `${fromMin(x.s)}–${fromMin(x.e)}`, icon: iconOfEvent(e), kc: iconKc(iconOfEvent(e), 'kc-' + (e.kind || '회의')), fixed: true, iconAct: `data-act="ipOpen" data-kind="e" data-id="${e.id}"`, title: e.title, sub: esc([e.location, e.emailId ? '메일에서 추가' : ''].filter(Boolean).join(' · ')), cls: (e.kind === '마감' ? 'hot' : '') + (impOfEvent(e) === 'high' ? ' improw' : ''), acts: eventActs(e), tag: e.example ? ' <span class="tag ex">예시</span>' : '' }) }); }
+  for (const x of localTimedOn(day)) { const e = x.ev; timed.push({ s: x.s, h: srow({ t: `${fromMin(x.s)}–${fromMin(x.e)}`, icon: iconOfEvent(e), kc: iconKc(iconOfEvent(e), 'kc-' + (e.kind || '회의')), fixed: true, iconAct: `data-act="ipOpen" data-kind="e" data-id="${e.id}"`, title: e.title, sub: esc([repText(e), e.location, e.emailId ? '메일에서 추가' : ''].filter(Boolean).join(' · ')), cls: (e.kind === '마감' ? 'hot' : '') + (impOfEvent(e) === 'high' ? ' improw' : ''), acts: eventActs(e), tag: e.example ? ' <span class="tag ex">예시</span>' : '' }) }); }
   for (const g of gOn(day)) timed.push({ s: g.s, h: srow({ t: `${g.time}–${g.endTime}`, icon: iconOfG(g), kc: iconKc(iconOfG(g), 'kc-g'), fixed: true, iconAct: `data-act="ipOpen" data-kind="g" data-id="${esc(gKey(g))}"`, title: g.title, sub: '구글 캘린더' + (g.calName ? ' · ' + esc(g.calName) : '') + (g.free ? ' · 바쁨 아님' : '') + (g.loc ? ' · ' + esc(g.loc) : ''), cls: impOfG(g) === 'high' ? 'improw' : '', acts: impBtn(impOfG(g) === 'high', 'impG', `data-k="${esc(gKey(g))}"`) + (g.link ? `<a class="ext" href="${esc(g.link)}" target="_blank" rel="noopener" title="구글 캘린더에서 열기">${ic('ext')}</a>` : '') }) });
   for (const [s, e] of freeSlots(day, 30)) timed.push({ s: s + 0.5, h: `<button type="button" class="srow freeslot" data-act="slotAdd" data-s="${s}" data-e="${e}"><span class="t">${fromMin(s)}–${fromMin(e)}</span>${ic('free')}<span class="tt">빈 시간 · ${durKo(e - s)}<span class="sub3">눌러서 이 시간에 일정 넣기</span></span><span class="acts"></span></button>` });
   timed.sort((a, b) => a.s - b.s);
@@ -1964,6 +2176,13 @@ function fieldsFrom(a, emailId) {
 async function analyzeNew() {
   const text = $('rawMail').value.trim();
   const st = $('pasteStatus');
+  if (!text) { st.className = 'status err'; st.textContent = '메일을 붙여넣거나 명령을 적어 주세요.'; return; }
+  if (looksLikeCommand(text) && !$('threadOf').value) {
+    const r = parseCommand(text);
+    if (r.sure) renderCmdPreview([r], text, false);
+    else runCommandAI(text);
+    return;
+  }
   if (text.length < 10) { st.className = 'status err'; st.textContent = '메일 내용을 붙여넣어 주세요.'; return; }
   const cat = $('mailCat').value;
   const prevId = $('threadOf').value;
@@ -2110,6 +2329,18 @@ ${m.summary ? '요약: ' + m.summary : ''}`;
   } catch (e) { const s = $('promptStatus'); if (s) { s.className = 'status err'; s.textContent = sampleErr(e).replace('분석', '생성'); } }
 }
 
+async function runCommandAI(text) {
+  const st = $('pasteStatus');
+  st.className = 'status'; st.textContent = 'AI 창에서 프롬프트를 복사해 붙여넣고, 답을 다시 붙여넣어 주세요.';
+  try {
+    const j = await sample.json(commandPrompt(text), { title: '명령 해석 · ' + text.slice(0, 30) });
+    const acts = cleanActions(j && j.actions);
+    if (!acts.length) { st.className = 'status err'; st.textContent = (j && j.note) || '실행할 내용을 찾지 못했습니다. 조금 더 구체적으로 적어 주세요.'; return; }
+    renderCmdPreview(acts, text, true);
+    if (j.note) toast(String(j.note).slice(0, 120));
+  } catch (e) { st.className = 'status'; st.textContent = e && e.code === 'cancelled' ? '취소했습니다.' : sampleErr(e); }
+}
+
 /* ---------- actions ---------- */
 function syncTabs() {
   document.querySelectorAll('#taskTabs .tab').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.tf === UI.tf)));
@@ -2205,6 +2436,10 @@ document.addEventListener('click', async ev0 => {
         return syncNow();
       case 'fsPick': return fsPick();
       case 'impT': { const e = S.events.find(x => x.id === id); if (e) await patch('events', id, { imp: impOfEvent(e) === 'high' ? 'normal' : 'high' }); return; }
+      case 'cmdApply': { const c = UI.cmd; if (!c) return; const n = await applyActions(c.actions); UI.cmd = null; $('rawMail').value = ''; const st = $('pasteStatus'); st.className = 'status'; st.textContent = `${n}건을 추가했습니다.`; toast(`${n}건을 추가했습니다.`); return; }
+      case 'cmdAI': { const c = UI.cmd; if (c) runCommandAI(c.text); return; }
+      case 'cmdCancel': UI.cmd = null; $('pasteStatus').textContent = ''; return;
+      case 'skipOcc': { const e = S.events.find(x => x.id === id); if (e) { await patch('events', id, { skip: [...(e.skip || []), el.dataset.day] }); toast(`${fmtShort(el.dataset.day)}만 반복에서 뺐습니다.`); } return; }
       case 'ipOpen': return openIconPick(el.dataset.kind, el.dataset.id);
       case 'ipSel': UI.ipick.sel = el.dataset.k; return renderIconPick();
       case 'ipWord': { const inp = $('ipWordIn'); UI.ipick.word = el.dataset.w; renderIconPick(); return; }
@@ -2392,6 +2627,7 @@ document.addEventListener('submit', async e => {
 document.addEventListener('input', e => {
   const t = e.target;
   if (t.id === 'ipWordIn' && UI.ipick) UI.ipick.word = t.value.trim();
+  if (t.id === 'rawMail') t.classList.toggle('big', t.value.length > 160 || t.value.split('\n').length > 3);
   if (t.closest('#fEvent')) { checkEventForm(); if ((t.id === 'fTitle') && !$('fImp').dataset.touched) $('fImp').value = autoImp($('fTitle').value, $('fKind').value); }
   if (t.id === 'fImp') t.dataset.touched = '1';
   if (UI.dlg === 'busy' && t.closest('#dlgRoot') && t.dataset.f) {
