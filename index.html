@@ -1324,7 +1324,19 @@ function gridRange() { const a = gridStart(); return [a, addDays(a, gridRows() *
 /* ---------- Google sign-in (Drive storage + Calendar) ---------- */
 const CFG = window.DASH_CONFIG || {};
 const SCOPES = 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.calendarlist.readonly';
-const G = { state: 'init', events: [], cals: [], storedAt: 0, partial: false, key: '', token: null, exp: 0, tc: null };
+const G = { state: 'init', events: [], cals: [], storedAt: 0, partial: false, key: '', token: null, exp: 0, tc: null, refreshing: false, fromCache: false };
+// last Google result is kept in this browser so the calendar shows at once; a fresh read then updates it in the background
+function gCacheSave() { try { localStorage.setItem('gCache', JSON.stringify({ src: (S.settings.gasUrl || '') + '|' + (clientId() || ''), cals: G.cals, events: G.events, storedAt: G.storedAt, partial: G.partial })); } catch {} }
+function gCacheLoad() {
+  try {
+    const c = JSON.parse(localStorage.getItem('gCache') || 'null');
+    if (!c || c.src !== (S.settings.gasUrl || '') + '|' + (clientId() || '') || !Array.isArray(c.events)) return;
+    G.cals = Array.isArray(c.cals) ? c.cals : []; G.events = c.events; G.storedAt = c.storedAt || 0; G.partial = !!c.partial; G.fromCache = true;
+    if (G.events.length || G.cals.length) G.state = 'ok';
+  } catch {}
+}
+function gCacheClear() { try { localStorage.removeItem('gCache'); } catch {} }
+const gSig = g => [g.title, g.date, g.endDate, g.time, g.endTime, g.allDay, g.loc].join('|');
 const cleanCid = v => String(v || '').replace(/[\s"'`<>]/g, '').replace(/^https?:\/\//, '');
 const CID_RE = /^\d+-[a-z0-9]+\.apps\.googleusercontent\.com$/;
 function clientId() { let v = ''; try { v = localStorage.getItem('gClientId') || ''; } catch {} return cleanCid(v || CFG.googleClientId || ''); }
@@ -1443,11 +1455,11 @@ function selectedCals() {
 const calInfo = id => G.cals.find(c => c.id === id) || (id === 'primary' ? G.cals.find(c => c.primary) : null) || { id, name: id === 'primary' ? '기본 캘린더' : id, color: '' };
 async function gLoad(force) {
   if (!gReady()) return;
-  if (S.settings.googleShow === false) { G.events = []; G.state = 'hidden'; renderAll(); return; }
+  if (S.settings.googleShow === false) { G.events = []; G.storedAt = 0; gCacheClear(); G.state = 'hidden'; renderAll(); return; }
   const cals = selectedCals();
   const [a, b] = gWindow(), key = a + b + cals.join(',');
   if (!force && key === G.key && Date.now() - G.storedAt < 300000) return;
-  G.key = key;
+  G.key = key; G.refreshing = true; renderGChip();
   try {
     let all = [], partial = false;
     for (const cid of cals) {
@@ -1463,7 +1475,18 @@ async function gLoad(force) {
       const ci = calInfo(cid);
       all = all.concat(parseG({ events: items }).map(g => ({ ...g, cal: cid, calName: ci.name, color: ci.color })));
     }
-    G.events = all; G.partial = partial; G.storedAt = Date.now(); G.state = 'ok';
+    const before = new Map(G.events.map(g => [gKey(g), gSig(g)])), inWin = g => g.date >= a && g.date < b;
+    let added = 0, changedN = 0;
+    for (const g of all) { const o = before.get(gKey(g)); if (o == null) added++; else if (o !== gSig(g)) changedN++; }
+    const removed = G.events.filter(g => inWin(g) && !all.some(x => gKey(x) === gKey(g))).length;
+    const keepOutside = G.events.filter(g => !inWin(g) && cals.includes(g.cal));
+    const hadData = G.storedAt > 0;
+    G.events = [...keepOutside.filter(g => !all.some(x => gKey(x) === gKey(g))), ...all]; G.partial = partial; G.storedAt = Date.now(); G.state = 'ok';
+    gCacheSave();
+    const diff = [added && `새 일정 ${added}건`, changedN && `바뀐 일정 ${changedN}건`, removed && `없어진 일정 ${removed}건`].filter(Boolean).join(' · ');
+    if (hadData && diff && (G.fromCache || !force)) toast('구글 캘린더 업데이트: ' + diff);
+    G.fromCache = false;
+    if (!diff && hadData) { G.refreshing = false; renderGChip(); return; }
   } catch (e) {
     if (e.code !== 'signin') {
       G.state = G.events.length ? 'stale' : 'error';
@@ -1472,6 +1495,7 @@ async function gLoad(force) {
       if (e.status === 404) toast('선택한 캘린더 중 찾을 수 없는 것이 있습니다. 설정에서 다시 골라 주세요.');
     }
   }
+  G.refreshing = false;
   renderAll();
 }
 function watchGoogle(force) { gLoad(!!force); }
@@ -1480,17 +1504,18 @@ function renderGChip() {
   if (gReady() && (G.state === 'signin' || G.state === 'init')) G.state = 'ok';
   if (!gReady() && G.state !== 'noclient') G.state = clientId() ? 'signin' : 'noclient';
   if (gasOn() && G.state === 'init') G.state = 'loading';
+  if (G.state === 'loading' && G.storedAt) G.state = 'ok';
   const n = G.events.length, t = G.storedAt ? new Date(G.storedAt) : null;
   const M = {
     loading: ['', '구글 캘린더 불러오는 중'],
-    ok: ['ok', `캘린더 ${n}건${t ? ' · ' + pad(t.getHours()) + ':' + pad(t.getMinutes()) : ''}${G.partial ? ' (일부)' : ''}`],
-    stale: ['warn', '캘린더 응답 없음 · 다시 시도'], error: ['warn', '캘린더 불러오기 실패 · 다시 시도'],
+    ok: ['ok', `캘린더 ${n}건${G.refreshing ? ' · 새로 확인 중' : t ? ' · ' + (todayStr() === ymd(t) ? '' : (t.getMonth() + 1) + '/' + t.getDate() + ' ') + pad(t.getHours()) + ':' + pad(t.getMinutes()) : ''}${G.partial ? ' (일부)' : ''}`],
+    stale: ['warn', `캘린더 ${n}건 (지난번 것) · 새로 못 읽음`], error: ['warn', '캘린더 불러오기 실패 · 다시 시도'],
     signin: ['', '구글 일정 불러오기'], noclient: ['', '구글 일정 보기 (선택)'],
     hidden: ['', '구글 일정 표시 꺼짐']
   };
   const [cls, label] = M[G.state] || M.signin;
   el.className = 'gchip ' + cls;
-  el.innerHTML = `${ic(G.state === 'loading' ? 'refresh' : 'gcal')}<span>${esc(label)}</span>`;
+  el.innerHTML = `${ic(G.state === 'loading' || G.refreshing ? 'refresh' : 'gcal')}<span>${esc(label)}</span>`;
   el.title = G.state === 'ok' ? '눌러서 새로 불러오기' : '';
 }
 async function pushGoogle(doc, id, calId, quiet) {
@@ -3014,7 +3039,7 @@ document.addEventListener('click', async ev0 => {
       case 'relayCancel': return relayCancel();
       case 'exportData': return exportData();
       case 'importData': return $('importFile').click();
-      case 'signOut': if (G.token && gisLoaded()) google.accounts.oauth2.revoke(G.token, () => {}); G.token = null; G.exp = 0; G.events = []; DRIVE.fileId = null; DRIVE.remoteMod = null; renderAll(); toast('구글 연결을 해제했습니다. 데이터는 드라이브와 이 브라우저에 남아 있습니다.'); return;
+      case 'signOut': if (G.token && gisLoaded()) google.accounts.oauth2.revoke(G.token, () => {}); G.token = null; G.exp = 0; G.events = []; G.storedAt = 0; gCacheClear(); DRIVE.fileId = null; DRIVE.remoteMod = null; renderAll(); toast('구글 연결을 해제했습니다. 데이터는 드라이브와 이 브라우저에 남아 있습니다.'); return;
       case 'openFinder': UI.dlg = 'finder'; return openFinder(el.dataset.ctx || null);
       case 'slotTog': { const k = el.dataset.k; UI.finder.sel.has(k) ? UI.finder.sel.delete(k) : UI.finder.sel.add(k); return renderFinder(); }
       case 'slotCopy': {
@@ -3053,7 +3078,7 @@ document.addEventListener('click', async ev0 => {
         { const gu = $('sGasUrl').value.trim(), gk = $('sGasKey').value.trim();
           if (gu && !/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(gu)) { toast('웹 앱 주소는 https://script.google.com/macros/s/…/exec 형태여야 합니다.'); return; }
           const changedGas = gu !== (S.settings.gasUrl || '') || gk !== (S.settings.gasKey || '');
-          data.gasUrl = gu; data.gasKey = gk; if (changedGas) { G.cals = []; G.events = []; G.key = ''; setTimeout(() => { if (gasOn()) signIn(); else renderAll(); }, 50); } }
+          data.gasUrl = gu; data.gasKey = gk; if (changedGas) { G.cals = []; G.events = []; G.key = ''; G.storedAt = 0; gCacheClear(); setTimeout(() => { if (gasOn()) signIn(); else renderAll(); }, 50); } }
         if (document.querySelector('input[name=gcal]')) data.gCals = [...document.querySelectorAll('input[name=gcal]:checked')].map(x => x.value);
         if ($('sGPushCal')) data.gPushCal = $('sGPushCal').value;
         const cid = cleanCid($('sCid').value);
@@ -3289,6 +3314,7 @@ setInterval(() => { renderHeader(); if (UI.selDay === todayStr()) renderDay(fals
 
 /* ---------- boot ---------- */
 loadLocal();
+gCacheLoad();
 renderAll();
 document.body.insertAdjacentHTML('beforeend', '<input type="file" id="importFile" accept="application/json,.json" hidden>');
 $('importFile').addEventListener('change', e => { const f = e.target.files[0]; if (f) importFile(f); e.target.value = ''; });
