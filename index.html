@@ -951,7 +951,16 @@ function gridRange() { const a = gridStart(); return [a, addDays(a, gridRows() *
 const CFG = window.DASH_CONFIG || {};
 const SCOPES = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.calendarlist.readonly';
 const G = { state: 'init', events: [], cals: [], storedAt: 0, partial: false, key: '', token: null, exp: 0, tc: null };
-function clientId() { try { return localStorage.getItem('gClientId') || CFG.googleClientId || ''; } catch { return CFG.googleClientId || ''; } }
+const cleanCid = v => String(v || '').replace(/[\s"'`<>]/g, '').replace(/^https?:\/\//, '');
+const CID_RE = /^\d+-[a-z0-9]+\.apps\.googleusercontent\.com$/;
+function clientId() { let v = ''; try { v = localStorage.getItem('gClientId') || ''; } catch {} return cleanCid(v || CFG.googleClientId || ''); }
+function cidProblem(v) {
+  if (!v) return '클라이언트 ID가 비어 있습니다.';
+  if (/^GOCSPX/i.test(v)) return '"클라이언트 보안 비밀번호"를 넣으셨습니다. 그 위의 "클라이언트 ID"(…apps.googleusercontent.com)를 넣어 주세요.';
+  if (/^\d+$/.test(v)) return '프로젝트 번호만 들어갔습니다. "사용자 인증 정보"에서 만든 OAuth 클라이언트 ID 전체(…apps.googleusercontent.com)를 넣어 주세요.';
+  if (!CID_RE.test(v)) return '클라이언트 ID 형식이 아닙니다. "숫자-영문.apps.googleusercontent.com" 형태 전체를 그대로 복사해 넣어 주세요.';
+  return '';
+}
 const gReady = () => !!G.token && Date.now() < G.exp;
 const gisLoaded = () => !!(window.google && google.accounts && google.accounts.oauth2);
 function initTokenClient() {
@@ -971,6 +980,8 @@ function initTokenClient() {
   return true;
 }
 function signIn() {
+  const bad = clientId() && cidProblem(clientId());
+  if (bad) { G.state = 'noclient'; renderGChip(); UI.dlg = 'settings'; openSettings(); toast(bad); return; }
   if (!clientId()) { G.state = 'noclient'; renderGChip(); UI.dlg = 'settings'; openSettings(); toast('설정에 구글 OAuth 클라이언트 ID를 넣어 주세요.'); return; }
   if (!gisLoaded()) { toast('구글 로그인 스크립트를 불러오는 중입니다. 잠시 후 다시 눌러 주세요.'); return; }
   initTokenClient();
@@ -2008,7 +2019,9 @@ document.addEventListener('click', async ev0 => {
           googleShow: $('sGShow').checked, googleBusy: $('sGBusy').checked, googlePush: $('sGPush').checked };
         if (document.querySelector('input[name=gcal]')) data.gCals = [...document.querySelectorAll('input[name=gcal]:checked')].map(x => x.value);
         if ($('sGPushCal')) data.gPushCal = $('sGPushCal').value;
-        const cid = $('sCid').value.trim();
+        const cid = cleanCid($('sCid').value);
+        const bad = cid && cidProblem(cid);
+        if (bad) { toast(bad); $('sCid').focus(); return; }
         try { if (cid && cid !== (CFG.googleClientId || '')) localStorage.setItem('gClientId', cid); else localStorage.removeItem('gClientId'); } catch {}
         if (cid !== (G.cidUsed || '')) { G.tc = null; G.cidUsed = cid; }
         await saveSettings(data); $('dlgRoot').innerHTML = ''; UI.dlg = null; toast('설정을 저장했습니다.'); watchGoogle(true); return;
