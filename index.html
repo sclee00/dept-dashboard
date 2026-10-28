@@ -380,6 +380,14 @@ a.btn{text-decoration:none;color:inherit}
 @keyframes calnext{from{transform:translateY(14px);opacity:.35}}
 @keyframes calprev{from{transform:translateY(-14px);opacity:.35}}
 @media (prefers-reduced-motion:reduce){.ci2.imp{animation:none}#cal.wnext,#cal.wprev{animation:none}}
+.icbtn{border:0;background:none;padding:.15rem;margin:-.15rem;border-radius:6px;cursor:pointer;display:grid;place-items:center;color:inherit}
+.icbtn:hover{background:var(--surface);outline:1px dashed var(--muted)}
+.ipgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(5.2rem,1fr));gap:.35rem;max-height:46vh;overflow:auto}
+.ipcell{display:flex;flex-direction:column;align-items:center;gap:.2rem;padding:.45rem .2rem;border:1px solid var(--line);border-radius:8px;background:var(--surface-2);cursor:pointer;color:var(--ink);font-size:.72rem}
+.ipcell .ic{width:1.4rem;height:1.4rem}
+.ipcell.on{border-color:var(--accent);background:var(--accent-soft);font-weight:600}
+.rulelist{display:flex;flex-wrap:wrap;gap:.35rem}
+.rule{display:inline-flex;align-items:center;gap:.3rem;background:var(--surface-2);border:1px solid var(--line);border-radius:999px;padding:.1rem .2rem .1rem .55rem;font-size:.82rem}
 .gasbox{display:flex;flex-direction:column;gap:.4rem;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:.65rem .75rem}
 .gsrow.tpl{grid-template-columns:1.2rem 7rem minmax(0,1fr) auto;cursor:default}
 
@@ -643,6 +651,7 @@ const ICON_GROUP = {
 const GENERIC_ICONS = new Set(['학사', '회의', '행사', '마감', 'gcal', '할일', 'lock']);
 function iconFor(text, fallback) {
   const t = String(text || '');
+  for (const r of (S.settings && S.settings.iconRules) || []) if (r && r.w && t.includes(r.w) && IP[r.icon]) return r.icon;
   for (const [re, k] of ICON_RULES) if (re.test(t)) return k;
   return fallback;
 }
@@ -662,6 +671,76 @@ function setMark(id, data) {
 function impBtn(on, act, attr) {
   return `<button class="impbtn ${on ? 'on' : ''}" type="button" data-act="${act}" ${attr} title="중요/일반 바꾸기" aria-pressed="${on}">${ic('행사')}${on ? '중요' : '일반'}</button>`;
 }
+/* ---------- icon override + learned icon patterns ---------- */
+const iconOfEvent = e => e.icon && IP[e.icon] ? e.icon : e.kind === '마감' ? '마감' : iconFor(e.title, e.kind || '학사');
+function iconOfG(g) { const m = (S.marks || []).find(x => x.id === gKey(g)); return m && m.icon && IP[m.icon] ? m.icon : iconFor(g.title, 'gcal'); }
+const iconKc = (k, d) => ICON_GROUP[k] || d || '';
+function titleWords(title) {
+  const out = [];
+  for (let w of String(title || '').split(/[\s,·/()[\]{}<>"'“”‘’!?.:;~_|@#+=*&^%$-]+/)) {
+    w = w.replace(/(으로|에서|에게|까지|부터|은|는|이|가|을|를|에|의|로|과|와|도|및)$/, '');
+    if (w.length >= 2 && !/^\d+$/.test(w) && !/^\d+(월|일|시|분|차|회)$/.test(w) && !out.includes(w)) out.push(w);
+  }
+  return out;
+}
+function openIconPick(kind, id) {
+  let title, cur, auto;
+  if (kind === 'e') {
+    const e = S.events.find(x => x.id === id); if (!e) return;
+    title = e.title; cur = e.icon && IP[e.icon] ? e.icon : ''; auto = e.kind === '마감' ? '마감' : iconFor(e.title, e.kind || '학사');
+  } else {
+    const g = G.events.find(x => gKey(x) === id); if (!g) return;
+    const m = S.marks.find(x => x.id === id);
+    title = g.title; cur = m && m.icon && IP[m.icon] ? m.icon : ''; auto = iconFor(g.title, 'gcal');
+  }
+  const words = titleWords(title);
+  const hg = w => /[가-힣]/.test(w) ? 1 : 0;
+  const sug = words.slice().sort((a, b) => hg(b) - hg(a) || b.length - a.length)[0] || '';
+  UI.ipick = { kind, id, title, sel: cur || auto, auto, scope: sug ? 'rule' : 'one', word: sug, words };
+  UI.dlg = 'ipick'; renderIconPick();
+}
+function renderIconPick() {
+  const p = UI.ipick; if (!p) return;
+  const keys = [...ICON_LEGEND.map(x => x[0]), 'gcal'];
+  const label = k => (ICON_LEGEND.find(x => x[0] === k) || [k, k === 'gcal' ? '구글 일정' : k])[1];
+  $('dlgRoot').innerHTML = `<div class="scrim" data-act="closeDlg"></div><div class="dlg"><div class="dlgbox wide" role="dialog" aria-modal="true" aria-labelledby="dlgT">
+    <h3 id="dlgT">${ic(p.sel, iconKc(p.sel))}아이콘 바꾸기</h3>
+    <div class="count">${esc(p.title)}</div>
+    <div class="ipgrid">${keys.map(k => `<button type="button" class="ipcell ${k === p.sel ? 'on' : ''}" data-act="ipSel" data-k="${k}" aria-pressed="${k === p.sel}" title="${esc(label(k))}">${ic(k, iconKc(k))}<span>${esc(label(k))}</span></button>`).join('')}</div>
+    <div class="bsec">
+      <label class="chk"><input type="radio" name="ipScope" value="one" ${p.scope === 'one' ? 'checked' : ''}>이 일정만 바꾸기</label>
+      <label class="chk"><input type="radio" name="ipScope" value="rule" ${p.scope === 'rule' ? 'checked' : ''}>이 단어가 들어간 일정은 앞으로도 이 아이콘으로</label>
+      ${p.scope === 'rule' ? `<div class="row">${p.words.map(w => `<button type="button" class="tab" data-act="ipWord" data-w="${esc(w)}" aria-pressed="${w === p.word}">${esc(w)}</button>`).join('')}</div>
+      <label>기억할 단어<input class="field" id="ipWordIn" value="${esc(p.word)}" placeholder="예: 정례회의" autocomplete="off"></label>
+      <span class="count">구글 일정, 할 일, 불가 시간에도 같은 규칙이 적용됩니다. 규칙은 설정에서 지울 수 있습니다.</span>` : ''}
+    </div>
+    <div class="row" style="justify-content:space-between"><button class="btn" type="button" data-act="ipAuto">${ic('refresh')}자동으로 되돌리기</button>
+      <span class="row"><button class="btn" type="button" data-act="closeDlg">취소</button><button class="btn primary" type="button" data-act="ipSave">${ic('check')}저장</button></span></div>
+  </div></div>`;
+}
+async function iconPickSave() {
+  const p = UI.ipick; if (!p) return;
+  const inp = $('ipWordIn'); if (inp) p.word = inp.value.trim();
+  if (p.scope === 'rule' && !p.word) { toast('기억할 단어를 넣어 주세요.'); return; }
+  let viaRule = false;
+  if (p.scope === 'rule') {
+    const rules = [{ w: p.word, icon: p.sel }, ...(S.settings.iconRules || []).filter(r => r.w !== p.word)].slice(0, 120);
+    await saveSettings({ ...S.settings, iconRules: rules });
+    viaRule = p.title.includes(p.word);
+  }
+  const own = viaRule ? '' : p.sel;
+  if (p.kind === 'e') await patch('events', p.id, { icon: own });
+  else setMark(p.id, { icon: own });
+  $('dlgRoot').innerHTML = ''; UI.dlg = null; UI.ipick = null;
+  toast(p.scope === 'rule' ? `앞으로 "${p.word}"가 들어간 일정은 이 아이콘으로 표시합니다.` : '아이콘을 바꿨습니다.');
+}
+async function iconPickAuto() {
+  const p = UI.ipick; if (!p) return;
+  if (p.kind === 'e') await patch('events', p.id, { icon: '' }); else setMark(p.id, { icon: '' });
+  $('dlgRoot').innerHTML = ''; UI.dlg = null; UI.ipick = null;
+  toast('자동 아이콘으로 되돌렸습니다.');
+}
+
 const PRIO_IC = { high: ['flame', 'p-high', '높음'], mid: ['flag', 'p-mid', '보통'], low: ['dash', 'p-low', '낮음'] };
 const prioIc = p => { const [n, c, l] = PRIO_IC[p] || PRIO_IC.mid; return `<span class="pi ${c}" title="중요도 ${l}">${ic(n)}</span>`; };
 
@@ -1194,7 +1273,7 @@ function renderGSend() {
     $('dlgRoot').innerHTML = `<div class="scrim" data-act="closeDlg"></div><div class="dlg"><div class="dlgbox wide" role="dialog" aria-modal="true" aria-labelledby="dlgT">
       <h3 id="dlgT">${ic('gcal', 'kc-g')}구글 캘린더에 추가</h3>
       <div class="count">"구글에 추가"를 누르면 구글 캘린더의 일정 만들기 화면이 내용이 채워진 채 새 탭으로 열립니다. 캘린더를 고르고 <b>저장</b>을 누르세요.</div>
-      <div class="gslist">${rows.length ? rows.map(e => { const k = e.kind === '마감' ? '마감' : iconFor(e.title, e.kind || '학사'); return `<div class="gsrow tpl">${ic(k, ICON_GROUP[k] || 'kc-' + (e.kind || '학사'))}<span class="t">${fmtShort(e.date)}${e.time ? ' ' + esc(e.time) : ''}</span><span class="tt">${esc(e.title)}${e.example ? ' <span class="tag ex">예시</span>' : ''}</span>${e.googleSent ? `<span class="gtag">${ic('check')}보냄</span>` : `<a class="btn small primary" href="${esc(gTemplateUrl(e))}" target="_blank" rel="noopener" data-act="gTpl" data-id="${e.id}">${ic('ext')}구글에 추가</a>`}</div>`; }).join('') : '<div class="empty">구글로 보낼 일정이 없습니다.</div>'}</div>
+      <div class="gslist">${rows.length ? rows.map(e => { const k = iconOfEvent(e); return `<div class="gsrow tpl">${ic(k, ICON_GROUP[k] || 'kc-' + (e.kind || '학사'))}<span class="t">${fmtShort(e.date)}${e.time ? ' ' + esc(e.time) : ''}</span><span class="tt">${esc(e.title)}${e.example ? ' <span class="tag ex">예시</span>' : ''}</span>${e.googleSent ? `<span class="gtag">${ic('check')}보냄</span>` : `<a class="btn small primary" href="${esc(gTemplateUrl(e))}" target="_blank" rel="noopener" data-act="gTpl" data-id="${e.id}">${ic('ext')}구글에 추가</a>`}</div>`; }).join('') : '<div class="empty">구글로 보낼 일정이 없습니다.</div>'}</div>
       <div class="row" style="justify-content:flex-end"><button class="btn" type="button" data-act="closeDlg">닫기</button></div>
     </div></div>`;
     return;
@@ -1207,7 +1286,7 @@ function renderGSend() {
     <div class="count">오늘 이후 일정 가운데 아직 구글에 없는 것입니다. 보낼 일정을 고르세요.</div>
     <label>추가할 캘린더<select class="field" id="gsCal">${opts.map(c => `<option value="${esc(c.id)}" ${c.id === g.cal || (g.cal === 'primary' && c.primary) ? 'selected' : ''}>${esc(c.name)}${c.primary ? ' (기본)' : ''}</option>`).join('')}</select></label>
     <div class="row"><button class="btn small" type="button" data-act="gsAll">모두 선택</button><button class="btn small" type="button" data-act="gsNone">선택 해제</button><span class="count">${g.sel.size}개 선택</span></div>
-    <div class="gslist">${list.length ? list.map(e => { const k = e.kind === '마감' ? '마감' : iconFor(e.title, e.kind || '학사'); return `<label class="gsrow"><input type="checkbox" data-gs="${e.id}" ${g.sel.has(e.id) ? 'checked' : ''}>${ic(k, ICON_GROUP[k] || 'kc-' + (e.kind || '학사'))}<span class="t">${fmtShort(e.date)}${e.time ? ' ' + esc(e.time) : ''}</span><span class="tt">${esc(e.title)}${e.example ? ' <span class="tag ex">예시</span>' : ''}</span></label>`; }).join('') : '<div class="empty">구글로 보낼 일정이 없습니다.</div>'}</div>
+    <div class="gslist">${list.length ? list.map(e => { const k = iconOfEvent(e); return `<label class="gsrow"><input type="checkbox" data-gs="${e.id}" ${g.sel.has(e.id) ? 'checked' : ''}>${ic(k, ICON_GROUP[k] || 'kc-' + (e.kind || '학사'))}<span class="t">${fmtShort(e.date)}${e.time ? ' ' + esc(e.time) : ''}</span><span class="tt">${esc(e.title)}${e.example ? ' <span class="tag ex">예시</span>' : ''}</span></label>`; }).join('') : '<div class="empty">구글로 보낼 일정이 없습니다.</div>'}</div>
     <div class="row" style="justify-content:flex-end"><button class="btn" type="button" data-act="closeDlg">닫기</button><button class="btn primary" type="button" data-act="gsSend" ${g.sel.size ? '' : 'disabled'}>${ic('gcal')}선택한 ${g.sel.size}개 추가</button></div>
   </div></div>`;
 }
@@ -1453,7 +1532,7 @@ function expandEvents() {
 function cellItems(day) {
   const items = [], grp = (k, d) => ICON_GROUP[k] || d;
   for (const e of expandEvents().filter(e => e.date === day)) {
-    const due = e.kind === '마감', timed = !e.span && toMin(e.time) != null, k = due ? '마감' : iconFor(e.title, e.kind || '학사');
+    const due = e.kind === '마감', timed = !e.span && toMin(e.time) != null, k = iconOfEvent(e);
     items.push({ o: due ? 0 : timed ? 20 + toMin(e.time) / 1440 : 10, ic: k, kc: grp(k, 'kc-' + (e.kind || '학사')), tm: timed ? e.time : '', tx: (impOfEvent(e) === 'high' ? '[중요] ' : '') + e.title + (e.googleId ? ' (구글에도 있음)' : ''), cls: (due ? 'hot' : (e.googleId || e.googleSent) ? 'synced' : '') + (impOfEvent(e) === 'high' ? ' imp' : '') });
   }
   for (const t of S.tasks.filter(t => !t.done && t.due === day)) {
@@ -1462,8 +1541,8 @@ function cellItems(day) {
   }
   for (const m of S.emails.filter(m => needsReplyNow(m) && m.replyDeadline === day))
     items.push({ o: 2, ic: 'reply', tx: '답장 기한 · ' + (m.subject || ''), cls: 'warn' });
-  for (const g of gAllDayOn(day)) { const k = iconFor(g.title, 'gcal'); items.push({ o: 9, ic: k, kc: grp(k, 'kc-g'), tx: `${impOfG(g) === 'high' ? '[중요] ' : ''}${g.title} (구글 · ${g.calName || ''})`, cls: 'g' + (g.free ? ' dim' : '') + (impOfG(g) === 'high' ? ' imp' : ''), gc: g.color }); }
-  for (const g of gOn(day)) { const k = iconFor(g.title, 'gcal'); items.push({ o: 20 + g.s / 1440, ic: k, kc: grp(k, 'kc-g'), tm: g.time, tx: `${impOfG(g) === 'high' ? '[중요] ' : ''}${g.title} (구글 · ${g.calName || ''})`, cls: 'g' + (g.free ? ' dim' : '') + (impOfG(g) === 'high' ? ' imp' : ''), gc: g.color }); }
+  for (const g of gAllDayOn(day)) { const k = iconOfG(g); items.push({ o: 9, ic: k, kc: grp(k, 'kc-g'), tx: `${impOfG(g) === 'high' ? '[중요] ' : ''}${g.title} (구글 · ${g.calName || ''})`, cls: 'g' + (g.free ? ' dim' : '') + (impOfG(g) === 'high' ? ' imp' : ''), gc: g.color }); }
+  for (const g of gOn(day)) { const k = iconOfG(g); items.push({ o: 20 + g.s / 1440, ic: k, kc: grp(k, 'kc-g'), tm: g.time, tx: `${impOfG(g) === 'high' ? '[중요] ' : ''}${g.title} (구글 · ${g.calName || ''})`, cls: 'g' + (g.free ? ' dim' : '') + (impOfG(g) === 'high' ? ' imp' : ''), gc: g.color }); }
   if (day >= todayStr()) for (const b of [...blocksOn(day), ...weeklyOn(day)]) {
     const k = iconFor(b.label, 'lock');
     items.push({ o: 40 + b.s / 1440, ic: k, tm: b.allDay ? '종일' : fromMin(b.s) + '–' + fromMin(b.e), tx: '불가 · ' + b.label, cls: 'busy' });
@@ -1504,9 +1583,10 @@ function renderCal() {
 }
 
 /* ---------- day panel ---------- */
-function srow({ t, icon, kc, title, sub, cls, acts, tag }) {
-  if (GENERIC_ICONS.has(icon) && icon !== '마감') { const k = iconFor(title, icon); if (k !== icon) { icon = k; kc = ICON_GROUP[k] || kc; } }
-  return `<div class="srow ${cls || ''}"><span class="t">${t || ''}</span>${ic(icon, kc || '')}<span class="tt">${esc(title)}${tag || ''}${sub ? `<span class="sub3">${sub}</span>` : ''}</span><span class="acts">${acts || ''}</span></div>`;
+function srow({ t, icon, kc, title, sub, cls, acts, tag, fixed, iconAct }) {
+  if (!fixed && GENERIC_ICONS.has(icon) && icon !== '마감') { const k = iconFor(title, icon); if (k !== icon) { icon = k; kc = ICON_GROUP[k] || kc; } }
+  const icHtml = iconAct ? `<button type="button" class="icbtn" ${iconAct} title="아이콘 바꾸기" aria-label="아이콘 바꾸기">${ic(icon, kc || '')}</button>` : ic(icon, kc || '');
+  return `<div class="srow ${cls || ''}"><span class="t">${t || ''}</span>${icHtml}<span class="tt">${esc(title)}${tag || ''}${sub ? `<span class="sub3">${sub}</span>` : ''}</span><span class="acts">${acts || ''}</span></div>`;
 }
 function eventActs(e) {
   const imp = impBtn(impOfEvent(e) === 'high', 'impT', `data-id="${e.id}"`);
@@ -1547,22 +1627,22 @@ function renderDay(force) {
   const ad = [];
   for (const e of expandEvents().filter(e => e.date === day && (e.span || toMin(e.time) == null))) {
     const range = e.span ? `${fmtShort(e.endDate === day ? e.date : e.date)}–${fmtShort(e.endDate)}` : '종일';
-    ad.push(srow({ t: e.kind === '마감' ? '마감' : range, icon: e.kind || '학사', kc: 'kc-' + (e.kind || '학사'), title: e.title, sub: esc(e.location || ''), cls: (e.kind === '마감' ? 'hot' : '') + (impOfEvent(e) === 'high' ? ' improw' : ''), acts: eventActs(e), tag: e.example ? ' <span class="tag ex">예시</span>' : '' }));
+    ad.push(srow({ t: e.kind === '마감' ? '마감' : range, icon: iconOfEvent(e), kc: iconKc(iconOfEvent(e), 'kc-' + (e.kind || '학사')), fixed: true, iconAct: `data-act="ipOpen" data-kind="e" data-id="${e.id}"`, title: e.title, sub: esc(e.location || ''), cls: (e.kind === '마감' ? 'hot' : '') + (impOfEvent(e) === 'high' ? ' improw' : ''), acts: eventActs(e), tag: e.example ? ' <span class="tag ex">예시</span>' : '' }));
   }
   for (const t of S.tasks.filter(t => !t.done && t.due === day))
     ad.push(srow({ t: '할 일', icon: t.priority === 'high' ? 'flame' : '할일', kc: 'kc-할일', title: t.title, cls: t.priority === 'high' ? 'hot' : '', sub: t.emailId ? '메일에서 나온 할 일' : '', acts: `<button class="x" type="button" data-act="toggleTask" data-id="${t.id}" aria-label="완료" title="완료">${ic('check')}</button>`, tag: t.example ? ' <span class="tag ex">예시</span>' : '' }));
   for (const m of S.emails.filter(m => needsReplyNow(m) && m.replyDeadline === day))
     ad.push(srow({ t: '답장 기한', icon: 'reply', kc: 'kc-reply', title: m.subject, cls: 'warn', acts: `<button class="btn small" type="button" data-act="openMail" data-id="${m.id}">열기</button>` }));
   for (const g of gAllDayOn(day))
-    ad.push(srow({ t: '종일', icon: 'gcal', kc: 'kc-g', title: g.title, sub: '구글 캘린더' + (g.calName ? ' · ' + esc(g.calName) : '') + (g.free ? ' · 바쁨 아님' : ''), cls: impOfG(g) === 'high' ? 'improw' : '', acts: impBtn(impOfG(g) === 'high', 'impG', `data-k="${esc(gKey(g))}"`) + (g.link ? `<a class="ext" href="${esc(g.link)}" target="_blank" rel="noopener">${ic('ext')}</a>` : '') }));
+    ad.push(srow({ t: '종일', icon: iconOfG(g), kc: iconKc(iconOfG(g), 'kc-g'), fixed: true, iconAct: `data-act="ipOpen" data-kind="g" data-id="${esc(gKey(g))}"`, title: g.title, sub: '구글 캘린더' + (g.calName ? ' · ' + esc(g.calName) : '') + (g.free ? ' · 바쁨 아님' : ''), cls: impOfG(g) === 'high' ? 'improw' : '', acts: impBtn(impOfG(g) === 'high', 'impG', `data-k="${esc(gKey(g))}"`) + (g.link ? `<a class="ext" href="${esc(g.link)}" target="_blank" rel="noopener">${ic('ext')}</a>` : '') }));
   for (const b of blocksOn(day).filter(b => b.allDay))
     ad.push(srow({ t: '종일', icon: 'lock', title: b.label, sub: '불가 시간', cls: 'busy', acts: `<button class="x" type="button" data-act="delBlock" data-id="${b.id}" aria-label="삭제">✕</button>` }));
 
   const timed = [];
   for (const b of weeklyOn(day)) timed.push({ s: b.s, h: srow({ t: `${fromMin(b.s)}–${fromMin(b.e)}`, icon: 'lock', title: b.label, sub: '매주 반복 불가 시간', cls: 'busy', acts: `<button class="btn small" type="button" data-act="openBusy">편집</button>`, tag: b.example ? ' <span class="tag ex">예시</span>' : '' }) });
   for (const b of blocksOn(day).filter(b => !b.allDay)) timed.push({ s: b.s, h: srow({ t: `${fromMin(b.s)}–${fromMin(b.e)}`, icon: 'lock', title: b.label, sub: '불가 시간', cls: 'busy', acts: `<button class="x" type="button" data-act="delBlock" data-id="${b.id}" aria-label="삭제">✕</button>`, tag: b.example ? ' <span class="tag ex">예시</span>' : '' }) });
-  for (const x of localTimedOn(day)) { const e = x.ev; timed.push({ s: x.s, h: srow({ t: `${fromMin(x.s)}–${fromMin(x.e)}`, icon: e.kind || '회의', kc: 'kc-' + (e.kind || '회의'), title: e.title, sub: esc([e.location, e.emailId ? '메일에서 추가' : ''].filter(Boolean).join(' · ')), cls: (e.kind === '마감' ? 'hot' : '') + (impOfEvent(e) === 'high' ? ' improw' : ''), acts: eventActs(e), tag: e.example ? ' <span class="tag ex">예시</span>' : '' }) }); }
-  for (const g of gOn(day)) timed.push({ s: g.s, h: srow({ t: `${g.time}–${g.endTime}`, icon: 'gcal', kc: 'kc-g', title: g.title, sub: '구글 캘린더' + (g.calName ? ' · ' + esc(g.calName) : '') + (g.free ? ' · 바쁨 아님' : '') + (g.loc ? ' · ' + esc(g.loc) : ''), cls: impOfG(g) === 'high' ? 'improw' : '', acts: impBtn(impOfG(g) === 'high', 'impG', `data-k="${esc(gKey(g))}"`) + (g.link ? `<a class="ext" href="${esc(g.link)}" target="_blank" rel="noopener" title="구글 캘린더에서 열기">${ic('ext')}</a>` : '') }) });
+  for (const x of localTimedOn(day)) { const e = x.ev; timed.push({ s: x.s, h: srow({ t: `${fromMin(x.s)}–${fromMin(x.e)}`, icon: iconOfEvent(e), kc: iconKc(iconOfEvent(e), 'kc-' + (e.kind || '회의')), fixed: true, iconAct: `data-act="ipOpen" data-kind="e" data-id="${e.id}"`, title: e.title, sub: esc([e.location, e.emailId ? '메일에서 추가' : ''].filter(Boolean).join(' · ')), cls: (e.kind === '마감' ? 'hot' : '') + (impOfEvent(e) === 'high' ? ' improw' : ''), acts: eventActs(e), tag: e.example ? ' <span class="tag ex">예시</span>' : '' }) }); }
+  for (const g of gOn(day)) timed.push({ s: g.s, h: srow({ t: `${g.time}–${g.endTime}`, icon: iconOfG(g), kc: iconKc(iconOfG(g), 'kc-g'), fixed: true, iconAct: `data-act="ipOpen" data-kind="g" data-id="${esc(gKey(g))}"`, title: g.title, sub: '구글 캘린더' + (g.calName ? ' · ' + esc(g.calName) : '') + (g.free ? ' · 바쁨 아님' : '') + (g.loc ? ' · ' + esc(g.loc) : ''), cls: impOfG(g) === 'high' ? 'improw' : '', acts: impBtn(impOfG(g) === 'high', 'impG', `data-k="${esc(gKey(g))}"`) + (g.link ? `<a class="ext" href="${esc(g.link)}" target="_blank" rel="noopener" title="구글 캘린더에서 열기">${ic('ext')}</a>` : '') }) });
   for (const [s, e] of freeSlots(day, 30)) timed.push({ s: s + 0.5, h: `<button type="button" class="srow freeslot" data-act="slotAdd" data-s="${s}" data-e="${e}"><span class="t">${fromMin(s)}–${fromMin(e)}</span>${ic('free')}<span class="tt">빈 시간 · ${durKo(e - s)}<span class="sub3">눌러서 이 시간에 일정 넣기</span></span><span class="acts"></span></button>` });
   timed.sort((a, b) => a.s - b.s);
 
@@ -2125,6 +2205,12 @@ document.addEventListener('click', async ev0 => {
         return syncNow();
       case 'fsPick': return fsPick();
       case 'impT': { const e = S.events.find(x => x.id === id); if (e) await patch('events', id, { imp: impOfEvent(e) === 'high' ? 'normal' : 'high' }); return; }
+      case 'ipOpen': return openIconPick(el.dataset.kind, el.dataset.id);
+      case 'ipSel': UI.ipick.sel = el.dataset.k; return renderIconPick();
+      case 'ipWord': { const inp = $('ipWordIn'); UI.ipick.word = el.dataset.w; renderIconPick(); return; }
+      case 'ipSave': return iconPickSave();
+      case 'ipAuto': return iconPickAuto();
+      case 'delRule': await saveSettings({ ...S.settings, iconRules: (S.settings.iconRules || []).filter(r => r.w !== el.dataset.w) }); if (UI.dlg === 'settings') openSettings(); return;
       case 'impG': { const k = el.dataset.k; const g = G.events.find(x => gKey(x) === k); if (g) setMark(k, { imp: impOfG(g) === 'high' ? 'normal' : 'high' }); return; }
       case 'gTpl': { const e = S.events.find(x => x.id === id); if (e && !e.googleSent) await patch('events', id, { googleSent: true }); if (UI.dlg === 'gsend') setTimeout(renderGSend, 50); return; }
       case 'gsOpen': return openGSend(el.dataset.id || null);
@@ -2305,6 +2391,7 @@ document.addEventListener('submit', async e => {
 });
 document.addEventListener('input', e => {
   const t = e.target;
+  if (t.id === 'ipWordIn' && UI.ipick) UI.ipick.word = t.value.trim();
   if (t.closest('#fEvent')) { checkEventForm(); if ((t.id === 'fTitle') && !$('fImp').dataset.touched) $('fImp').value = autoImp($('fTitle').value, $('fKind').value); }
   if (t.id === 'fImp') t.dataset.touched = '1';
   if (UI.dlg === 'busy' && t.closest('#dlgRoot') && t.dataset.f) {
@@ -2321,6 +2408,7 @@ document.addEventListener('change', e => {
   if (UI.dlg === 'gsend' && t.dataset.gs) { t.checked ? UI.gsend.sel.add(t.dataset.gs) : UI.gsend.sel.delete(t.dataset.gs); return renderGSend(); }
   if (UI.dlg === 'gsend' && t.id === 'gsCal') { UI.gsend.cal = t.value; return; }
   if (t.id === 'fImp') t.dataset.touched = '1';
+  if (UI.dlg === 'ipick' && t.name === 'ipScope') { const inp = $('ipWordIn'); if (inp) UI.ipick.word = inp.value.trim(); UI.ipick.scope = t.value; return renderIconPick(); }
   if (t.id === 'fKind' && $('fImp') && !$('fImp').dataset.touched) $('fImp').value = autoImp($('fTitle').value, t.value);
   if (t.id === 'bAll') { $('bStart').disabled = $('bEnd').disabled = $('bWeekly').disabled = t.checked; }
 });
@@ -2355,6 +2443,8 @@ function openSettings() {
     <label>개강 주 월요일 (주차 계산 기준)<input class="field" type="date" id="sStart" value="${esc(s.semesterStart)}"></label>
     <label>답장 서명<textarea class="field" id="sSig" rows="3">${esc(s.signature)}</textarea></label>
     <label>업무를 받는 조교 (이름·호칭)<input class="field" id="sAsst" value="${esc(s.assistant)}" placeholder="예: 김OO 조교"></label>
+    <div class="bsec"><b>${ic('spark')} 기억한 아이콘 규칙</b>
+      ${(s.iconRules || []).length ? `<div class="rulelist">${s.iconRules.map(r => `<span class="rule">${ic(r.icon, iconKc(r.icon))}<b>${esc(r.w)}</b><button class="x" type="button" data-act="delRule" data-w="${esc(r.w)}" aria-label="규칙 지우기">✕</button></span>`).join('')}</div>` : '<span class="count">아직 없습니다. 날짜를 눌러 일정 왼쪽 아이콘을 누르면 바꿀 수 있고, 그때 단어를 기억시킬 수 있습니다.</span>'}</div>
     <div class="bsec"><b>${ic('drive')} 저장 폴더</b>
       <span class="count">PC에 <b>Google Drive 데스크톱 앱</b>을 설치하면 내 드라이브가 일반 폴더(예: G:\\내 드라이브)로 보입니다. 그 안에 "학과장실 대시보드" 폴더를 만들어 고르면 데이터가 그 폴더의 ${FILE_NAME}에 저장되고, 드라이브가 다른 PC로 동기화합니다. 다른 PC에서도 같은 폴더를 한 번 고르면 됩니다.</span>
       ${!fsOK ? `<span class="count" style="color:var(--amber)">이 브라우저는 폴더 저장을 지원하지 않습니다. 크롬이나 엣지에서 열어 주세요.</span>` : `<div class="row"><span>${FS.handle ? `현재 폴더: <b>${esc(FS.handle.name)}</b>` : '아직 고른 폴더가 없습니다.'}</span><button class="btn small ${FS.handle ? '' : 'primary'}" type="button" data-act="fsPick">${ic('drive')}${FS.handle ? '폴더 바꾸기' : '폴더 고르기'}</button></div>`}
