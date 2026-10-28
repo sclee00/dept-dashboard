@@ -95,7 +95,7 @@ header.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:spac
 .cell:hover{border-color:var(--muted)}
 .cell.off{background:transparent;border:1px dashed var(--line)}
 .cell.out{opacity:.42}
-.cell.past .citems{opacity:.6}
+.cell.past .citems{opacity:var(--past-o,.6)}
 .cell.today{border:2px solid var(--accent);padding:calc(.3rem - 1px) calc(.35rem - 1px)}
 .cell.sel{background:var(--accent-soft);border-color:var(--accent)}
 .chead{display:flex;align-items:center;justify-content:space-between;gap:.25rem;min-width:0}
@@ -343,9 +343,9 @@ a.btn{text-decoration:none;color:inherit}
 .ptext{max-height:12rem}
 .kc-reply{color:var(--amber)}
 .kc-p{color:var(--green)} .kc-adm{color:var(--amber)}
-.citems{flex-direction:row!important;flex-wrap:wrap;gap:3px!important}
-.ci2{width:1.7rem;height:1.7rem;border-radius:7px;display:inline-grid;place-items:center;background:var(--surface);border:1px solid var(--line);flex:none}
-.ci2 .ic{width:1.1rem;height:1.1rem}
+.citems{display:grid!important;grid-template-columns:repeat(3,var(--cis,1.45rem));grid-auto-rows:var(--cis,1.45rem);gap:3px!important;align-content:start}
+.ci2{width:var(--cis,1.45rem);height:var(--cis,1.45rem);border-radius:6px;display:inline-grid;place-items:center;background:var(--surface);border:1px solid var(--line);flex:none}
+.ci2 .ic{width:calc(var(--cis,1.45rem) * .62);height:calc(var(--cis,1.45rem) * .62)}
 .ci2.g{background:transparent;border:1.5px solid var(--gc,var(--k-g))}
 .ci2.task{border-style:dashed;border-color:var(--muted)}
 .ci2.synced{box-shadow:inset 0 -2px 0 var(--k-g)}
@@ -356,8 +356,9 @@ a.btn{text-decoration:none;color:inherit}
 .ci2.busy{background:repeating-linear-gradient(135deg,var(--surface) 0 3px,var(--hatch) 3px 6px);border-color:transparent}
 .ci2.busy .ic{color:var(--muted)}
 
-@media (min-width:1100px){.ci2{width:2.05rem;height:2.05rem;border-radius:8px}.ci2 .ic{width:1.3rem;height:1.3rem}.citems{gap:4px!important}}
-@media (max-width:700px){.ci2{width:1.3rem;height:1.3rem;border-radius:5px}.ci2 .ic{width:.85rem;height:.85rem}}
+@media (min-width:1100px){.cal-wrap,#cal{--cis:1.6rem}.citems{gap:4px!important}}
+@media (max-width:700px){#cal{--cis:1.05rem}.ci2{border-radius:4px}.citems{gap:1px!important}}
+.citems .more{width:var(--cis,1.45rem);height:var(--cis,1.45rem);display:grid;place-items:center;padding:0;font-size:.62rem;border:1px dashed var(--line);border-radius:6px;font-variant-numeric:tabular-nums}
 .legend .ci2{width:1.35rem;height:1.35rem}
 .legend .ci2 .ic{width:.9rem;height:.9rem}
 .iconhelp{position:relative}
@@ -417,6 +418,11 @@ a.btn{text-decoration:none;color:inherit}
 .ci2[draggable="true"]{cursor:grab}
 .ci2.dragging{opacity:.35}
 .cell.dropok{outline:2px dashed var(--accent);outline-offset:-2px;background:var(--accent-soft)}
+/* day cell: date column on the left, 3 x 3 icon grid on the right */
+.cell{display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:.3rem;align-items:start}
+.chead{flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:.2rem}
+.dn{flex-direction:column;align-items:flex-start;gap:.1rem;line-height:1.1}
+.citems{justify-content:end}
 .cell:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
 .imlist{display:grid;grid-template-columns:repeat(auto-fill,minmax(15rem,1fr));gap:.35rem;max-height:56vh;overflow:auto}
 .imrow{display:grid;grid-template-columns:1.6rem minmax(0,1fr) 2.2rem auto;gap:.4rem;align-items:center;background:var(--surface-2);border-radius:8px;padding:.3rem .45rem}
@@ -572,7 +578,7 @@ a.btn{text-decoration:none;color:inherit}
 const DEFAULTS = { semesterLabel: '2026학년도 2학기', semesterStart: '2026-08-31', signature: '컴퓨터공학과 학과장 드림', assistant: '학과 조교',
   workStart: '09:00', workEnd: '18:00', workDays: [1, 2, 3, 4, 5], weekly: [], googleShow: true, googleBusy: true, googlePush: false, gCals: null, gPushCal: 'primary' };
 const S = { tasks: [], events: [], emails: [], blocks: [], marks: [], settings: { ...DEFAULTS }, settingsU: 0, deleted: {} };
-const UI = { view: 'weeks', wOff: 0, tf: 'open', mf: 'open', month: null, selDay: null, rail: 'day', dayForm: null, prefill: null, finder: null, bd: null, dlg: null, cap: 14, openId: null, edits: {}, analyzeCtl: null, draftCtl: null, confirmDel: false };
+const UI = { view: 'weeks', wOff: 0, tf: 'open', mf: 'open', month: null, selDay: null, rail: 'day', dayForm: null, prefill: null, finder: null, bd: null, dlg: null, cap: 9, openId: null, edits: {}, analyzeCtl: null, draftCtl: null, confirmDel: false };
 
 
 /* ---------- icons (inline SVG, stroke = currentColor) ---------- */
@@ -995,7 +1001,7 @@ async function saveEdit(btn) {
 }
 
 /* ---------- importance look (settings) ---------- */
-const IMP_DEF = { color: '', colorBy: 'fixed', past: 'blink', width: 2, speed: 2.6, mode: 'fade', dim: 0.28 };
+const IMP_DEF = { color: '', colorBy: 'fixed', past: 'blink', pastDim: 0.6, width: 2, speed: 2.6, mode: 'fade', dim: 0.28 };
 function impStyle() { const v = { ...IMP_DEF, ...((S.settings && S.settings.impStyle) || {}) }; return v; }
 function applyImpStyle(v) {
   v = v || impStyle();
@@ -1004,6 +1010,7 @@ function applyImpStyle(v) {
   r.setProperty('--imp-w', Math.max(1, Math.min(5, +v.width || 2)) + 'px');
   r.setProperty('--imp-s', Math.max(0.6, Math.min(6, +v.speed || 2.6)) + 's');
   r.setProperty('--imp-o', String(Math.max(0, Math.min(0.9, +v.dim))));
+  r.setProperty('--past-o', String(Math.max(0.15, Math.min(1, v.pastDim == null ? 0.6 : +v.pastDim))));
   document.body.classList.toggle('imp-invert', v.mode === 'invert');
   document.body.classList.toggle('imp-glow', v.mode === 'glow');
   document.body.classList.toggle('imp-still', v.mode === 'still');
@@ -1019,21 +1026,22 @@ function paintImpOwn() {
 }
 new MutationObserver(() => { cancelAnimationFrame(paintImpOwn._r); paintImpOwn._r = requestAnimationFrame(paintImpOwn); }).observe(document.body, { childList: true, subtree: true });
 function impFormValues() {
-  return { color: $('impColor').value, colorBy: $('impColorBy').value, past: $('impPast').value, width: +$('impWidth').value, speed: +$('impSpeed').value, mode: $('impMode').value, dim: +$('impDim').value };
+  return { color: $('impColor').value, colorBy: $('impColorBy').value, past: $('impPast').value, pastDim: +$('impPastDim').value, width: +$('impWidth').value, speed: +$('impSpeed').value, mode: $('impMode').value, dim: +$('impDim').value };
 }
 function impSettingsHtml(s) {
   const v = { ...IMP_DEF, ...(s.impStyle || {}) };
   const amber = getComputedStyle(document.documentElement).getPropertyValue('--amber').trim() || '#F3BF5E';
-  return `<div class="bsec"><b>${ic('행사')} 중요 일정 표시</b>
+  return `<div class="bsec"><b>${ic('행사')} 중요 일정·지난 날짜 표시</b>
     <div class="impprev"><span class="ci2 imp">${ic('회의', 'kc-회의')}</span><span class="ci2 imp">${ic('interview', 'kc-회의')}</span><span class="ci2">${ic('food', 'kc-p')}</span><span class="count">미리 보기 (왼쪽 두 개가 중요)</span></div>
     <div class="impgrid">
       <label>테두리 색 기준<select class="field" id="impColorBy"><option value="fixed" ${v.colorBy !== 'icon' ? 'selected' : ''}>정한 색 (오른쪽)</option><option value="icon" ${v.colorBy === 'icon' ? 'selected' : ''}>현재 아이콘 색</option></select></label>
       <label>테두리 색<input type="color" id="impColor" value="${esc(/^#[0-9a-f]{6}$/i.test(v.color || '') ? v.color : amber)}" ${v.colorBy === 'icon' ? 'disabled' : ''}></label>
       <label>효과<select class="field" id="impMode">${[['fade', '흐려졌다 밝아짐'], ['invert', '색 반전'], ['glow', '빛 번짐'], ['still', '깜빡임 없음 (테두리만)']].map(([k, l]) => `<option value="${k}" ${v.mode === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       <label>지나간 중요 일정<select class="field" id="impPast">${[['blink', '계속 깜빡임'], ['still', '테두리만 (깜빡임 멈춤)'], ['off', '중요 표시 끄기']].map(([k, l]) => `<option value="${k}" ${v.past === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+      <label>지나간 날짜 아이콘 밝기 <span id="impPastDimV">${Math.round((v.pastDim ?? 0.6) * 100)}%</span><input type="range" id="impPastDim" min="0.15" max="1" step="0.05" value="${v.pastDim ?? 0.6}"></label>
       <label>테두리 두께 <span id="impWidthV">${v.width}px</span><input type="range" id="impWidth" min="1" max="5" step="1" value="${v.width}"></label>
       <label>한 번 깜빡이는 시간 <span id="impSpeedV">${v.speed}초</span><input type="range" id="impSpeed" min="0.6" max="6" step="0.2" value="${v.speed}"></label>
-      <label>흐려지는 정도 <span id="impDimV">${Math.round((1 - v.dim) * 100)}%</span><input type="range" id="impDim" min="0" max="0.9" step="0.02" value="${v.dim}"></label>
+      <label>깜빡일 때 흐려지는 정도 <span id="impDimV">${Math.round((1 - v.dim) * 100)}%</span><input type="range" id="impDim" min="0" max="0.9" step="0.02" value="${v.dim}"></label>
       <div style="align-self:end"><button class="btn small" type="button" data-act="impReset">${ic('refresh')}기본값으로</button></div>
     </div>
     <span class="count">마감처럼 이미 빨간 일정은 테두리가 빨간색으로 유지됩니다. 화면 움직임 줄이기를 켠 PC에서는 깜빡이지 않습니다.</span></div>`;
@@ -2300,11 +2308,22 @@ function renderCal() {
     </div>`;
   }
   const g = $('cal'); g.style.setProperty('--rows', rows); g.innerHTML = html;
+  fitIcons(g);
   requestAnimationFrame(() => {
     if (UI.cap > 1 && [...g.querySelectorAll('.cell')].some(c => c.scrollHeight > c.clientHeight + 2)) { UI.cap--; renderCal(); }
   });
 }
 
+// size icons so a 3 x 3 grid fits inside one day cell
+function fitIcons(g) {
+  const c = g.querySelector('.cell'), h = c && c.querySelector('.chead'); if (!c || !h) return;
+  const cs = getComputedStyle(c), gap = window.innerWidth <= 700 ? 1 : window.innerWidth >= 1100 ? 4 : 3;
+  let hw = 0; g.querySelectorAll('.cell .chead').forEach(x => { hw = Math.max(hw, x.offsetWidth); });
+  const availH = c.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+  const availW = c.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - hw - (parseFloat(cs.columnGap) || 5);
+  const size = Math.floor(Math.max(13, Math.min(28, (availH - 2 * gap) / 3, (availW - 2 * gap) / 3)));
+  if (g.style.getPropertyValue('--cis') !== size + 'px') g.style.setProperty('--cis', size + 'px');
+}
 /* ---------- day panel ---------- */
 function srow({ t, icon, kc, title, sub, cls, acts, tag, fixed, iconAct }) {
   if (!fixed && GENERIC_ICONS.has(icon) && icon !== '마감') { const k = iconFor(title, icon); if (k !== icon) { icon = k; kc = ICON_GROUP[k] || kc; } }
@@ -2951,11 +2970,11 @@ document.addEventListener('click', async ev0 => {
       case 'prevMonth': case 'nextMonth': {
         const k = act === 'prevMonth' ? -1 : 1;
         if (UI.view === 'month') UI.month = new Date(UI.month.getFullYear(), UI.month.getMonth() + k, 1); else UI.wOff += k;
-        UI.cap = 14; renderCal(); watchGoogle(); return;
+        UI.cap = 9; renderCal(); watchGoogle(); return;
       }
-      case 'thisMonth': { const d = new Date(); UI.month = new Date(d.getFullYear(), d.getMonth(), 1); UI.wOff = 0; UI.selDay = todayStr(); UI.rail = 'day'; UI.cap = 14; renderAll(); watchGoogle(); return; }
+      case 'thisMonth': { const d = new Date(); UI.month = new Date(d.getFullYear(), d.getMonth(), 1); UI.wOff = 0; UI.selDay = todayStr(); UI.rail = 'day'; UI.cap = 9; renderAll(); watchGoogle(); return; }
       case 'view': {
-        UI.view = el.dataset.v; UI.cap = 14;
+        UI.view = el.dataset.v; UI.cap = 9;
         const sd = parse(UI.selDay || todayStr());
         if (UI.view === 'month') UI.month = new Date(sd.getFullYear(), sd.getMonth(), 1);
         else { const now = new Date(); now.setDate(now.getDate() - now.getDay()); UI.wOff = Math.floor((sd - parse(ymd(now))) / (7 * 86400000)); if (UI.wOff >= 0 && UI.wOff <= 4) UI.wOff = 0; }
@@ -3022,7 +3041,7 @@ document.addEventListener('click', async ev0 => {
       case 'edDay': { const n = +el.dataset.d, a = UI.edit.days; a.includes(n) ? a.splice(a.indexOf(n), 1) : a.push(n); const keep = {}; for (const id of ['edTitle', 'edDate', 'edStart', 'edEnd', 'edLoc', 'edUntil', 'edImp', 'edKind']) if ($(id)) keep[id] = $(id).value; const all = $('edAll').checked; renderEdit(); for (const [id, v] of Object.entries(keep)) if ($(id)) $(id).value = v; $('edAll').checked = all; return; }
       case 'edSave': return saveEdit(el);
       case 'iconMgr': return openIconMgr();
-      case 'impReset': { const amber = getComputedStyle(document.documentElement).getPropertyValue('--amber').trim(); $('impColor').value = amber; $('impWidth').value = 2; $('impSpeed').value = 2.6; $('impMode').value = 'fade'; $('impColorBy').value = 'fixed'; $('impPast').value = 'blink'; $('impColor').disabled = false; $('impDim').value = 0.28; $('impWidth').dispatchEvent(new Event('input', { bubbles: true })); return; }
+      case 'impReset': { const amber = getComputedStyle(document.documentElement).getPropertyValue('--amber').trim(); $('impColor').value = amber; $('impWidth').value = 2; $('impSpeed').value = 2.6; $('impMode').value = 'fade'; $('impColorBy').value = 'fixed'; $('impPast').value = 'blink'; $('impPastDim').value = 0.6; $('impColor').disabled = false; $('impDim').value = 0.28; $('impWidth').dispatchEvent(new Event('input', { bubbles: true })); return; }
       case 'imReset': { delete UI.im[el.dataset.k]; return renderIconMgr(); }
       case 'imResetAll': UI.im = {}; return renderIconMgr();
       case 'imSave': return saveIconMgr();
@@ -3218,7 +3237,7 @@ document.addEventListener('input', e => {
   const t = e.target;
   if (t.id === 'ipWordIn' && UI.ipick) UI.ipick.word = t.value.trim();
   if (UI.dlg === 'iconmgr' && t.dataset.im) { const k = t.dataset.k; UI.im[k] = { ...(UI.im[k] || {}), [t.dataset.im]: t.value }; if (t.dataset.im === 'color') { const r = t.closest('.imrow'); if (r) r.querySelector('.imic').style.color = t.value; } }
-  if (['impColor', 'impColorBy', 'impPast', 'impWidth', 'impSpeed', 'impMode', 'impDim'].includes(t.id)) { const v = impFormValues(); applyImpStyle(v); $('impWidthV').textContent = v.width + 'px'; $('impSpeedV').textContent = v.speed + '초'; $('impDimV').textContent = Math.round((1 - v.dim) * 100) + '%'; }
+  if (['impColor', 'impColorBy', 'impPast', 'impPastDim', 'impWidth', 'impSpeed', 'impMode', 'impDim'].includes(t.id)) { const v = impFormValues(); applyImpStyle(v); $('impWidthV').textContent = v.width + 'px'; $('impSpeedV').textContent = v.speed + '초'; $('impDimV').textContent = Math.round((1 - v.dim) * 100) + '%'; $('impPastDimV').textContent = Math.round(v.pastDim * 100) + '%'; }
   if (t.id === 'edAll') { $('edStart').disabled = $('edEnd').disabled = t.checked; }
   if (t.id === 'rawMail') t.classList.toggle('big', t.value.length > 160 || t.value.split('\n').length > 3);
   if (t.closest('#fEvent')) { checkEventForm(); if ((t.id === 'fTitle') && !$('fImp').dataset.touched) $('fImp').value = autoImp($('fTitle').value, $('fKind').value); }
@@ -3252,7 +3271,7 @@ function shiftCalMonth(k) {
     const now = new Date(); now.setDate(now.getDate() - now.getDay());
     UI.wOff = Math.round((parse(ymd(target)) - parse(ymd(now))) / (7 * 86400000));
   }
-  UI.cap = 14; renderCal(); watchGoogle();
+  UI.cap = 9; renderCal(); watchGoogle();
   const g = $('cal'); g.classList.remove('wnext', 'wprev'); void g.offsetWidth; g.classList.add(k > 0 ? 'wnext' : 'wprev');
 }
 $('cal').addEventListener('wheel', e => {
@@ -3264,7 +3283,7 @@ $('cal').addEventListener('wheel', e => {
   const k = wheelAcc > 0 ? 1 : -1; wheelAcc = 0; wheelLock = Date.now() + 450;
   shiftCalMonth(k);
 }, { passive: false });
-let rsT; window.addEventListener('resize', () => { clearTimeout(rsT); rsT = setTimeout(() => { UI.cap = 14; renderCal(); renderRail(); }, 200); });
+let rsT; window.addEventListener('resize', () => { clearTimeout(rsT); rsT = setTimeout(() => { UI.cap = 9; renderCal(); renderRail(); }, 200); });
 function openSettings() {
   const s = S.settings;
   $('dlgRoot').innerHTML = `<div class="scrim" data-act="closeDlg"></div><div class="dlg"><div class="dlgbox" role="dialog" aria-modal="true" aria-labelledby="dlgT">
