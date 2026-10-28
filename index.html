@@ -550,6 +550,7 @@ a.btn{text-decoration:none;color:inherit}
           <option>대학본부·행정</option><option>교원</option><option>학생</option><option>외부기관</option><option>기타</option>
         </select>
         <select class="field" id="threadOf" aria-label="이어지는 메일"><option value="">새 메일로 등록</option></select>
+        <button class="btn small" type="button" data-act="toChat" title="입력한 명령을 Claude 대화창에 붙여넣을 프롬프트로 만듭니다" style="justify-content:center"><span data-ic="copy"></span>Claude에게 시킬 프롬프트 만들기</button>
         <div class="row"><button class="btn" type="button" data-act="cancelAnalyze" id="stopBtn" hidden>중지</button><button class="btn primary grow" type="button" data-act="analyze" id="analyzeBtn"><span data-ic="spark"></span>자동 처리</button></div>
       </div>
     </div>
@@ -1893,7 +1894,9 @@ function parseCommand(raw) {
   if (r.type === 'event' && !r.date) { r.date = today; r.notes.push('날짜를 찾지 못해 오늘로 넣었습니다'); }
   if (r.type === 'block' && !r.date && !r.repeat) { r.date = today; r.notes.push('날짜를 찾지 못해 오늘로 넣었습니다'); }
   if (r.type === 'block' && !r.time && !r.allDay) r.allDay = true;
-  r.sure = !!title && !r.notes.length;
+  // monthly / every-other-week / nth-weekday / changes to existing items are beyond the simple parser
+  const hard = /매월|매달|월\s*\d+\s*회|격주|2주\s*마다|마지막\s*주|(첫|둘|셋|넷|다섯)째|\d\s*번째\s*주|매년|분기|옮겨|미뤄|당겨|바꿔|변경|취소|삭제|지워|빼/.test(raw);
+  r.sure = !!title && !r.notes.length && !hard;
   return r;
 }
 function describeAction(a) {
@@ -1913,7 +1916,7 @@ function renderCmdPreview(actions, sourceText, fromAI) {
     ${actions.map((a, i) => { const d = describeAction(a); const k = a.type === 'update' ? 'pen' : a.type === 'done' ? 'check' : a.type === 'delete' ? 'ban' : a.type === 'block' ? 'lock' : a.type === 'task' ? iconFor(a.title, '할일') : iconFor(a.title, a.kind || '회의');
       return `<div class="cmdrow">${ic(k, ICON_GROUP[k] || '')}<span class="pill ${a.type === 'delete' ? 'del' : 'pend'}">${d.typeKo}</span><b>${esc(d.title)}</b><span class="count">${esc(d.when)}</span>${a.type === 'event' && a.imp === 'high' ? '<span class="impbtn on">중요</span>' : ''}${(a.notes || []).map(n => `<span class="warnline">${esc(n)}</span>`).join('')}</div>`; }).join('')}
     <div class="row"><button class="btn small primary" type="button" data-act="cmdApply">${ic('check')}${actions.length > 1 ? `${actions.length}개 모두 ` : ''}${actions.some(a => ['update', 'delete', 'done'].includes(a.type)) ? '실행' : '추가'}</button>
-      ${fromAI ? '' : `<button class="btn small" type="button" data-act="cmdAI">${ic('spark')}다르게 이해했어요 · Claude에게 맡기기</button>`}
+      ${fromAI ? '' : `<button class="btn small" type="button" data-act="cmdAI">${ic('spark')}다르게 이해했어요 · Claude에게 맡기기</button>`}${fromAI || aiOn() ? '' : ''}
       <button class="btn small" type="button" data-act="cmdCancel">취소</button></div>
   </div>`;
 }
@@ -2036,7 +2039,7 @@ const UNDO_LABEL = {
   delRule: '아이콘 규칙 삭제', skipOcc: '반복 일정 한 번 빼기', edSave: '일정 편집', bdSave: '불가 시간 설정', saveSettings: '설정 변경', imSave: '아이콘 색·이름',
   pushG: '구글에 추가', fEvent: '일정 추가', fBlock: '불가 시간 추가', taskForm: '할 일 추가', importData: '파일 가져오기'
 };
-const UNDO_SKIP = new Set(['undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'aiCancel', 'cmdCancel']);
+const UNDO_SKIP = new Set(['toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'aiCancel', 'cmdCancel']);
 function undoSnap() {
   const o = { settings: JSON.parse(JSON.stringify(S.settings)) };
   for (const c of COLS) o[c] = JSON.parse(JSON.stringify(S[c]));
@@ -2750,7 +2753,7 @@ async function analyzeNew() {
   if (looksLikeCommand(text) && !$('threadOf').value) {
     const r = parseCommand(text);
     if (r.sure) renderCmdPreview([r], text, false);
-    else runCommandAI(text);
+    else if (aiOn()) runCommandAI(text); else openChatPrompt(text);
     return;
   }
   if (text.length < 10) { st.className = 'status err'; st.textContent = '메일 내용을 붙여넣어 주세요.'; return; }
@@ -2900,6 +2903,58 @@ ${m.summary ? '요약: ' + m.summary : ''}`;
   } catch (e) { const s = $('promptStatus'); if (s) { s.className = 'status err'; s.textContent = sampleErr(e).replace('분석', '생성'); } }
 }
 
+/* ---------- hand a command to Claude chat, which works in Google Calendar directly ---------- */
+function chatPrompt(text) {
+  const st = S.settings, d = new Date();
+  const cal = (G.cals.find(c => c.id === st.gPushCal) || G.cals.find(c => c.primary) || { name: '기본 캘린더' }).name;
+  const weekly = (st.weekly || []).filter(r => r.days && r.days.length).map(r => `${r.days.map(n => DOW_KO[n]).join('·')} ${r.start}–${r.end} ${r.label || '불가'}`);
+  const local = S.events.filter(e => !e.googleId && !e.googleSent && (repDays(e) || (e.date >= todayStr() && e.date <= addDays(todayStr(), 30)))).slice(0, 25)
+    .map(e => `${repDays(e) ? '매주 ' + repDays(e).map(n => DOW_KO[n]).join('·') : e.date} ${e.time ? e.time + '–' + fromMin(Math.min(evEnd(e), 1439)) : '종일'} ${e.title}`);
+  return `구글 캘린더 도구로 아래 명령을 직접 처리해 주세요.
+
+명령: ${text}
+
+참고
+- 오늘: ${ymd(d)} (${WD[d.getDay()]}요일), 시간대 Asia/Seoul
+- 넣을 캘린더: ${cal}
+- 근무시간: ${st.workStart}–${st.workEnd}. "3시"처럼 오전/오후가 없으면 1~7시는 오후로 봅니다.
+- "오전"만 있으면 10:00–12:00, "오후"만 있으면 14:00–16:00, 길이가 없으면 1시간으로 잡습니다.
+- 매월 마지막 주 ○요일 같은 반복은 RRULE(예: FREQ=MONTHLY;BYDAY=-1TU)로 넣습니다.${weekly.length ? `\n- 매주 안 되는 시간: ${weekly.join(', ')}` : ''}${local.length ? `\n- 구글에는 없고 대시보드에만 있는 일정(겹치는지 볼 때 참고):\n${local.map(x => '  · ' + x).join('\n')}` : ''}
+
+처리 방법
+- 일정을 넣거나 고치기 전에 그 시간에 겹치는 일정이 있는지 확인하고, 겹치면 알려 주세요.
+- 빠진 정보는 위 규칙대로 정하고, 무엇으로 정했는지 알려 주세요.
+- 일정을 지우거나 여러 개를 한꺼번에 바꾸는 일은 먼저 무엇을 할지 보여 주고 확인을 받으세요.
+- 끝나면 한 일을 짧게 정리해 주세요 (제목 · 날짜 · 시간 · 반복).`;
+}
+function openChatPrompt(text) {
+  UI.chat = { text, prompt: chatPrompt(text) }; UI.dlg = 'chat';
+  const c = UI.chat;
+  $('dlgRoot').innerHTML = `<div class="scrim" data-act="closeDlg"></div><div class="dlg"><div class="dlgbox wide" role="dialog" aria-modal="true" aria-labelledby="dlgT">
+    <h3 id="dlgT">${ic('spark')}Claude에게 맡기기 · ${esc(text.slice(0, 40))}</h3>
+    <div class="aiask">
+      <div class="q">${ic('gcal', 'kc-g')}Claude 대화창에 붙여넣으면 Claude가 구글 캘린더에 바로 넣습니다</div>
+      <span class="count">복사한 뒤 쓰고 계신 Claude 대화창(또는 새 대화)에 붙여넣으세요. 구글 캘린더가 연결된 Claude라면 따로 할 일이 없습니다. 끝나면 대시보드가 다음 확인 때 그 일정을 아이콘으로 띄웁니다.</span>
+      <textarea class="field" id="chatPrompt" rows="12" spellcheck="false">${esc(c.prompt)}</textarea>
+      <div class="row" style="justify-content:space-between">
+        <button class="btn small" type="button" data-act="chatJson" title="Claude의 답을 받아 대시보드 일정으로 넣는 예전 방식">답을 받아 대시보드에 넣기</button>
+        <span class="row"><a class="btn" href="https://claude.ai/new" target="_blank" rel="noopener" data-act="chatCopy" data-open="1">${ic('ext')}복사하고 새 대화 열기</a>
+        <button class="btn primary" type="button" data-act="chatCopy">${ic('copy')}프롬프트 복사</button></span>
+      </div>
+    </div>
+  </div></div>`;
+  const b = $('dlgRoot').querySelector('button[data-act="chatCopy"]'); if (b) b.focus();
+}
+async function chatCopy(el) {
+  const ta = $('chatPrompt'); if (!ta) return;
+  try { await navigator.clipboard.writeText(ta.value); toast('복사했습니다. Claude 대화창에 붙여넣으세요.'); }
+  catch { ta.focus(); ta.select(); try { document.execCommand('copy'); toast('복사했습니다. Claude 대화창에 붙여넣으세요.'); } catch { toast('선택해 두었습니다. Ctrl+C로 복사하세요.'); } }
+  const st = $('pasteStatus'); if (st) { st.className = 'status'; st.textContent = 'Claude에게 맡겼습니다. 처리되면 구글 캘린더 일정으로 달력에 뜹니다.'; }
+  if (!el.dataset.open) { $('dlgRoot').innerHTML = ''; UI.dlg = null; }
+  else setTimeout(() => { $('dlgRoot').innerHTML = ''; UI.dlg = null; }, 300);
+  $('rawMail').value = ''; UI.cmd = null;
+}
+
 async function runCommandAI(text) {
   const st = $('pasteStatus');
   st.className = 'status'; st.textContent = aiOn() ? 'Claude에게 맡길지 묻는 창을 열었습니다.' : 'AI 창에서 프롬프트를 복사해 붙여넣고, 답을 다시 붙여넣어 주세요.';
@@ -3022,7 +3077,10 @@ document.addEventListener('click', async ev0 => {
       case 'aiCancel': return aiCancelRun();
       case 'aiManual': { const r = UI.relay; if (r) { r.mode = 'manual'; renderRelay(); } return; }
       case 'aiTest': return aiTest();
-      case 'cmdAI': { const c = UI.cmd; if (c) runCommandAI(c.text); return; }
+      case 'cmdAI': { const c = UI.cmd; if (c) { if (aiOn()) runCommandAI(c.text); else openChatPrompt(c.text); } return; }
+      case 'toChat': { const t = $('rawMail').value.trim(); if (!t) { const st = $('pasteStatus'); st.className = 'status err'; st.textContent = '먼저 명령을 적어 주세요.'; return; } return openChatPrompt(t); }
+      case 'chatCopy': return chatCopy(el);
+      case 'chatJson': { const t = UI.chat && UI.chat.text; $('dlgRoot').innerHTML = ''; UI.dlg = null; if (t) runCommandAI(t); return; }
       case 'cmdCancel': UI.cmd = null; $('pasteStatus').textContent = ''; return;
       case 'skipOcc': { const e = S.events.find(x => x.id === id); if (e) { await patch('events', id, { skip: [...(e.skip || []), el.dataset.day] }); toast(`${fmtShort(el.dataset.day)}만 반복에서 뺐습니다.`); } return; }
       case 'edOpen': return openEdit(el.dataset.kind, el.dataset.id);
