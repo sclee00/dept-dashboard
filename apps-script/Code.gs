@@ -10,7 +10,9 @@
  *    → 배포 → 웹 앱 URL(…/exec) 복사
  * 5. 대시보드 설정 → 구글 캘린더 → "Apps Script 웹 앱 주소"와 "비밀 키" 입력 → 연결 확인
  *
+ * 코드를 바꾼 뒤에는 [배포] → [배포 관리] → 수정(연필) → 버전: 새 버전 → 배포
  * 이 스크립트는 내 계정의 캘린더만 다루며, KEY가 맞는 요청에만 답합니다.
+ * 할 수 있는 일: 캘린더 목록, 일정 읽기, 일정 만들기, 일정 고치기 (삭제는 없음)
  */
 const KEY = 'CHANGE_ME';
 
@@ -25,11 +27,12 @@ function doGet(e) {
   if (p.key !== KEY) return out({ ok: false, error: 'key' });
   try {
     switch (p.action) {
-      case 'ping': return out({ ok: true, email: Session.getEffectiveUser().getEmail(), tz: Session.getScriptTimeZone() });
+      case 'ping': return out({ ok: true, email: Session.getEffectiveUser().getEmail(), tz: Session.getScriptTimeZone(), version: 3 });
       case 'calendars': return out({ ok: true, calendars: listCalendars() });
       case 'events': return out({ ok: true, events: listEvents(p.cal, p.from, p.to) });
       case 'create': return out({ ok: true, event: createEvent(p) });
-      default: return out({ ok: false, error: 'action' });
+      case 'update': return out({ ok: true, event: updateEvent(p) });
+      default: return out({ ok: false, error: 'action', message: '스크립트가 오래된 버전입니다. 새 코드로 다시 배포해 주세요.' });
     }
   } catch (err) {
     return out({ ok: false, error: 'script', message: String((err && err.message) || err) });
@@ -64,6 +67,21 @@ function fmt(d, f) {
   return Utilities.formatDate(d, Session.getScriptTimeZone(), f);
 }
 
+function timeRange(p) {
+  const st = toDate(p.date, p.time);
+  let en = p.endTime ? toDate(p.date, p.endTime) : null;
+  if (!en || en <= st) en = new Date(st.getTime() + 3600000);
+  return [st, en];
+}
+
+function weeklyRule(daysText, until) {
+  const W = [CalendarApp.Weekday.SUNDAY, CalendarApp.Weekday.MONDAY, CalendarApp.Weekday.TUESDAY, CalendarApp.Weekday.WEDNESDAY, CalendarApp.Weekday.THURSDAY, CalendarApp.Weekday.FRIDAY, CalendarApp.Weekday.SATURDAY];
+  const days = String(daysText).split(',').map(Number).filter(function (n) { return n >= 0 && n <= 6; }).map(function (n) { return W[n]; });
+  let rule = CalendarApp.newRecurrence().addWeeklyRule().onlyOnWeekdays(days);
+  if (until) { const u = toDate(until); u.setDate(u.getDate() + 1); rule = rule.until(u); }
+  return rule;
+}
+
 function listEvents(cal, from, to) {
   const c = calById(cal);
   return c.getEvents(toDate(from), toDate(to)).slice(0, 600).map(function (ev) {
@@ -76,6 +94,7 @@ function listEvents(cal, from, to) {
       o.end = { dateTime: fmt(ev.getEndTime(), "yyyy-MM-dd'T'HH:mm:ssXXX") };
     }
     try { if (ev.getTransparency() === CalendarApp.EventTransparency.TRANSPARENT) o.transparency = 'transparent'; } catch (e) {}
+    try { if (ev.isRecurringEvent()) o.recurring = true; } catch (e) {}
     return o;
   });
 }
@@ -86,32 +105,48 @@ function createEvent(p) {
   const opt = {};
   if (p.location) opt.location = p.location;
   if (p.description) opt.description = p.description;
-  let ev;
   if (p.days) {
-    const W = [CalendarApp.Weekday.SUNDAY, CalendarApp.Weekday.MONDAY, CalendarApp.Weekday.TUESDAY, CalendarApp.Weekday.WEDNESDAY, CalendarApp.Weekday.THURSDAY, CalendarApp.Weekday.FRIDAY, CalendarApp.Weekday.SATURDAY];
-    const days = String(p.days).split(',').map(Number).filter(function (n) { return n >= 0 && n <= 6; }).map(function (n) { return W[n]; });
-    let rule = CalendarApp.newRecurrence().addWeeklyRule().onlyOnWeekdays(days);
-    if (p.until) { const u = toDate(p.until); u.setDate(u.getDate() + 1); rule = rule.until(u); }
+    const rule = weeklyRule(p.days, p.until);
     if (p.time) {
-      const st = toDate(p.date, p.time);
-      let en = p.endTime ? toDate(p.date, p.endTime) : null;
-      if (!en || en <= st) en = new Date(st.getTime() + 3600000);
-      const series = c.createEventSeries(p.title, st, en, rule, opt);
-      return { id: series.getId(), series: true };
+      const r = timeRange(p);
+      return { id: c.createEventSeries(p.title, r[0], r[1], rule, opt).getId(), series: true };
     }
-    const series = c.createAllDayEventSeries(p.title, toDate(p.date), rule, opt);
-    return { id: series.getId(), series: true };
+    return { id: c.createAllDayEventSeries(p.title, toDate(p.date), rule, opt).getId(), series: true };
   }
+  let ev;
   if (p.time) {
-    const st = toDate(p.date, p.time);
-    let en = p.endTime ? toDate(p.date, p.endTime) : null;
-    if (!en || en <= st) en = new Date(st.getTime() + 3600000);
-    ev = c.createEvent(p.title, st, en, opt);
+    const r = timeRange(p);
+    ev = c.createEvent(p.title, r[0], r[1], opt);
   } else if (p.endDate && p.endDate > p.date) {
     const end = toDate(p.endDate); end.setDate(end.getDate() + 1);
     ev = c.createAllDayEvent(p.title, toDate(p.date), end, opt);
   } else {
     ev = c.createAllDayEvent(p.title, toDate(p.date), opt);
   }
+  return { id: ev.getId() };
+}
+
+function updateEvent(p) {
+  const c = calById(p.cal);
+  if (p.days) {
+    const s = c.getEventSeriesById(p.id);
+    if (!s) throw new Error('반복 일정을 찾을 수 없습니다.');
+    if (p.title) s.setTitle(p.title);
+    s.setLocation(p.location || '');
+    const rule = weeklyRule(p.days, p.until);
+    if (p.time) { const r = timeRange(p); s.setRecurrence(rule, r[0], r[1]); }
+    else s.setRecurrence(rule, toDate(p.date));
+    return { id: s.getId() };
+  }
+  const ev = c.getEventById(p.id);
+  if (!ev) throw new Error('구글 캘린더에서 일정을 찾을 수 없습니다.');
+  if (p.title) ev.setTitle(p.title);
+  ev.setLocation(p.location || '');
+  if (p.titleOnly) return { id: ev.getId() };
+  if (p.time) { const r = timeRange(p); ev.setTime(r[0], r[1]); }
+  else if (p.endDate && p.endDate > p.date) {
+    const end = toDate(p.endDate); end.setDate(end.getDate() + 1);
+    ev.setAllDayDates(toDate(p.date), end);
+  } else ev.setAllDayDate(toDate(p.date));
   return { id: ev.getId() };
 }

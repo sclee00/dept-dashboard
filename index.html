@@ -102,10 +102,10 @@ header.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:spac
 .dn{font-family:var(--mono);font-weight:500;font-size:.92rem;font-variant-numeric:tabular-nums;display:inline-flex;align-items:center;gap:.3rem}
 .dn em{font-style:normal;font-family:var(--body);font-size:.68rem;font-weight:600;background:var(--accent);color:var(--on-accent);border-radius:4px;padding:0 .3rem}
 .cell.sun .dn{color:var(--red)} .cell.sat .dn{color:var(--accent)}
-.free{font-family:var(--mono);font-size:.7rem;border-radius:5px;padding:0 .32rem;white-space:nowrap;font-variant-numeric:tabular-nums}
-.f-good{background:var(--green-soft);color:var(--green)}
-.f-mid{background:var(--amber-soft);color:var(--amber)}
-.f-low,.f-full{background:var(--red-soft);color:var(--red)}
+.free{font-family:var(--mono);font-size:.66rem;border-radius:5px;padding:0 .2rem;white-space:nowrap;font-variant-numeric:tabular-nums;opacity:.55}
+.f-good{color:var(--muted)}
+.f-mid{color:var(--muted)}
+.f-low,.f-full{color:var(--red)}
 .f-full{font-weight:600}
 .citems{display:flex;flex-direction:column;gap:2px;min-width:0}
 .ci{display:flex;align-items:center;gap:.25rem;font-size:.72rem;line-height:1.4;white-space:nowrap;overflow:hidden;border-radius:4px;padding:0 .2rem;min-width:0}
@@ -139,13 +139,17 @@ header.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:spac
 .srow .t{font-family:var(--mono);font-size:.78rem;color:var(--muted);font-variant-numeric:tabular-nums}
 .srow .tt{min-width:0;overflow-wrap:anywhere}
 .srow .sub3{display:block;font-size:.76rem;color:var(--muted)}
-.srow .acts{display:flex;gap:.25rem;align-items:center}
+.srow .acts{display:flex;gap:.25rem;align-items:center;flex-wrap:wrap}
+.srow:not(.freeslot){grid-template-columns:6.4rem 1.2rem minmax(0,1fr)}
+.srow:not(.freeslot) .acts{grid-column:3;justify-self:start}
+.srow:not(.freeslot) .acts:empty{display:none}
 .srow.hot{background:var(--red-soft)} .srow.hot .tt{color:var(--red);font-weight:600}
 .srow.warn{background:var(--amber-soft)}
 .srow.busy{background:repeating-linear-gradient(135deg,var(--surface-2) 0 6px,var(--hatch) 6px 9px)}
 .srow.busy .ic{color:var(--muted)}
-.srow.freeslot{background:var(--green-soft);border:1px dashed var(--green);color:var(--green);cursor:pointer}
-.srow.freeslot .t{color:var(--green)}
+.srow.freeslot{background:transparent;border:1px dashed var(--line);color:var(--muted);cursor:pointer;opacity:.75}
+.srow.freeslot:hover{border-color:var(--green);color:var(--green);opacity:1}
+.srow.freeslot .t{color:inherit}
 .srow.freeslot:hover{border-style:solid}
 .miniform{display:grid;grid-template-columns:1fr 1fr;gap:.45rem;background:var(--surface-2);padding:.75rem;border-radius:10px;border:1px solid var(--line)}
 .miniform .full{grid-column:1/-1}
@@ -368,9 +372,21 @@ a.btn{text-decoration:none;color:inherit}
 .gsrow{display:grid;grid-template-columns:auto 1.2rem 7rem minmax(0,1fr);gap:.5rem;align-items:center;padding:.45rem .55rem;border-radius:8px;background:var(--surface-2);cursor:pointer;font-size:.9rem;color:var(--ink)!important}
 .gsrow .t{font-family:var(--mono);font-size:.8rem;color:var(--muted)}
 .gsrow input{accent-color:var(--accent);width:1rem;height:1rem}
-.ci2.imp{box-shadow:0 0 0 2px var(--amber);animation:impblink 2.6s ease-in-out infinite}
-.ci2.imp.hot{box-shadow:0 0 0 2px var(--red)}
-@keyframes impblink{0%,100%{opacity:1}50%{opacity:.28}}
+.ci2.imp{box-shadow:0 0 0 var(--imp-w,2px) var(--imp-c,var(--amber));animation:impblink var(--imp-s,2.6s) ease-in-out infinite}
+.ci2.imp.hot{box-shadow:0 0 0 var(--imp-w,2px) var(--red)}
+@keyframes impblink{0%,100%{opacity:1}50%{opacity:var(--imp-o,.28)}}
+.imp-invert .ci2.imp{animation-name:impinv}
+.imp-invert .ci2.imp .ic{animation:impinvic var(--imp-s,2.6s) ease-in-out infinite}
+@keyframes impinv{0%,100%{background:var(--surface)}50%{background:var(--imp-c,var(--amber))}}
+@keyframes impinvic{0%,100%{}50%{color:var(--bg)}}
+.imp-glow .ci2.imp{animation-name:impglow}
+@keyframes impglow{0%,100%{box-shadow:0 0 0 var(--imp-w,2px) var(--imp-c,var(--amber))}50%{box-shadow:0 0 0 var(--imp-w,2px) var(--imp-c,var(--amber)),0 0 10px calc(var(--imp-w,2px) * 2) var(--imp-c,var(--amber))}}
+.imp-still .ci2.imp{animation:none}
+.impprev{display:flex;align-items:center;gap:.6rem;padding:.5rem;background:var(--surface-2);border-radius:8px}
+.impgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(12rem,1fr));gap:.45rem .8rem}
+.impgrid label{font-size:.8rem;color:var(--muted);display:flex;flex-direction:column;gap:.2rem}
+.impgrid input[type=range]{accent-color:var(--accent)}
+.impgrid input[type=color]{width:100%;height:2rem;border:1px solid var(--line);border-radius:6px;background:none;padding:0;cursor:pointer}
 .impbtn{display:inline-flex;align-items:center;gap:.2rem;border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:6px;padding:.1rem .45rem;font-size:.75rem;cursor:pointer;white-space:nowrap}
 .impbtn .ic{width:.9rem;height:.9rem}
 .impbtn.on{color:var(--amber);border-color:var(--amber);background:var(--amber-soft);font-weight:600}
@@ -385,6 +401,17 @@ a.btn{text-decoration:none;color:inherit}
 .cmdhead .ic{color:var(--accent)}
 .cmdrow{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
 .cmdrow .ic{width:1.3rem;height:1.3rem}
+.ic.cu{color:var(--icc)}
+.ci2[draggable="true"]{cursor:grab}
+.ci2.dragging{opacity:.35}
+.cell.dropok{outline:2px dashed var(--accent);outline-offset:-2px;background:var(--accent-soft)}
+.cell:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.imlist{display:grid;grid-template-columns:repeat(auto-fill,minmax(15rem,1fr));gap:.35rem;max-height:56vh;overflow:auto}
+.imrow{display:grid;grid-template-columns:1.6rem minmax(0,1fr) 2.2rem auto;gap:.4rem;align-items:center;background:var(--surface-2);border-radius:8px;padding:.3rem .45rem}
+.imrow .imic .ic{width:1.3rem;height:1.3rem}
+.imrow input[type=color]{width:2.1rem;height:1.8rem;border:1px solid var(--line);border-radius:6px;background:none;padding:0;cursor:pointer}
+.imrow .field{padding:.3rem .45rem}
+.quick{margin-top:0}
 .icbtn{border:0;background:none;padding:.15rem;margin:-.15rem;border-radius:6px;cursor:pointer;display:grid;place-items:center;color:inherit}
 .icbtn:hover{background:var(--surface);outline:1px dashed var(--muted)}
 .ipgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(5.2rem,1fr));gap:.35rem;max-height:46vh;overflow:auto}
@@ -448,21 +475,6 @@ a.btn{text-decoration:none;color:inherit}
     </div>
   </header>
 
-  <section class="quick" aria-label="메일 붙여넣기">
-    <div class="qhead"><span class="qic" data-ic="inbox"></span><b>자동 처리</b><span class="count">메일을 붙여넣으면 요약·일정·할 일·답장·조교 지시를 만들고, 짧게 명령하면 바로 실행합니다</span></div>
-    <div class="qbody">
-      <textarea class="field" id="rawMail" rows="3" placeholder="메일을 그대로 붙여넣거나 짧게 명령하세요 (Ctrl+Enter). 예: 매주 화요일 3시에 임원회의 일정 추가 · 금요일까지 예산서 제출 할 일 · 다음주 수요일 오후 출장 불가 · 11월 5일 2시~4시 교육과정위원회"></textarea>
-      <div class="qctl">
-        <select class="field" id="mailCat" aria-label="분류">
-          <option>대학본부·행정</option><option>교원</option><option>학생</option><option>외부기관</option><option>기타</option>
-        </select>
-        <select class="field" id="threadOf" aria-label="이어지는 메일"><option value="">새 메일로 등록</option></select>
-        <div class="row"><button class="btn" type="button" data-act="cancelAnalyze" id="stopBtn" hidden>중지</button><button class="btn primary grow" type="button" data-act="analyze" id="analyzeBtn"><span data-ic="spark"></span>자동 처리</button></div>
-      </div>
-    </div>
-    <div class="status" id="pasteStatus"></div>
-  </section>
-
   <section class="focusbar" id="focus" aria-label="지금 볼 것"></section>
 
   <main class="board">
@@ -519,6 +531,21 @@ a.btn{text-decoration:none;color:inherit}
       </div>
     </aside>
   </main>
+
+  <section class="quick" aria-label="메일 붙여넣기">
+    <div class="qhead"><span class="qic" data-ic="inbox"></span><b>자동 처리</b><span class="count">메일을 붙여넣으면 요약·일정·할 일·답장·조교 지시를 만들고, 짧게 명령하면 바로 실행합니다</span></div>
+    <div class="qbody">
+      <textarea class="field" id="rawMail" rows="3" placeholder="메일을 그대로 붙여넣거나 짧게 명령하세요 (Ctrl+Enter). 예: 매주 화요일 3시에 임원회의 일정 추가 · 금요일까지 예산서 제출 할 일 · 다음주 수요일 오후 출장 불가 · 11월 5일 2시~4시 교육과정위원회"></textarea>
+      <div class="qctl">
+        <select class="field" id="mailCat" aria-label="분류">
+          <option>대학본부·행정</option><option>교원</option><option>학생</option><option>외부기관</option><option>기타</option>
+        </select>
+        <select class="field" id="threadOf" aria-label="이어지는 메일"><option value="">새 메일로 등록</option></select>
+        <div class="row"><button class="btn" type="button" data-act="cancelAnalyze" id="stopBtn" hidden>중지</button><button class="btn primary grow" type="button" data-act="analyze" id="analyzeBtn"><span data-ic="spark"></span>자동 처리</button></div>
+      </div>
+    </div>
+    <div class="status" id="pasteStatus"></div>
+  </section>
 </div>
 
 <div id="sheetRoot"></div>
@@ -569,7 +596,7 @@ const IP = {
   ban:'<circle cx="12" cy="12" r="9"/><path d="m5.6 5.6 12.8 12.8"/>',
   pin:'<path d="M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11z"/><circle cx="12" cy="10" r="2"/>'
 };
-const ic = (n, cls = '') => `<svg class="ic ${cls}" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${IP[n] || ''}</svg>`;
+const ic = (n, cls = '') => { const cu = typeof S !== 'undefined' && S.settings && S.settings.iconStyle && S.settings.iconStyle[n] && /^#[0-9a-f]{6}$/i.test(S.settings.iconStyle[n].color || '') ? S.settings.iconStyle[n].color : ''; return `<svg class="ic ${cls}${cu ? ' cu' : ''}"${cu ? ` style="--icc:${cu}"` : ''} viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${IP[n] || ''}</svg>`; };
 /* ---------- topic icons: pick an icon from the words in a title ---------- */
 Object.assign(IP, {
   interview: '<circle cx="8" cy="9" r="3.5"/><path d="M2 21a6 6 0 0 1 12 0"/><path d="M14 3h8v6h-4l-2 2V9h-2z"/>',
@@ -707,7 +734,7 @@ function openIconPick(kind, id) {
 function renderIconPick() {
   const p = UI.ipick; if (!p) return;
   const keys = [...ICON_LEGEND.map(x => x[0]), 'gcal'];
-  const label = k => (ICON_LEGEND.find(x => x[0] === k) || [k, k === 'gcal' ? '구글 일정' : k])[1];
+  const label = iconLabel;
   $('dlgRoot').innerHTML = `<div class="scrim" data-act="closeDlg"></div><div class="dlg"><div class="dlgbox wide" role="dialog" aria-modal="true" aria-labelledby="dlgT">
     <h3 id="dlgT">${ic(p.sel, iconKc(p.sel))}아이콘 바꾸기</h3>
     <div class="count">${esc(p.title)}</div>
@@ -746,6 +773,228 @@ async function iconPickAuto() {
   toast('자동 아이콘으로 되돌렸습니다.');
 }
 
+/* ---------- icon types: user colors and names ---------- */
+const HEX_RE = /^#[0-9a-f]{6}$/i;
+const iconStyleOf = k => ((S.settings && S.settings.iconStyle) || {})[k] || {};
+const iconLabel = k => iconStyleOf(k).label || (ICON_LEGEND.find(x => x[0] === k) || [k, k === 'gcal' ? '구글 일정' : k])[1];
+const ICON_KEYS = () => [...ICON_LEGEND.map(x => x[0]), 'gcal'];
+function defaultIconHex(k) {
+  const v = { 'kc-회의': '--k-meet', 'kc-학사': '--k-acad', 'kc-행사': '--k-event', 'kc-p': '--green', 'kc-adm': '--amber', 'kc-마감': '--k-due', 'kc-할일': '--muted', 'kc-g': '--k-g' }[ICON_GROUP[k] || (k === 'gcal' ? 'kc-g' : k === 'reply' ? 'kc-adm' : '')] || '--ink';
+  const c = getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+  return HEX_RE.test(c) ? c : '#e9edf3';
+}
+function openIconMgr() {
+  UI.im = JSON.parse(JSON.stringify((S.settings && S.settings.iconStyle) || {}));
+  UI.dlg = 'iconmgr'; renderIconMgr();
+}
+function renderIconMgr() {
+  const im = UI.im || {};
+  $('dlgRoot').innerHTML = `<div class="scrim" data-act="closeDlg"></div><div class="dlg"><div class="dlgbox wide" role="dialog" aria-modal="true" aria-labelledby="dlgT">
+    <h3 id="dlgT">${ic('spark')}아이콘 ${ICON_KEYS().length}종 · 색과 이름</h3>
+    <div class="count">색은 달력의 아이콘 색, 이름은 아이콘 목록과 아이콘 고르기 창에 쓰입니다. 마감·답장 기한·불가 시간 표시는 강조를 위해 정해진 색을 그대로 씁니다.</div>
+    <div class="imlist">${ICON_KEYS().map(k => { const st = im[k] || {}; const col = HEX_RE.test(st.color || '') ? st.color : defaultIconHex(k); return `<div class="imrow" data-row="${k}">
+      <span class="imic" style="color:${esc(col)}">${ic(k)}</span>
+      <input class="field" data-im="label" data-k="${k}" value="${esc(st.label || '')}" placeholder="${esc((ICON_LEGEND.find(x => x[0] === k) || [k, k === 'gcal' ? '구글 일정' : k])[1])}" aria-label="아이콘 이름">
+      <input type="color" data-im="color" data-k="${k}" value="${esc(col)}" aria-label="아이콘 색">
+      <button class="x" type="button" data-act="imReset" data-k="${k}" title="기본으로 되돌리기" aria-label="기본으로 되돌리기">${ic('refresh')}</button>
+    </div>`; }).join('')}</div>
+    <div class="row" style="justify-content:space-between"><button class="btn" type="button" data-act="imResetAll">모두 기본으로</button>
+      <span class="row"><button class="btn" type="button" data-act="closeDlg">취소</button><button class="btn primary" type="button" data-act="imSave">${ic('check')}저장</button></span></div>
+  </div></div>`;
+}
+async function saveIconMgr() {
+  const out = {};
+  for (const [k, v] of Object.entries(UI.im || {})) {
+    const e = {};
+    if (v.label && v.label.trim()) e.label = v.label.trim().slice(0, 20);
+    if (HEX_RE.test(v.color || '') && v.color.toLowerCase() !== defaultIconHex(k).toLowerCase()) e.color = v.color;
+    if (e.label || e.color) out[k] = e;
+  }
+  await saveSettings({ ...S.settings, iconStyle: out });
+  $('dlgRoot').innerHTML = ''; UI.dlg = null; UI.im = null;
+  renderLegend();
+  toast('아이콘 색과 이름을 저장했습니다.');
+}
+function renderLegend() {
+  const el = $('legend'); if (!el) return;
+  el.innerHTML = `<span><span class="ci2">${ic('회의', 'kc-회의')}</span>내 일정</span><span><span class="ci2 g" style="--gc:#7DB6D4">${ic('gcal', 'kc-g')}</span>구글</span><span><span class="ci2 task">${ic('할일', 'kc-할일')}</span>할 일</span><span><span class="ci2 hot">${ic('마감', 'kc-마감')}</span>마감·중요</span><span><span class="ci2 warn">${ic('reply')}</span>답장 기한</span><span><span class="ci2 imp">${ic('회의', 'kc-회의')}</span>중요(깜빡임)</span><span><span class="ci2 busy">${ic('lock')}</span>불가</span><span><span class="free f-good">빈 4h</span>빈 시간</span>
+  <details class="iconhelp"><summary>아이콘 ${ICON_LEGEND.length}종</summary><div class="iconlist">${ICON_LEGEND.map(([k]) => `<span>${ic(k, ICON_GROUP[k] || '')}${esc(iconLabel(k))}</span>`).join('')}<span class="count" style="grid-column:1/-1">일정 제목의 단어로 아이콘을 고릅니다. 아이콘에 마우스를 올리거나 날짜를 누르면 내용이 보입니다.</span><button class="btn small" type="button" data-act="iconMgr" style="grid-column:1/-1;justify-self:start">${ic('pen')}색·이름 바꾸기</button></div></details>`;
+}
+
+/* ---------- move / edit events (local + Google) ---------- */
+function googleBody(doc) {
+  const body = { summary: doc.title, location: doc.location || '' };
+  if (toMin(doc.time) != null) {
+    const en = fromMin(Math.min(evEnd(doc), 1439));
+    body.start = { dateTime: `${doc.date}T${doc.time}:00`, timeZone: TZ }; body.end = { dateTime: `${doc.date}T${en}:00`, timeZone: TZ };
+  } else {
+    const last = isDate(doc.endDate) && doc.endDate > doc.date ? doc.endDate : doc.date;
+    body.start = { date: doc.date }; body.end = { date: addDays(last, 1) };
+  }
+  if (rrule(doc)) body.recurrence = [rrule(doc)];
+  return body;
+}
+// returns 'ok' | 'none' (no live connection) | 'unknown' (pushed without id) | 'fail'
+async function gUpdate(cal, gid, doc) {
+  if (!gid) return 'none';
+  if (gid === 'pushed') return 'unknown';
+  try {
+    if (gasOn() && doc.titleOnly) { await gas({ action: 'update', cal: cal || 'primary', id: gid, title: doc.title, location: doc.location || '', titleOnly: '1' }); return 'ok'; }
+    if (oauthReady() && doc.titleOnly) { await gapi(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(cal || 'primary')}/events/${encodeURIComponent(gid)}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ summary: doc.title, location: doc.location || '' }) }); return 'ok'; }
+    if (gasOn()) {
+      await gas({ action: 'update', cal: cal || 'primary', id: gid, title: doc.title, date: doc.date, time: toMin(doc.time) != null ? doc.time : '', endTime: toMin(doc.time) != null ? fromMin(Math.min(evEnd(doc), 1439)) : '', endDate: doc.endDate || '', location: doc.location || '', days: repDays(doc) ? repDays(doc).join(',') : '', until: repDays(doc) && isDate(doc.repeat.until) ? doc.repeat.until : '' });
+      return 'ok';
+    }
+    if (oauthReady()) {
+      await gapi(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(cal || 'primary')}/events/${encodeURIComponent(gid)}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(googleBody(doc)) });
+      return 'ok';
+    }
+    return 'none';
+  } catch (e) { UI.gErrMsg = e && e.message; return 'fail'; }
+}
+function gResultToast(r, base) {
+  if (r === 'ok') { toast(base + ' 구글 캘린더에도 반영했습니다.'); gLoad(true); }
+  else if (r === 'none') toast(base + ' 구글 캘린더는 연결이 없어 바뀌지 않았습니다. (설정 → 구글 캘린더 연결)');
+  else if (r === 'unknown') toast(base + ' 이 일정은 구글 쪽 번호를 몰라 구글에서는 직접 고쳐 주세요.');
+  else if (r === 'fail') toast(base + ' 구글 캘린더에 반영하지 못했습니다. ' + (UI.gErrMsg || ''));
+  else toast(base);
+}
+async function moveItem(dk, newDate) {
+  const [kind, ...rest] = dk.split(':'); const id = rest.join(':');
+  if (kind === 't') { const t = S.tasks.find(x => x.id === id); if (!t || t.due === newDate) return; await patch('tasks', id, { due: newDate }); toast(`할 일 기한을 ${fmtShort(newDate)}로 옮겼습니다.`); return; }
+  if (kind === 'r') { toast('반복 일정은 날짜를 눌러 "편집"에서 요일이나 시간을 바꿔 주세요.'); return; }
+  if (kind === 'e') {
+    const e = S.events.find(x => x.id === id); if (!e || e.date === newDate) return;
+    const len = isDate(e.endDate) && e.endDate > e.date ? Math.round((parse(e.endDate) - parse(e.date)) / 86400000) : 0;
+    const upd = { date: newDate, endDate: len ? addDays(newDate, len) : (e.endDate || '') };
+    await patch('events', id, upd);
+    const r = e.googleId ? await gUpdate(e.googleCal, e.googleId, { ...e, ...upd }) : e.googleSent ? 'unknown' : '';
+    gResultToast(r, `"${e.title}"을 ${fmtShort(newDate)}로 옮겼습니다.`);
+    UI.selDay = newDate; renderAll(); return;
+  }
+  if (kind === 'g') {
+    const g = G.events.find(x => gKey(x) === id); if (!g || g.date === newDate) return;
+    if (g.recurring) { toast('구글의 반복 일정은 구글 캘린더에서 옮겨 주세요.'); return; }
+    const doc = g.allDay ? { title: g.title, date: newDate, endDate: g.endDate > g.date ? addDays(newDate, Math.round((parse(g.endDate) - parse(g.date)) / 86400000)) : '', location: g.loc || '' } : { title: g.title, date: newDate, time: g.time, endTime: g.endTime === '24:00' ? '23:59' : g.endTime, location: g.loc || '' };
+    const r = await gUpdate(g.cal, g.id, doc);
+    if (r === 'ok') { const old = g.date; g.date = newDate; if (g.allDay) g.endDate = doc.endDate || newDate; const m = S.marks.find(x => x.id === `g:${g.id}:${old}`); if (m) setMark(`g:${g.id}:${newDate}`, { imp: m.imp, icon: m.icon }); UI.selDay = newDate; renderAll(); }
+    gResultToast(r === 'none' ? 'nolink' : r, r === 'ok' ? `"${g.title}"을 ${fmtShort(newDate)}로 옮겼습니다.` : r === 'none' ? '구글 일정을 옮기려면 Apps Script 연결이 필요합니다.' : '');
+  }
+}
+
+/* ---------- drag icons between days ---------- */
+let dragKey = null;
+document.addEventListener('dragstart', e => {
+  const el = e.target.closest && e.target.closest('[data-dk]'); if (!el) return;
+  dragKey = el.dataset.dk;
+  try { e.dataTransfer.setData('text/plain', dragKey); e.dataTransfer.effectAllowed = 'move'; } catch {}
+  el.classList.add('dragging');
+});
+document.addEventListener('dragend', e => { const el = e.target.closest && e.target.closest('[data-dk]'); if (el) el.classList.remove('dragging'); document.querySelectorAll('.cell.dropok').forEach(c => c.classList.remove('dropok')); dragKey = null; });
+document.addEventListener('dragover', e => { if (!dragKey) return; const c = e.target.closest && e.target.closest('.cell[data-day]'); if (!c) return; e.preventDefault(); try { e.dataTransfer.dropEffect = 'move'; } catch {} if (!c.classList.contains('dropok')) { document.querySelectorAll('.cell.dropok').forEach(x => x.classList.remove('dropok')); c.classList.add('dropok'); } });
+document.addEventListener('drop', e => { const c = e.target.closest && e.target.closest('.cell[data-day]'); if (!c || !dragKey) return; e.preventDefault(); const k = dragKey; dragKey = null; c.classList.remove('dropok'); moveItem(k, c.dataset.day); });
+
+/* ---------- edit dialog ---------- */
+function openEdit(kind, id) {
+  let d;
+  if (kind === 'e') {
+    const e = S.events.find(x => x.id === id); if (!e) return;
+    d = { kind, id, title: e.title, date: e.date, endDate: e.endDate || '', time: e.time || '', endTime: e.time ? fromMin(Math.min(evEnd(e), 1439)) : '', allDay: toMin(e.time) == null, location: e.location || '', ekind: e.kind || '회의', imp: impOfEvent(e), days: repDays(e) ? [...repDays(e)] : null, until: e.repeat && e.repeat.until || '', g: !!e.googleId || !!e.googleSent };
+  } else {
+    const g = G.events.find(x => gKey(x) === id); if (!g) return;
+    d = { kind, id, title: g.title, date: g.date, endDate: g.allDay && g.endDate > g.date ? g.endDate : '', time: g.allDay ? '' : g.time, endTime: g.allDay ? '' : (g.endTime === '24:00' ? '23:59' : g.endTime), allDay: g.allDay, location: g.loc || '', imp: impOfG(g), recurring: !!g.recurring, calName: g.calName || '' };
+  }
+  UI.edit = d; UI.dlg = 'edit'; renderEdit();
+}
+function renderEdit() {
+  const d = UI.edit; if (!d) return;
+  const tog = [1, 2, 3, 4, 5, 6, 0].map(n => `<button type="button" class="dtog ${d.days && d.days.includes(n) ? 'on' : ''}" data-act="edDay" data-d="${n}">${'일월화수목금토'[n]}</button>`).join('');
+  $('dlgRoot').innerHTML = `<div class="scrim" data-act="closeDlg"></div><div class="dlg"><div class="dlgbox wide" role="dialog" aria-modal="true" aria-labelledby="dlgT">
+    <h3 id="dlgT">${ic('pen')}일정 편집${d.kind === 'g' ? ` <span class="count">구글 · ${esc(d.calName)}</span>` : ''}</h3>
+    ${d.recurring ? '<div class="warnline">구글의 반복 일정입니다. 여기서는 이 일정의 제목만 바꿀 수 있고, 날짜·시간은 구글 캘린더에서 바꿔 주세요.</div>' : ''}
+    <div class="miniform" style="background:none;border:0;padding:0">
+      <label class="full">제목<input class="field" id="edTitle" value="${esc(d.title)}" autocomplete="off"></label>
+      <label>${d.days ? '시작일' : '날짜'}<input class="field" type="date" id="edDate" value="${esc(d.date)}" ${d.recurring ? 'disabled' : ''}></label>
+      <label class="chk" style="align-self:end"><input type="checkbox" id="edAll" ${d.allDay ? 'checked' : ''} ${d.recurring ? 'disabled' : ''}>종일</label>
+      <label>시작<input class="field" type="time" id="edStart" value="${esc(d.time)}" ${d.allDay || d.recurring ? 'disabled' : ''}></label>
+      <label>끝<input class="field" type="time" id="edEnd" value="${esc(d.endTime)}" ${d.allDay || d.recurring ? 'disabled' : ''}></label>
+      ${!d.days ? `<label>여러 날이면 마지막 날<input class="field" type="date" id="edEndDate" value="${esc(d.endDate)}" ${d.recurring ? 'disabled' : ''}></label>` : ''}
+      ${d.kind === 'e' ? `<label>종류<select class="field" id="edKind">${['회의', '행사', '학사', '마감'].map(k => `<option ${k === d.ekind ? 'selected' : ''}>${k}</option>`).join('')}</select></label>` : ''}
+      <label class="full">장소<input class="field" id="edLoc" value="${esc(d.location)}" autocomplete="off"></label>
+      ${d.days ? `<div class="full"><span class="count">반복 요일</span><div class="row" style="margin-top:.3rem">${tog}</div></div>
+        <label>반복 끝나는 날 (비우면 계속)<input class="field" type="date" id="edUntil" value="${esc(d.until)}"></label>` : ''}
+      <label>중요도<select class="field" id="edImp"><option value="normal" ${d.imp !== 'high' ? 'selected' : ''}>일반</option><option value="high" ${d.imp === 'high' ? 'selected' : ''}>중요</option></select></label>
+    </div>
+    ${d.kind === 'e' && d.g ? `<div class="count">${ic('gcal', 'kc-g')} 구글 캘린더에 있는 일정이라 저장하면 구글에도 반영합니다.</div>` : ''}
+    <div class="status err" id="edErr"></div>
+    <div class="row" style="justify-content:flex-end"><button class="btn" type="button" data-act="closeDlg">취소</button><button class="btn primary" type="button" data-act="edSave">${ic('check')}저장</button></div>
+  </div></div>`;
+}
+async function saveEdit(btn) {
+  const d = UI.edit; if (!d) return;
+  const title = $('edTitle').value.trim(), date = $('edDate').value, all = $('edAll').checked;
+  const st = toMin($('edStart').value); let en = toMin($('edEnd').value);
+  const endDate = $('edEndDate') ? $('edEndDate').value : '';
+  const err = m => { $('edErr').textContent = m; };
+  if (!title) return err('제목을 넣어 주세요.');
+  if (!isDate(date)) return err('날짜를 확인해 주세요.');
+  if (!all && st == null) return err('시작 시간을 넣거나 종일로 체크해 주세요.');
+  if (!all && (en == null || en <= st)) en = Math.min(st + 60, 1439);
+  if (d.days && !d.days.length) return err('반복 요일을 하나 이상 골라 주세요.');
+  const doc = { title, date, time: all ? '' : fromMin(st), endTime: all ? '' : fromMin(en), endDate: !d.days && isDate(endDate) && endDate > date ? endDate : '', location: $('edLoc').value.trim() };
+  btn.disabled = true;
+  if (d.kind === 'e') {
+    const e = S.events.find(x => x.id === d.id); if (!e) return;
+    const upd = { ...doc, kind: $('edKind').value, imp: $('edImp').value };
+    if (d.days) upd.repeat = { days: d.days, ...(isDate($('edUntil').value) ? { until: $('edUntil').value } : {}) };
+    await patch('events', d.id, upd);
+    $('dlgRoot').innerHTML = ''; UI.dlg = null; UI.edit = null;
+    const r = e.googleId ? await gUpdate(e.googleCal, e.googleId, { ...e, ...upd }) : e.googleSent ? 'unknown' : '';
+    gResultToast(r, '일정을 고쳤습니다.');
+    UI.selDay = date; renderAll(); return;
+  }
+  const g = G.events.find(x => gKey(x) === d.id); if (!g) return;
+  setMark(d.id, { imp: $('edImp').value });
+  const r = await gUpdate(g.cal, g.id, d.recurring ? { title, date: g.date, time: g.allDay ? '' : g.time, endTime: g.allDay ? '' : g.endTime, endDate: g.allDay && g.endDate > g.date ? g.endDate : '', location: doc.location, titleOnly: true } : doc);
+  $('dlgRoot').innerHTML = ''; UI.dlg = null; UI.edit = null;
+  if (r === 'none') toast('구글 일정을 고치려면 Apps Script 연결이 필요합니다. 중요도만 저장했습니다.');
+  else gResultToast(r, '일정을 고쳤습니다.');
+  if (r === 'ok') UI.selDay = d.recurring ? g.date : date;
+  renderAll();
+}
+
+/* ---------- importance look (settings) ---------- */
+const IMP_DEF = { color: '', width: 2, speed: 2.6, mode: 'fade', dim: 0.28 };
+function impStyle() { const v = { ...IMP_DEF, ...((S.settings && S.settings.impStyle) || {}) }; return v; }
+function applyImpStyle(v) {
+  v = v || impStyle();
+  const r = document.documentElement.style;
+  if (/^#[0-9a-f]{6}$/i.test(v.color || '')) r.setProperty('--imp-c', v.color); else r.removeProperty('--imp-c');
+  r.setProperty('--imp-w', Math.max(1, Math.min(5, +v.width || 2)) + 'px');
+  r.setProperty('--imp-s', Math.max(0.6, Math.min(6, +v.speed || 2.6)) + 's');
+  r.setProperty('--imp-o', String(Math.max(0, Math.min(0.9, +v.dim))));
+  document.body.classList.toggle('imp-invert', v.mode === 'invert');
+  document.body.classList.toggle('imp-glow', v.mode === 'glow');
+  document.body.classList.toggle('imp-still', v.mode === 'still');
+}
+function impFormValues() {
+  return { color: $('impColor').value, width: +$('impWidth').value, speed: +$('impSpeed').value, mode: $('impMode').value, dim: +$('impDim').value };
+}
+function impSettingsHtml(s) {
+  const v = { ...IMP_DEF, ...(s.impStyle || {}) };
+  const amber = getComputedStyle(document.documentElement).getPropertyValue('--amber').trim() || '#F3BF5E';
+  return `<div class="bsec"><b>${ic('행사')} 중요 일정 표시</b>
+    <div class="impprev"><span class="ci2 imp">${ic('회의', 'kc-회의')}</span><span class="ci2 imp">${ic('interview', 'kc-회의')}</span><span class="ci2">${ic('food', 'kc-p')}</span><span class="count">미리 보기 (왼쪽 두 개가 중요)</span></div>
+    <div class="impgrid">
+      <label>테두리 색<input type="color" id="impColor" value="${esc(/^#[0-9a-f]{6}$/i.test(v.color || '') ? v.color : amber)}"></label>
+      <label>효과<select class="field" id="impMode">${[['fade', '흐려졌다 밝아짐'], ['invert', '색 반전'], ['glow', '빛 번짐'], ['still', '깜빡임 없음 (테두리만)']].map(([k, l]) => `<option value="${k}" ${v.mode === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+      <label>테두리 두께 <span id="impWidthV">${v.width}px</span><input type="range" id="impWidth" min="1" max="5" step="1" value="${v.width}"></label>
+      <label>한 번 깜빡이는 시간 <span id="impSpeedV">${v.speed}초</span><input type="range" id="impSpeed" min="0.6" max="6" step="0.2" value="${v.speed}"></label>
+      <label>흐려지는 정도 <span id="impDimV">${Math.round((1 - v.dim) * 100)}%</span><input type="range" id="impDim" min="0" max="0.9" step="0.02" value="${v.dim}"></label>
+      <div style="align-self:end"><button class="btn small" type="button" data-act="impReset">${ic('refresh')}기본값으로</button></div>
+    </div>
+    <span class="count">마감처럼 이미 빨간 일정은 테두리가 빨간색으로 유지됩니다. 화면 움직임 줄이기를 켠 PC에서는 깜빡이지 않습니다.</span></div>`;
+}
 const PRIO_IC = { high: ['flame', 'p-high', '높음'], mid: ['flag', 'p-mid', '보통'], low: ['dash', 'p-low', '낮음'] };
 const prioIc = p => { const [n, c, l] = PRIO_IC[p] || PRIO_IC.mid; return `<span class="pi ${c}" title="중요도 ${l}">${ic(n)}</span>`; };
 
@@ -1146,12 +1395,12 @@ function parseG(payload) {
       const day = ymd(a), s = a.getHours() * 60 + a.getMinutes();
       let e = !isNaN(b) && ymd(b) === day ? b.getHours() * 60 + b.getMinutes() : 1440;
       if (e <= s) e = Math.min(s + 30, 1440);
-      out.push({ id: String(x.id || ''), title, date: day, allDay: false, s, e, time: fromMin(s), endTime: e >= 1440 ? '24:00' : fromMin(e), free, link, loc: String(x.location || '') });
+      out.push({ id: String(x.id || ''), title, date: day, allDay: false, s, e, time: fromMin(s), endTime: e >= 1440 ? '24:00' : fromMin(e), free, link, loc: String(x.location || ''), recurring: !!(x.recurring || x.recurringEventId) });
     } else if (st.date) {
       const a = String(st.date).slice(0, 10), b = String(en.date || st.date).slice(0, 10);
       if (!isDate(a)) continue;
       const endD = isDate(b) && b > a ? addDays(b, -1) : a;
-      out.push({ id: String(x.id || ''), title, date: a, endDate: endD, allDay: true, free, link });
+      out.push({ id: String(x.id || ''), title, date: a, endDate: endD, allDay: true, free, link, recurring: !!(x.recurring || x.recurringEventId) });
     }
   }
   return out;
@@ -1743,17 +1992,17 @@ function expandEvents() {
 function cellItems(day) {
   const items = [], grp = (k, d) => ICON_GROUP[k] || d;
   for (const e of expandEvents().filter(e => e.date === day)) {
-    const due = e.kind === '마감', timed = !e.span && toMin(e.time) != null, k = iconOfEvent(e);
-    items.push({ o: due ? 0 : timed ? 20 + toMin(e.time) / 1440 : 10, ic: k, kc: grp(k, 'kc-' + (e.kind || '학사')), tm: timed ? e.time : '', tx: (impOfEvent(e) === 'high' ? '[중요] ' : '') + e.title + (e.googleId ? ' (구글에도 있음)' : ''), cls: (due ? 'hot' : (e.googleId || e.googleSent) ? 'synced' : '') + (impOfEvent(e) === 'high' ? ' imp' : '') });
+    const due = e.kind === '마감', timed = !e.span && toMin(e.time) != null, k = iconOfEvent(e), dk = (e.occ ? 'r:' : 'e:') + e.id;
+    items.push({ o: due ? 0 : timed ? 20 + toMin(e.time) / 1440 : 10, ic: k, kc: grp(k, 'kc-' + (e.kind || '학사')), tm: timed ? e.time : '', tx: (impOfEvent(e) === 'high' ? '[중요] ' : '') + e.title + (e.googleId ? ' (구글에도 있음)' : ''), cls: (due ? 'hot' : (e.googleId || e.googleSent) ? 'synced' : '') + (impOfEvent(e) === 'high' ? ' imp' : ''), dk });
   }
   for (const t of S.tasks.filter(t => !t.done && t.due === day)) {
     const k = iconFor(t.title, '할일');
-    items.push({ o: t.priority === 'high' ? 1 : 5, ic: k, kc: grp(k, 'kc-할일'), tx: '할 일 · ' + t.title, cls: 'task' + (t.priority === 'high' ? ' hot' : t.priority === 'low' ? ' dim' : '') });
+    items.push({ o: t.priority === 'high' ? 1 : 5, ic: k, kc: grp(k, 'kc-할일'), tx: '할 일 · ' + t.title, dk: 't:' + t.id, cls: 'task' + (t.priority === 'high' ? ' hot' : t.priority === 'low' ? ' dim' : '') });
   }
   for (const m of S.emails.filter(m => needsReplyNow(m) && m.replyDeadline === day))
     items.push({ o: 2, ic: 'reply', tx: '답장 기한 · ' + (m.subject || ''), cls: 'warn' });
-  for (const g of gAllDayOn(day)) { const k = iconOfG(g); items.push({ o: 9, ic: k, kc: grp(k, 'kc-g'), tx: `${impOfG(g) === 'high' ? '[중요] ' : ''}${g.title} (구글 · ${g.calName || ''})`, cls: 'g' + (g.free ? ' dim' : '') + (impOfG(g) === 'high' ? ' imp' : ''), gc: g.color }); }
-  for (const g of gOn(day)) { const k = iconOfG(g); items.push({ o: 20 + g.s / 1440, ic: k, kc: grp(k, 'kc-g'), tm: g.time, tx: `${impOfG(g) === 'high' ? '[중요] ' : ''}${g.title} (구글 · ${g.calName || ''})`, cls: 'g' + (g.free ? ' dim' : '') + (impOfG(g) === 'high' ? ' imp' : ''), gc: g.color }); }
+  for (const g of gAllDayOn(day)) { const k = iconOfG(g); items.push({ o: 9, ic: k, kc: grp(k, 'kc-g'), tx: `${impOfG(g) === 'high' ? '[중요] ' : ''}${g.title} (구글 · ${g.calName || ''})`, cls: 'g' + (g.free ? ' dim' : '') + (impOfG(g) === 'high' ? ' imp' : ''), gc: g.color, dk: g.recurring ? '' : 'g:' + gKey(g) }); }
+  for (const g of gOn(day)) { const k = iconOfG(g); items.push({ o: 20 + g.s / 1440, ic: k, kc: grp(k, 'kc-g'), tm: g.time, tx: `${impOfG(g) === 'high' ? '[중요] ' : ''}${g.title} (구글 · ${g.calName || ''})`, cls: 'g' + (g.free ? ' dim' : '') + (impOfG(g) === 'high' ? ' imp' : ''), gc: g.color, dk: g.recurring ? '' : 'g:' + gKey(g) }); }
   if (day >= todayStr()) for (const b of [...blocksOn(day), ...weeklyOn(day)]) {
     const k = iconFor(b.label, 'lock');
     items.push({ o: 40 + b.s / 1440, ic: k, tm: b.allDay ? '종일' : fromMin(b.s) + '–' + fromMin(b.e), tx: '불가 · ' + b.label, cls: 'busy' });
@@ -1782,10 +2031,10 @@ function renderCal() {
     const more = items.length - shown.length;
     const cls = ['cell', !wk && d.getMonth() !== m.getMonth() ? 'out' : '', d.getDay() === 0 ? 'sun' : '', d.getDay() === 6 ? 'sat' : '',
       s === t ? 'today' : '', s === UI.selDay ? 'sel' : '', s < t ? 'past' : '', workWin(s) ? '' : 'off'].join(' ');
-    html += `<button type="button" class="${cls}" data-act="pickDay" data-day="${s}" aria-label="${d.getMonth() + 1}월 ${d.getDate()}일, 항목 ${items.length}개">
+    html += `<div role="button" tabindex="0" class="${cls}" data-act="pickDay" data-day="${s}" aria-label="${d.getMonth() + 1}월 ${d.getDate()}일, 항목 ${items.length}개">
       <span class="chead"><span class="dn">${wk && (d.getDate() === 1 || i === 0) ? `<b>${d.getMonth() + 1}월</b>` : ''}${d.getDate()}${s === t ? '<em>오늘</em>' : ''}</span>${freeBadge(s)}</span>
-      <span class="citems">${shown.map(x => `<span class="ci2 ${x.cls || ''}" title="${esc((x.tm ? x.tm + ' ' : '') + x.tx)}"${x.gc ? ` style="--gc:${esc(x.gc)}"` : ''}>${ic(x.ic, x.kc || '')}</span>`).join('')}${more > 0 ? `<span class="more">+${more}</span>` : ''}</span>
-    </button>`;
+      <span class="citems">${shown.map(x => `<span class="ci2 ${x.cls || ''}" title="${esc((x.tm ? x.tm + ' ' : '') + x.tx)}${x.dk ? ' · 끌어서 날짜 옮기기' : ''}"${x.gc ? ` style="--gc:${esc(x.gc)}"` : ''}${x.dk ? ` draggable="true" data-dk="${esc(x.dk)}"` : ''}>${ic(x.ic, x.kc || '')}</span>`).join('')}${more > 0 ? `<span class="more">+${more}</span>` : ''}</span>
+    </div>`;
   }
   const g = $('cal'); g.style.setProperty('--rows', rows); g.innerHTML = html;
   requestAnimationFrame(() => {
@@ -1800,7 +2049,7 @@ function srow({ t, icon, kc, title, sub, cls, acts, tag, fixed, iconAct }) {
   return `<div class="srow ${cls || ''}"><span class="t">${t || ''}</span>${icHtml}<span class="tt">${esc(title)}${tag || ''}${sub ? `<span class="sub3">${sub}</span>` : ''}</span><span class="acts">${acts || ''}</span></div>`;
 }
 function eventActs(e) {
-  const imp = impBtn(impOfEvent(e) === 'high', 'impT', `data-id="${e.id}"`);
+  const imp = `<button class="x" type="button" data-act="edOpen" data-kind="e" data-id="${e.id}" title="날짜·시간 편집" aria-label="편집">${ic('pen')}</button>` + impBtn(impOfEvent(e) === 'high', 'impT', `data-id="${e.id}"`);
   const sync = e.googleId ? `<span class="gtag" title="구글 캘린더에 있음">${ic('gcal')}✓</span>`
     : gReady() ? `<button class="btn small" type="button" data-act="pushG" data-id="${e.id}" title="구글 캘린더에 추가">${ic('gcal')}구글에 추가</button>`
     : `<a class="btn small" href="${esc(gTemplateUrl(e))}" target="_blank" rel="noopener" data-act="gTpl" data-id="${e.id}" title="구글 캘린더 일정 만들기 화면 열기">${ic('gcal')}${e.googleSent ? '다시 보내기' : '구글에 추가'}</a>`;
@@ -1846,7 +2095,7 @@ function renderDay(force) {
   for (const m of S.emails.filter(m => needsReplyNow(m) && m.replyDeadline === day))
     ad.push(srow({ t: '답장 기한', icon: 'reply', kc: 'kc-reply', title: m.subject, cls: 'warn', acts: `<button class="btn small" type="button" data-act="openMail" data-id="${m.id}">열기</button>` }));
   for (const g of gAllDayOn(day))
-    ad.push(srow({ t: '종일', icon: iconOfG(g), kc: iconKc(iconOfG(g), 'kc-g'), fixed: true, iconAct: `data-act="ipOpen" data-kind="g" data-id="${esc(gKey(g))}"`, title: g.title, sub: '구글 캘린더' + (g.calName ? ' · ' + esc(g.calName) : '') + (g.free ? ' · 바쁨 아님' : ''), cls: impOfG(g) === 'high' ? 'improw' : '', acts: impBtn(impOfG(g) === 'high', 'impG', `data-k="${esc(gKey(g))}"`) + (g.link ? `<a class="ext" href="${esc(g.link)}" target="_blank" rel="noopener">${ic('ext')}</a>` : '') }));
+    ad.push(srow({ t: '종일', icon: iconOfG(g), kc: iconKc(iconOfG(g), 'kc-g'), fixed: true, iconAct: `data-act="ipOpen" data-kind="g" data-id="${esc(gKey(g))}"`, title: g.title, sub: '구글 캘린더' + (g.calName ? ' · ' + esc(g.calName) : '') + (g.free ? ' · 바쁨 아님' : ''), cls: impOfG(g) === 'high' ? 'improw' : '', acts: `<button class="x" type="button" data-act="edOpen" data-kind="g" data-id="${esc(gKey(g))}" title="편집" aria-label="편집">${ic('pen')}</button>` + impBtn(impOfG(g) === 'high', 'impG', `data-k="${esc(gKey(g))}"`) + (g.link ? `<a class="ext" href="${esc(g.link)}" target="_blank" rel="noopener">${ic('ext')}</a>` : '') }));
   for (const b of blocksOn(day).filter(b => b.allDay))
     ad.push(srow({ t: '종일', icon: 'lock', title: b.label, sub: '불가 시간', cls: 'busy', acts: `<button class="x" type="button" data-act="delBlock" data-id="${b.id}" aria-label="삭제">✕</button>` }));
 
@@ -1854,7 +2103,7 @@ function renderDay(force) {
   for (const b of weeklyOn(day)) timed.push({ s: b.s, h: srow({ t: `${fromMin(b.s)}–${fromMin(b.e)}`, icon: 'lock', title: b.label, sub: '매주 반복 불가 시간', cls: 'busy', acts: `<button class="btn small" type="button" data-act="openBusy">편집</button>`, tag: b.example ? ' <span class="tag ex">예시</span>' : '' }) });
   for (const b of blocksOn(day).filter(b => !b.allDay)) timed.push({ s: b.s, h: srow({ t: `${fromMin(b.s)}–${fromMin(b.e)}`, icon: 'lock', title: b.label, sub: '불가 시간', cls: 'busy', acts: `<button class="x" type="button" data-act="delBlock" data-id="${b.id}" aria-label="삭제">✕</button>`, tag: b.example ? ' <span class="tag ex">예시</span>' : '' }) });
   for (const x of localTimedOn(day)) { const e = x.ev; timed.push({ s: x.s, h: srow({ t: `${fromMin(x.s)}–${fromMin(x.e)}`, icon: iconOfEvent(e), kc: iconKc(iconOfEvent(e), 'kc-' + (e.kind || '회의')), fixed: true, iconAct: `data-act="ipOpen" data-kind="e" data-id="${e.id}"`, title: e.title, sub: esc([repText(e), e.location, e.emailId ? '메일에서 추가' : ''].filter(Boolean).join(' · ')), cls: (e.kind === '마감' ? 'hot' : '') + (impOfEvent(e) === 'high' ? ' improw' : ''), acts: eventActs(e), tag: e.example ? ' <span class="tag ex">예시</span>' : '' }) }); }
-  for (const g of gOn(day)) timed.push({ s: g.s, h: srow({ t: `${g.time}–${g.endTime}`, icon: iconOfG(g), kc: iconKc(iconOfG(g), 'kc-g'), fixed: true, iconAct: `data-act="ipOpen" data-kind="g" data-id="${esc(gKey(g))}"`, title: g.title, sub: '구글 캘린더' + (g.calName ? ' · ' + esc(g.calName) : '') + (g.free ? ' · 바쁨 아님' : '') + (g.loc ? ' · ' + esc(g.loc) : ''), cls: impOfG(g) === 'high' ? 'improw' : '', acts: impBtn(impOfG(g) === 'high', 'impG', `data-k="${esc(gKey(g))}"`) + (g.link ? `<a class="ext" href="${esc(g.link)}" target="_blank" rel="noopener" title="구글 캘린더에서 열기">${ic('ext')}</a>` : '') }) });
+  for (const g of gOn(day)) timed.push({ s: g.s, h: srow({ t: `${g.time}–${g.endTime}`, icon: iconOfG(g), kc: iconKc(iconOfG(g), 'kc-g'), fixed: true, iconAct: `data-act="ipOpen" data-kind="g" data-id="${esc(gKey(g))}"`, title: g.title, sub: '구글 캘린더' + (g.calName ? ' · ' + esc(g.calName) : '') + (g.free ? ' · 바쁨 아님' : '') + (g.loc ? ' · ' + esc(g.loc) : ''), cls: impOfG(g) === 'high' ? 'improw' : '', acts: `<button class="x" type="button" data-act="edOpen" data-kind="g" data-id="${esc(gKey(g))}" title="편집" aria-label="편집">${ic('pen')}</button>` + impBtn(impOfG(g) === 'high', 'impG', `data-k="${esc(gKey(g))}"`) + (g.link ? `<a class="ext" href="${esc(g.link)}" target="_blank" rel="noopener" title="구글 캘린더에서 열기">${ic('ext')}</a>` : '') }) });
   for (const [s, e] of freeSlots(day, 30)) timed.push({ s: s + 0.5, h: `<button type="button" class="srow freeslot" data-act="slotAdd" data-s="${s}" data-e="${e}"><span class="t">${fromMin(s)}–${fromMin(e)}</span>${ic('free')}<span class="tt">빈 시간 · ${durKo(e - s)}<span class="sub3">눌러서 이 시간에 일정 넣기</span></span><span class="acts"></span></button>` });
   timed.sort((a, b) => a.s - b.s);
 
@@ -2440,6 +2689,14 @@ document.addEventListener('click', async ev0 => {
       case 'cmdAI': { const c = UI.cmd; if (c) runCommandAI(c.text); return; }
       case 'cmdCancel': UI.cmd = null; $('pasteStatus').textContent = ''; return;
       case 'skipOcc': { const e = S.events.find(x => x.id === id); if (e) { await patch('events', id, { skip: [...(e.skip || []), el.dataset.day] }); toast(`${fmtShort(el.dataset.day)}만 반복에서 뺐습니다.`); } return; }
+      case 'edOpen': return openEdit(el.dataset.kind, el.dataset.id);
+      case 'edDay': { const n = +el.dataset.d, a = UI.edit.days; a.includes(n) ? a.splice(a.indexOf(n), 1) : a.push(n); const keep = {}; for (const id of ['edTitle', 'edDate', 'edStart', 'edEnd', 'edLoc', 'edUntil', 'edImp', 'edKind']) if ($(id)) keep[id] = $(id).value; const all = $('edAll').checked; renderEdit(); for (const [id, v] of Object.entries(keep)) if ($(id)) $(id).value = v; $('edAll').checked = all; return; }
+      case 'edSave': return saveEdit(el);
+      case 'iconMgr': return openIconMgr();
+      case 'impReset': { const amber = getComputedStyle(document.documentElement).getPropertyValue('--amber').trim(); $('impColor').value = amber; $('impWidth').value = 2; $('impSpeed').value = 2.6; $('impMode').value = 'fade'; $('impDim').value = 0.28; $('impWidth').dispatchEvent(new Event('input', { bubbles: true })); return; }
+      case 'imReset': { delete UI.im[el.dataset.k]; return renderIconMgr(); }
+      case 'imResetAll': UI.im = {}; return renderIconMgr();
+      case 'imSave': return saveIconMgr();
       case 'ipOpen': return openIconPick(el.dataset.kind, el.dataset.id);
       case 'ipSel': UI.ipick.sel = el.dataset.k; return renderIconPick();
       case 'ipWord': { const inp = $('ipWordIn'); UI.ipick.word = el.dataset.w; renderIconPick(); return; }
@@ -2493,6 +2750,7 @@ document.addEventListener('click', async ev0 => {
       case 'saveSettings': {
         const data = { ...S.settings, semesterLabel: $('sLabel').value.trim() || DEFAULTS.semesterLabel, semesterStart: isDate($('sStart').value) ? $('sStart').value : DEFAULTS.semesterStart, signature: $('sSig').value.trim() || DEFAULTS.signature, assistant: $('sAsst').value.trim() || DEFAULTS.assistant,
           googleShow: $('sGShow').checked, googleBusy: $('sGBusy').checked, googlePush: $('sGPush').checked };
+        if ($('impMode')) { const iv = impFormValues(); const amber = getComputedStyle(document.documentElement).getPropertyValue('--amber').trim(); data.impStyle = { ...iv, color: iv.color.toLowerCase() === amber.toLowerCase() ? '' : iv.color }; }
         { const gu = $('sGasUrl').value.trim(), gk = $('sGasKey').value.trim();
           if (gu && !/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(gu)) { toast('웹 앱 주소는 https://script.google.com/macros/s/…/exec 형태여야 합니다.'); return; }
           const changedGas = gu !== (S.settings.gasUrl || '') || gk !== (S.settings.gasKey || '');
@@ -2506,7 +2764,7 @@ document.addEventListener('click', async ev0 => {
         if (cid !== (G.cidUsed || '')) { G.tc = null; G.cidUsed = cid; }
         await saveSettings(data); $('dlgRoot').innerHTML = ''; UI.dlg = null; toast('설정을 저장했습니다.'); watchGoogle(true); return;
       }
-      case 'closeDlg': if (UI.dlg === 'relay') return relayCancel(); $('dlgRoot').innerHTML = ''; UI.dlg = null; return;
+      case 'closeDlg': if (UI.dlg === 'relay') return relayCancel(); if (UI.dlg === 'settings') applyImpStyle(); $('dlgRoot').innerHTML = ''; UI.dlg = null; return;
       case 'noop': return;
       case 'gotoMf': UI.mf = el.dataset.mf; UI.rail = 'mail'; syncTabs(); renderMails(); renderRail(); if (window.innerWidth < 1100) $('rail').scrollIntoView({ block: 'start' }); return;
       case 'ignoreMail': { const mm = S.emails.find(x => x.id === id); if (!mm) return; const box = el.closest('.mbox,.ignban'); const cb = box && box.querySelector('input[type=checkbox]'); await ignoreMail(mm, !cb || cb.checked); if (UI.openId === id) closeSheet(); return; }
@@ -2581,7 +2839,8 @@ document.addEventListener('click', async ev0 => {
 document.addEventListener('input', e => { if (e.target.closest('#sheetRoot') && e.target.id) UI.edits[e.target.id] = e.target.value; });
 document.addEventListener('change', e => { if (e.target.closest('#sheetRoot') && e.target.id) UI.edits[e.target.id] = e.target.value; });
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { if (UI.dlg === 'relay') relayCancel(); else if ($('dlgRoot').innerHTML) { $('dlgRoot').innerHTML = ''; UI.dlg = null; } else if (UI.openId) closeSheet(); else if (UI.dayForm) { UI.dayForm = null; renderDay(true); } }
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('[role="button"][data-act]')) { e.preventDefault(); e.target.click(); return; }
+  if (e.key === 'Escape') { if (UI.dlg === 'relay') relayCancel(); else if ($('dlgRoot').innerHTML) { if (UI.dlg === 'settings') applyImpStyle(); $('dlgRoot').innerHTML = ''; UI.dlg = null; } else if (UI.openId) closeSheet(); else if (UI.dayForm) { UI.dayForm = null; renderDay(true); } }
   if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && e.target.id === 'rawMail') analyzeNew();
 });
 $('taskForm').addEventListener('submit', async e => {
@@ -2627,6 +2886,9 @@ document.addEventListener('submit', async e => {
 document.addEventListener('input', e => {
   const t = e.target;
   if (t.id === 'ipWordIn' && UI.ipick) UI.ipick.word = t.value.trim();
+  if (UI.dlg === 'iconmgr' && t.dataset.im) { const k = t.dataset.k; UI.im[k] = { ...(UI.im[k] || {}), [t.dataset.im]: t.value }; if (t.dataset.im === 'color') { const r = t.closest('.imrow'); if (r) r.querySelector('.imic').style.color = t.value; } }
+  if (['impColor', 'impWidth', 'impSpeed', 'impMode', 'impDim'].includes(t.id)) { const v = impFormValues(); applyImpStyle(v); $('impWidthV').textContent = v.width + 'px'; $('impSpeedV').textContent = v.speed + '초'; $('impDimV').textContent = Math.round((1 - v.dim) * 100) + '%'; }
+  if (t.id === 'edAll') { $('edStart').disabled = $('edEnd').disabled = t.checked; }
   if (t.id === 'rawMail') t.classList.toggle('big', t.value.length > 160 || t.value.split('\n').length > 3);
   if (t.closest('#fEvent')) { checkEventForm(); if ((t.id === 'fTitle') && !$('fImp').dataset.touched) $('fImp').value = autoImp($('fTitle').value, $('fKind').value); }
   if (t.id === 'fImp') t.dataset.touched = '1';
@@ -2644,6 +2906,7 @@ document.addEventListener('change', e => {
   if (UI.dlg === 'gsend' && t.dataset.gs) { t.checked ? UI.gsend.sel.add(t.dataset.gs) : UI.gsend.sel.delete(t.dataset.gs); return renderGSend(); }
   if (UI.dlg === 'gsend' && t.id === 'gsCal') { UI.gsend.cal = t.value; return; }
   if (t.id === 'fImp') t.dataset.touched = '1';
+  if (t.id === 'impMode') applyImpStyle(impFormValues());
   if (UI.dlg === 'ipick' && t.name === 'ipScope') { const inp = $('ipWordIn'); if (inp) UI.ipick.word = inp.value.trim(); UI.ipick.scope = t.value; return renderIconPick(); }
   if (t.id === 'fKind' && $('fImp') && !$('fImp').dataset.touched) $('fImp').value = autoImp($('fTitle').value, t.value);
   if (t.id === 'bAll') { $('bStart').disabled = $('bEnd').disabled = $('bWeekly').disabled = t.checked; }
@@ -2679,6 +2942,8 @@ function openSettings() {
     <label>개강 주 월요일 (주차 계산 기준)<input class="field" type="date" id="sStart" value="${esc(s.semesterStart)}"></label>
     <label>답장 서명<textarea class="field" id="sSig" rows="3">${esc(s.signature)}</textarea></label>
     <label>업무를 받는 조교 (이름·호칭)<input class="field" id="sAsst" value="${esc(s.assistant)}" placeholder="예: 김OO 조교"></label>
+    ${impSettingsHtml(s)}
+    <div class="bsec"><b>${ic('spark')} 아이콘</b><div><button class="btn small" type="button" data-act="iconMgr">${ic('pen')}아이콘 ${ICON_LEGEND.length + 1}종 색·이름 바꾸기</button></div></div>
     <div class="bsec"><b>${ic('spark')} 기억한 아이콘 규칙</b>
       ${(s.iconRules || []).length ? `<div class="rulelist">${s.iconRules.map(r => `<span class="rule">${ic(r.icon, iconKc(r.icon))}<b>${esc(r.w)}</b><button class="x" type="button" data-act="delRule" data-w="${esc(r.w)}" aria-label="규칙 지우기">✕</button></span>`).join('')}</div>` : '<span class="count">아직 없습니다. 날짜를 눌러 일정 왼쪽 아이콘을 누르면 바꿀 수 있고, 그때 단어를 기억시킬 수 있습니다.</span>'}</div>
     <div class="bsec"><b>${ic('drive')} 저장 폴더</b>
@@ -2712,12 +2977,11 @@ function openSettings() {
 }
 
 document.querySelectorAll('[data-ic]').forEach(el => el.outerHTML = ic(el.dataset.ic, el.dataset.c || ''));
-$('legend').innerHTML = `<span><span class="ci2">${ic('회의', 'kc-회의')}</span>내 일정</span><span><span class="ci2 g" style="--gc:#7DB6D4">${ic('gcal', 'kc-g')}</span>구글</span><span><span class="ci2 task">${ic('할일', 'kc-할일')}</span>할 일</span><span><span class="ci2 hot">${ic('마감', 'kc-마감')}</span>마감·중요</span><span><span class="ci2 warn">${ic('reply')}</span>답장 기한</span><span><span class="ci2 imp">${ic('회의', 'kc-회의')}</span>중요(깜빡임)</span><span><span class="ci2 busy">${ic('lock')}</span>불가</span><span><span class="free f-good">빈 4h</span>빈 시간</span>
-  <details class="iconhelp"><summary>아이콘 ${ICON_LEGEND.length}종 보기</summary><div class="iconlist">${ICON_LEGEND.map(([k, l]) => `<span>${ic(k, ICON_GROUP[k] || '')}${l}</span>`).join('')}<span class="count" style="grid-column:1/-1">일정 제목의 단어로 아이콘을 고릅니다. 아이콘에 마우스를 올리거나 날짜를 누르면 내용이 보입니다.</span></div></details>`;
+renderLegend();
 
 UI.selDay = todayStr();
 try { if (localStorage.getItem('calView') === 'month') UI.view = 'month'; } catch {}
-function renderAll() { renderHeader(); renderTasks(); renderMails(); renderCal(); renderDay(false); renderRail(); renderGChip(); renderSync(); renderSheet(false); }
+function renderAll() { applyImpStyle(); renderHeader(); renderTasks(); renderMails(); renderCal(); renderDay(false); renderRail(); renderGChip(); renderSync(); renderSheet(false); }
 renderAll();
 setInterval(() => { renderHeader(); if (UI.selDay === todayStr()) renderDay(false); }, 60000);
 
