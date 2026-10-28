@@ -382,6 +382,10 @@ a.btn{text-decoration:none;color:inherit}
 .imp-glow .ci2.imp{animation-name:impglow}
 @keyframes impglow{0%,100%{box-shadow:0 0 0 var(--imp-w,2px) var(--imp-c,var(--amber))}50%{box-shadow:0 0 0 var(--imp-w,2px) var(--imp-c,var(--amber)),0 0 10px calc(var(--imp-w,2px) * 2) var(--imp-c,var(--amber))}}
 .imp-still .ci2.imp{animation:none}
+.imp-past-still .cell.past .ci2.imp{animation:none}
+.imp-past-still .cell.past .ci2.imp .ic{animation:none}
+.imp-past-off .cell.past .ci2.imp{animation:none;box-shadow:none}
+.imp-past-off .cell.past .ci2.imp .ic{animation:none}
 .imp-iconc .ci2.imp:not(.hot){--imp-c:var(--imp-own,var(--amber))}
 .impprev{display:flex;align-items:center;gap:.6rem;padding:.5rem;background:var(--surface-2);border-radius:8px}
 .impgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(12rem,1fr));gap:.45rem .8rem}
@@ -977,7 +981,7 @@ async function saveEdit(btn) {
 }
 
 /* ---------- importance look (settings) ---------- */
-const IMP_DEF = { color: '', colorBy: 'fixed', width: 2, speed: 2.6, mode: 'fade', dim: 0.28 };
+const IMP_DEF = { color: '', colorBy: 'fixed', past: 'blink', width: 2, speed: 2.6, mode: 'fade', dim: 0.28 };
 function impStyle() { const v = { ...IMP_DEF, ...((S.settings && S.settings.impStyle) || {}) }; return v; }
 function applyImpStyle(v) {
   v = v || impStyle();
@@ -990,6 +994,8 @@ function applyImpStyle(v) {
   document.body.classList.toggle('imp-glow', v.mode === 'glow');
   document.body.classList.toggle('imp-still', v.mode === 'still');
   document.body.classList.toggle('imp-iconc', v.colorBy === 'icon');
+  document.body.classList.toggle('imp-past-still', v.past === 'still');
+  document.body.classList.toggle('imp-past-off', v.past === 'off');
   paintImpOwn();
 }
 // "icon color" border: each important chip takes the color its own icon is drawn with
@@ -999,7 +1005,7 @@ function paintImpOwn() {
 }
 new MutationObserver(() => { cancelAnimationFrame(paintImpOwn._r); paintImpOwn._r = requestAnimationFrame(paintImpOwn); }).observe(document.body, { childList: true, subtree: true });
 function impFormValues() {
-  return { color: $('impColor').value, colorBy: $('impColorBy').value, width: +$('impWidth').value, speed: +$('impSpeed').value, mode: $('impMode').value, dim: +$('impDim').value };
+  return { color: $('impColor').value, colorBy: $('impColorBy').value, past: $('impPast').value, width: +$('impWidth').value, speed: +$('impSpeed').value, mode: $('impMode').value, dim: +$('impDim').value };
 }
 function impSettingsHtml(s) {
   const v = { ...IMP_DEF, ...(s.impStyle || {}) };
@@ -1010,6 +1016,7 @@ function impSettingsHtml(s) {
       <label>테두리 색 기준<select class="field" id="impColorBy"><option value="fixed" ${v.colorBy !== 'icon' ? 'selected' : ''}>정한 색 (오른쪽)</option><option value="icon" ${v.colorBy === 'icon' ? 'selected' : ''}>현재 아이콘 색</option></select></label>
       <label>테두리 색<input type="color" id="impColor" value="${esc(/^#[0-9a-f]{6}$/i.test(v.color || '') ? v.color : amber)}" ${v.colorBy === 'icon' ? 'disabled' : ''}></label>
       <label>효과<select class="field" id="impMode">${[['fade', '흐려졌다 밝아짐'], ['invert', '색 반전'], ['glow', '빛 번짐'], ['still', '깜빡임 없음 (테두리만)']].map(([k, l]) => `<option value="${k}" ${v.mode === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+      <label>지나간 중요 일정<select class="field" id="impPast">${[['blink', '계속 깜빡임'], ['still', '테두리만 (깜빡임 멈춤)'], ['off', '중요 표시 끄기']].map(([k, l]) => `<option value="${k}" ${v.past === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       <label>테두리 두께 <span id="impWidthV">${v.width}px</span><input type="range" id="impWidth" min="1" max="5" step="1" value="${v.width}"></label>
       <label>한 번 깜빡이는 시간 <span id="impSpeedV">${v.speed}초</span><input type="range" id="impSpeed" min="0.6" max="6" step="0.2" value="${v.speed}"></label>
       <label>흐려지는 정도 <span id="impDimV">${Math.round((1 - v.dim) * 100)}%</span><input type="range" id="impDim" min="0" max="0.9" step="0.02" value="${v.dim}"></label>
@@ -3001,7 +3008,7 @@ document.addEventListener('click', async ev0 => {
       case 'edDay': { const n = +el.dataset.d, a = UI.edit.days; a.includes(n) ? a.splice(a.indexOf(n), 1) : a.push(n); const keep = {}; for (const id of ['edTitle', 'edDate', 'edStart', 'edEnd', 'edLoc', 'edUntil', 'edImp', 'edKind']) if ($(id)) keep[id] = $(id).value; const all = $('edAll').checked; renderEdit(); for (const [id, v] of Object.entries(keep)) if ($(id)) $(id).value = v; $('edAll').checked = all; return; }
       case 'edSave': return saveEdit(el);
       case 'iconMgr': return openIconMgr();
-      case 'impReset': { const amber = getComputedStyle(document.documentElement).getPropertyValue('--amber').trim(); $('impColor').value = amber; $('impWidth').value = 2; $('impSpeed').value = 2.6; $('impMode').value = 'fade'; $('impColorBy').value = 'fixed'; $('impColor').disabled = false; $('impDim').value = 0.28; $('impWidth').dispatchEvent(new Event('input', { bubbles: true })); return; }
+      case 'impReset': { const amber = getComputedStyle(document.documentElement).getPropertyValue('--amber').trim(); $('impColor').value = amber; $('impWidth').value = 2; $('impSpeed').value = 2.6; $('impMode').value = 'fade'; $('impColorBy').value = 'fixed'; $('impPast').value = 'blink'; $('impColor').disabled = false; $('impDim').value = 0.28; $('impWidth').dispatchEvent(new Event('input', { bubbles: true })); return; }
       case 'imReset': { delete UI.im[el.dataset.k]; return renderIconMgr(); }
       case 'imResetAll': UI.im = {}; return renderIconMgr();
       case 'imSave': return saveIconMgr();
@@ -3197,7 +3204,7 @@ document.addEventListener('input', e => {
   const t = e.target;
   if (t.id === 'ipWordIn' && UI.ipick) UI.ipick.word = t.value.trim();
   if (UI.dlg === 'iconmgr' && t.dataset.im) { const k = t.dataset.k; UI.im[k] = { ...(UI.im[k] || {}), [t.dataset.im]: t.value }; if (t.dataset.im === 'color') { const r = t.closest('.imrow'); if (r) r.querySelector('.imic').style.color = t.value; } }
-  if (['impColor', 'impColorBy', 'impWidth', 'impSpeed', 'impMode', 'impDim'].includes(t.id)) { const v = impFormValues(); applyImpStyle(v); $('impWidthV').textContent = v.width + 'px'; $('impSpeedV').textContent = v.speed + '초'; $('impDimV').textContent = Math.round((1 - v.dim) * 100) + '%'; }
+  if (['impColor', 'impColorBy', 'impPast', 'impWidth', 'impSpeed', 'impMode', 'impDim'].includes(t.id)) { const v = impFormValues(); applyImpStyle(v); $('impWidthV').textContent = v.width + 'px'; $('impSpeedV').textContent = v.speed + '초'; $('impDimV').textContent = Math.round((1 - v.dim) * 100) + '%'; }
   if (t.id === 'edAll') { $('edStart').disabled = $('edEnd').disabled = t.checked; }
   if (t.id === 'rawMail') t.classList.toggle('big', t.value.length > 160 || t.value.split('\n').length > 3);
   if (t.closest('#fEvent')) { checkEventForm(); if ((t.id === 'fTitle') && !$('fImp').dataset.touched) $('fImp').value = autoImp($('fTitle').value, $('fKind').value); }
@@ -3216,7 +3223,7 @@ document.addEventListener('change', e => {
   if (UI.dlg === 'gsend' && t.dataset.gs) { t.checked ? UI.gsend.sel.add(t.dataset.gs) : UI.gsend.sel.delete(t.dataset.gs); return renderGSend(); }
   if (UI.dlg === 'gsend' && t.id === 'gsCal') { UI.gsend.cal = t.value; return; }
   if (t.id === 'fImp') t.dataset.touched = '1';
-  if (t.id === 'impMode' || t.id === 'impColorBy') { applyImpStyle(impFormValues()); if ($('impColor')) $('impColor').disabled = $('impColorBy').value === 'icon'; }
+  if (t.id === 'impMode' || t.id === 'impColorBy' || t.id === 'impPast') { applyImpStyle(impFormValues()); if ($('impColor')) $('impColor').disabled = $('impColorBy').value === 'icon'; }
   if (UI.dlg === 'ipick' && t.name === 'ipScope') { const inp = $('ipWordIn'); if (inp) UI.ipick.word = inp.value.trim(); UI.ipick.scope = t.value; return renderIconPick(); }
   if (t.id === 'fKind' && $('fImp') && !$('fImp').dataset.touched) $('fImp').value = autoImp($('fTitle').value, t.value);
   if (t.id === 'bAll') { $('bStart').disabled = $('bEnd').disabled = $('bWeekly').disabled = t.checked; }
