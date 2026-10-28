@@ -399,6 +399,13 @@ a.btn{text-decoration:none;color:inherit}
 .cmdbox{display:flex;flex-direction:column;gap:.45rem;background:var(--surface-2);border:1px solid var(--accent);border-radius:10px;padding:.65rem .75rem;margin-top:.2rem;color:var(--ink)}
 .cmdhead{display:flex;align-items:center;gap:.4rem}
 .cmdhead .ic{color:var(--accent)}
+#undoBtn:disabled{opacity:.4;cursor:default}
+#undoBtn .ul{max-width:14rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.aiask{display:flex;flex-direction:column;gap:.55rem;background:var(--surface-2);border:1px solid var(--accent);border-radius:10px;padding:.75rem .85rem}
+.aiask .q{font-size:1rem;font-weight:600;display:flex;align-items:center;gap:.4rem}
+.spin{width:1rem;height:1rem;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;display:inline-block}
+@keyframes spin{to{transform:rotate(360deg)}}
+.pill.del{background:var(--red-soft,rgba(255,90,90,.15));color:var(--red)}
 .cmdrow{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
 .cmdrow .ic{width:1.3rem;height:1.3rem}
 .ic.cu{color:var(--icc)}
@@ -469,6 +476,8 @@ a.btn{text-decoration:none;color:inherit}
     <div class="tools">
       <button class="gchip" id="syncchip" type="button" data-act="sync"><span data-ic="drive"></span><span>저장 위치 확인 중</span></button>
       <button class="gchip" id="gchip" type="button" data-act="gchip"><span data-ic="gcal"></span><span>구글 로그인</span></button>
+      <button class="iconbtn" id="undoBtn" data-act="undo" type="button" disabled title="되돌릴 것이 없습니다"><span data-ic="undo"></span><span class="ul">되돌리기</span></button>
+      <button class="iconbtn" id="redoBtn" data-act="redo" type="button" hidden aria-label="다시 하기"><span data-ic="redo"></span></button>
       <button class="iconbtn" data-act="openFinder" type="button"><span data-ic="search"></span>빈 시간 찾기</button>
       <button class="iconbtn" data-act="openBusy" type="button"><span data-ic="lock"></span>불가 시간</button>
       <button class="iconbtn" data-act="settings" type="button"><span data-ic="gear"></span>설정</button>
@@ -611,6 +620,8 @@ Object.assign(IP, {
   door: '<path d="M3 21h18M6 21V3h10v18"/><circle cx="13" cy="12" r="1"/><path d="M16 7h3v14"/>',
   medal: '<circle cx="12" cy="15" r="5"/><path d="M8.5 10.5 6 3h4l2 5 2-5h4l-2.5 7.5"/>',
   won: '<circle cx="12" cy="12" r="9"/><path d="M7 8l2 8 3-6 3 6 2-8M6 11.5h12"/>',
+  undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
+  redo: '<path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/>',
   pen: '<path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
   plane: '<path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/>',
   train: '<rect x="5" y="3" width="14" height="14" rx="3"/><path d="M5 11h14M9 21l1.5-4M15 21l-1.5-4M9 14h.01M15 14h.01"/>',
@@ -892,7 +903,7 @@ document.addEventListener('dragstart', e => {
 });
 document.addEventListener('dragend', e => { const el = e.target.closest && e.target.closest('[data-dk]'); if (el) el.classList.remove('dragging'); document.querySelectorAll('.cell.dropok').forEach(c => c.classList.remove('dropok')); dragKey = null; });
 document.addEventListener('dragover', e => { if (!dragKey) return; const c = e.target.closest && e.target.closest('.cell[data-day]'); if (!c) return; e.preventDefault(); try { e.dataTransfer.dropEffect = 'move'; } catch {} if (!c.classList.contains('dropok')) { document.querySelectorAll('.cell.dropok').forEach(x => x.classList.remove('dropok')); c.classList.add('dropok'); } });
-document.addEventListener('drop', e => { const c = e.target.closest && e.target.closest('.cell[data-day]'); if (!c || !dragKey) return; e.preventDefault(); const k = dragKey; dragKey = null; c.classList.remove('dropok'); moveItem(k, c.dataset.day); });
+document.addEventListener('drop', e => { const c = e.target.closest && e.target.closest('.cell[data-day]'); if (!c || !dragKey) return; e.preventDefault(); const k = dragKey; dragKey = null; c.classList.remove('dropok'); undoArm('날짜 옮기기'); moveItem(k, c.dataset.day); });
 
 /* ---------- edit dialog ---------- */
 function openEdit(kind, id) {
@@ -1586,7 +1597,7 @@ function mergeIn(r) {
 }
 function cacheLocal() { try { localStorage.setItem('deptDash', JSON.stringify(snapshot())); } catch {} }
 function loadLocal() { try { const d = JSON.parse(localStorage.getItem('deptDash') || 'null'); if (d) mergeIn(d); } catch {} }
-function changed() { renderAll(); cacheLocal(); DRIVE.dirty = true; clearTimeout(DRIVE.timer); DRIVE.timer = setTimeout(syncNow, 1500); }
+function changed() { undoCommit(); renderAll(); cacheLocal(); DRIVE.dirty = true; clearTimeout(DRIVE.timer); DRIVE.timer = setTimeout(syncNow, 1500); }
 async function add(col, data) { const id = uid(); S[col].push({ id, ...data, _u: Date.now() }); changed(); return id; }
 async function patch(col, id, data) { const x = S[col].find(r => r.id === id); if (x) { deepMerge(x, JSON.parse(JSON.stringify(data))); x._u = Date.now(); } changed(); }
 async function del(col, id) { S[col] = S[col].filter(r => r.id !== id); (S.deleted[col] ||= {})[id] = Date.now(); changed(); }
@@ -1848,6 +1859,7 @@ function parseCommand(raw) {
   return r;
 }
 function describeAction(a) {
+  if (['update', 'delete', 'done'].includes(a.type)) return describeRef(a);
   const rep = a.repeat && a.repeat.days && a.repeat.days.length ? `매주 ${a.repeat.days.map(d => DOW_KO[d]).join('·')}요일` + (a.repeat.until ? ` (${fmtShort(a.repeat.until)}까지)` : '') : '';
   const when = a.type === 'task' ? (a.due ? `${fmtShort(a.due)}까지` : '기한 없음')
     : [rep || (a.date ? fmtShort(a.date) : ''), a.allDay ? '종일' : a.time ? `${a.time}–${a.endTime || ''}` : ''].filter(Boolean).join(' ');
@@ -1859,26 +1871,18 @@ function renderCmdPreview(actions, sourceText, fromAI) {
   const st = $('pasteStatus');
   st.className = 'status';
   st.innerHTML = `<div class="cmdbox">
-    <div class="cmdhead">${ic('spark')}<b>${fromAI ? 'AI가 해석한 내용' : '이렇게 처리할까요?'}</b></div>
-    ${actions.map((a, i) => { const d = describeAction(a); const k = a.type === 'block' ? 'lock' : a.type === 'task' ? iconFor(a.title, '할일') : iconFor(a.title, a.kind || '회의');
-      return `<div class="cmdrow">${ic(k, ICON_GROUP[k] || '')}<span class="pill pend">${d.typeKo}</span><b>${esc(d.title)}</b><span class="count">${esc(d.when)}</span>${a.type === 'event' && a.imp === 'high' ? '<span class="impbtn on">중요</span>' : ''}${(a.notes || []).map(n => `<span class="warnline">${esc(n)}</span>`).join('')}</div>`; }).join('')}
-    <div class="row"><button class="btn small primary" type="button" data-act="cmdApply">${ic('check')}${actions.length > 1 ? `${actions.length}개 모두 ` : ''}추가</button>
-      ${fromAI ? '' : `<button class="btn small" type="button" data-act="cmdAI">${ic('spark')}다르게 이해했어요 · AI에게 맡기기</button>`}
+    <div class="cmdhead">${ic('spark')}<b>${fromAI ? 'Claude가 해석한 내용 · 확인 후 실행하세요' : '이렇게 처리할까요?'}</b></div>
+    ${actions.map((a, i) => { const d = describeAction(a); const k = a.type === 'update' ? 'pen' : a.type === 'done' ? 'check' : a.type === 'delete' ? 'ban' : a.type === 'block' ? 'lock' : a.type === 'task' ? iconFor(a.title, '할일') : iconFor(a.title, a.kind || '회의');
+      return `<div class="cmdrow">${ic(k, ICON_GROUP[k] || '')}<span class="pill ${a.type === 'delete' ? 'del' : 'pend'}">${d.typeKo}</span><b>${esc(d.title)}</b><span class="count">${esc(d.when)}</span>${a.type === 'event' && a.imp === 'high' ? '<span class="impbtn on">중요</span>' : ''}${(a.notes || []).map(n => `<span class="warnline">${esc(n)}</span>`).join('')}</div>`; }).join('')}
+    <div class="row"><button class="btn small primary" type="button" data-act="cmdApply">${ic('check')}${actions.length > 1 ? `${actions.length}개 모두 ` : ''}${actions.some(a => ['update', 'delete', 'done'].includes(a.type)) ? '실행' : '추가'}</button>
+      ${fromAI ? '' : `<button class="btn small" type="button" data-act="cmdAI">${ic('spark')}다르게 이해했어요 · Claude에게 맡기기</button>`}
       <button class="btn small" type="button" data-act="cmdCancel">취소</button></div>
   </div>`;
 }
-function commandPrompt(text) {
-  return `당신은 한국 대학교 컴퓨터공학과 학과장의 일정 비서입니다. 학과장이 대시보드에 짧은 명령을 입력했습니다. 명령을 실행할 동작 목록으로 바꾸세요.
-${ctxLine()}
-요일 번호: 일0 월1 화2 수3 목4 금5 토6. "3시"처럼 오전/오후가 없으면 근무시간 기준으로 1~7시는 오후로 보세요.
-
-아래 형식의 JSON 객체 하나로만 답하세요.
-{"actions": [{"type": "event | task | block", "title": "짧은 제목", "date": "YYYY-MM-DD 또는 null (반복이면 첫 날짜)", "time": "HH:MM 또는 null", "endTime": "HH:MM 또는 null", "allDay": true 또는 false, "repeat": {"days": [요일 번호], "until": "YYYY-MM-DD 또는 null"} 또는 null, "due": "할 일 기한 YYYY-MM-DD 또는 null", "kind": "회의 | 행사 | 마감 | 학사", "important": true 또는 false}], "note": "학과장에게 알릴 한 줄 (없으면 null)"}
-type: event는 일정, task는 할 일, block은 학과장이 안 되는 시간(불가 시간).
-
-명령: ${text}`;
-}
 function cleanActions(arr) {
+  return (Array.isArray(arr) ? arr : []).slice(0, 30).map(a => !a ? null : ['update', 'delete', 'done'].includes(a.type) ? cleanRefAction(a) : a.title ? cleanNewActions([a])[0] : null).filter(Boolean);
+}
+function cleanNewActions(arr) {
   const kinds = ['회의', '행사', '마감', '학사'], hmRe = /^\d{2}:\d{2}$/;
   return (Array.isArray(arr) ? arr : []).filter(a => a && a.title).slice(0, 20).map(a => {
     const x = { type: ['event', 'task', 'block'].includes(a.type) ? a.type : 'event', title: String(a.title).slice(0, 120), date: isDate(a.date) ? a.date : '', time: hmRe.test(a.time || '') ? a.time : '', endTime: hmRe.test(a.endTime || '') ? a.endTime : '', allDay: !!a.allDay, due: isDate(a.due) ? a.due : '', kind: kinds.includes(a.kind) ? a.kind : '회의', notes: [] };
@@ -1892,7 +1896,10 @@ function cleanActions(arr) {
 }
 async function applyActions(actions) {
   let first = '', n = 0;
+  const gs = { ok: 0, fail: 0, left: 0 };
+  UI.lastApplyG = gs;
   for (const a of actions) {
+    if (['update', 'delete', 'done'].includes(a.type)) { const r = await applyRefAction(a); n += r.n; if (r.date) first = first || r.date; if (r.g === 'ok') gs.ok++; else if (r.g === 'fail' || r.g === 'none' || r.g === 'unknown') gs.fail++; gs.left += r.gLeft || 0; continue; }
     if (a.type === 'task') { await add('tasks', { title: a.title, due: a.due || '', priority: a.imp === 'high' ? 'high' : 'mid', done: false, source: 'command', createdAt: nowISO() }); n++; if (a.due) first = first || a.due; continue; }
     if (a.type === 'block') {
       if (a.repeat && !a.allDay && a.time) {
@@ -1909,6 +1916,7 @@ async function applyActions(actions) {
     if (S.settings.googlePush === true && gReady()) pushGoogle(doc, nid);
     n++; first = first || a.date;
   }
+  if (gs.ok) gLoad(true);
   if (first) { UI.selDay = first; UI.rail = 'day'; const fd = parse(first); if (UI.view === 'month') UI.month = new Date(fd.getFullYear(), fd.getMonth(), 1); }
   renderAll();
   return n;
@@ -1925,10 +1933,27 @@ function parseLoose(t) {
 }
 function relay({ title, prompt, json }) {
   if (UI.relay) UI.relay.reject({ code: 'cancelled' });
-  return new Promise((resolve, reject) => { UI.relay = { title, prompt, json, resolve, reject }; UI.dlg = 'relay'; renderRelay(); });
+  return new Promise((resolve, reject) => { UI.relay = { title, prompt, json, resolve, reject, mode: aiOn() ? 'ask' : 'manual' }; UI.dlg = 'relay'; renderRelay(); });
 }
 function renderRelay() {
   const r = UI.relay; if (!r) return;
+  if (r.mode !== 'manual') {
+    const mname = (AI_MODELS.find(x => x[0] === aiModel()) || [0, aiModel()])[1];
+    $('dlgRoot').innerHTML = `<div class="scrim" ${r.mode === 'run' ? '' : 'data-act="relayCancel"'}></div><div class="dlg"><div class="dlgbox wide" role="dialog" aria-modal="true" aria-labelledby="dlgT">
+      <h3 id="dlgT">${ic('spark')}${esc(r.title)}</h3>
+      <div class="aiask">
+        ${r.mode === 'run' ? `<div class="q"><span class="spin"></span>Claude가 해석하고 있습니다… 보통 5~30초 걸립니다.</div>
+          <div class="row"><button class="btn" type="button" data-act="aiCancel">중지</button></div>`
+        : `<div class="q">${ic('spark')}Claude에게 보내서 자동으로 해석할까요?</div>
+          <span class="count">보낼 내용: 프롬프트 ${r.prompt.length.toLocaleString()}자 (입력한 내용, 오늘 날짜${/대시보드 일정/.test(r.prompt) ? ', 앞으로의 일정·할 일 목록, 빈 시간' : ''}) · 모델: ${esc(mname)}. 결과는 바로 적용하지 않고 먼저 보여 드립니다.</span>
+          ${r.mode === 'err' ? `<div class="warnline">${esc(r.err)}</div>` : ''}
+          <details><summary class="count" style="cursor:pointer">보낼 프롬프트 보기</summary><pre class="ptext">${esc(r.prompt)}</pre></details>
+          <div class="row" style="justify-content:flex-end"><button class="btn" type="button" data-act="relayCancel">취소</button><button class="btn" type="button" data-act="aiManual">${ic('copy')}직접 복사해서 하기</button><button class="btn primary" type="button" data-act="aiRun">${ic('spark')}${r.mode === 'err' ? '다시 시도' : '네, Claude에게 맡기기'}</button></div>`}
+      </div>
+    </div></div>`;
+    if (r.mode !== 'run') { const b = $('dlgRoot').querySelector('[data-act="aiRun"]'); if (b) b.focus(); }
+    return;
+  }
   $('dlgRoot').innerHTML = `<div class="scrim" data-act="relayCancel"></div><div class="dlg"><div class="dlgbox wide" role="dialog" aria-modal="true" aria-labelledby="dlgT">
     <h3 id="dlgT">${ic('spark')}${esc(r.title)}</h3>
     <div class="rstep"><b>1</b><div>프롬프트를 복사해 Claude나 ChatGPT 새 대화에 붙여넣으세요. 아래 버튼을 누르면 복사와 함께 새 탭이 열립니다.
@@ -1940,6 +1965,7 @@ function renderRelay() {
     <div class="rstep"><b>2</b><div>AI가 답하면 답 전체를 복사해 여기에 붙여넣고 적용을 누르세요.${r.json ? ' (JSON 앞뒤에 설명이 붙어 있어도 됩니다)' : ''}
       <textarea class="field" id="relayOut" rows="8" style="margin-top:.45rem" placeholder="AI의 답을 붙여넣으세요"></textarea>
       <div class="status err" id="relayErr"></div></div></div>
+    ${aiOn() ? '' : '<span class="count">설정 → Claude 자동 해석에 API 키를 넣으면 이 복사·붙여넣기 없이 Claude가 바로 처리합니다 (보내기 전에 묻습니다).</span>'}
     <div class="row" style="justify-content:flex-end"><button class="btn" type="button" data-act="relayCancel">취소</button><button class="btn primary" type="button" data-act="relayApply">${ic('check')}적용</button></div>
   </div></div>`;
 }
@@ -1956,11 +1982,268 @@ function relayApply() {
   UI.relay = null; UI.dlg = null; $('dlgRoot').innerHTML = '';
   r.resolve(out);
 }
-function relayCancel() { const r = UI.relay; UI.relay = null; UI.dlg = null; $('dlgRoot').innerHTML = ''; if (r) r.reject({ code: 'cancelled' }); }
+function relayCancel() { const r = UI.relay; if (r && r.ctl) r.ctl.abort(); UI.relay = null; UI.dlg = null; $('dlgRoot').innerHTML = ''; if (r) r.reject({ code: 'cancelled' }); }
 const sample = Object.assign(
   async (prompt, opts = {}) => { const text = await relay({ title: opts.title || 'AI에게 답 받기', prompt, json: false }); if (opts.onText) opts.onText({ text, delta: text }); return { text, truncated: false }; },
   { json: (prompt, opts = {}) => relay({ title: opts.title || 'AI 분석', prompt, json: true }) }
 );
+
+/* ---------- undo / redo of data changes ---------- */
+// A click (or drop / form) arms a snapshot; the first data change after it commits the snapshot to the undo stack.
+const UNDO = { stack: [], redo: [], max: 30, pending: null, busy: false };
+const UNDO_LABEL = {
+  cmdApply: '자동 처리 명령', addEv: '메일 일정 추가', addTk: '메일 할 일 추가', addAllEv: '메일 일정 모두 추가', addAllTk: '메일 할 일 모두 추가',
+  toggleTask: '할 일 완료 표시', delTask: '할 일 삭제', delEvent: '일정 삭제', delBlock: '불가 시간 삭제', delMail: '메일 삭제',
+  ignoreMail: '메일 무시', keepMail: '메일 남기기', pickOpt: '답장 방향 선택', impT: '중요도 변경', impG: '중요도 변경', ipSave: '아이콘 변경',
+  delRule: '아이콘 규칙 삭제', skipOcc: '반복 일정 한 번 빼기', edSave: '일정 편집', bdSave: '불가 시간 설정', saveSettings: '설정 변경', imSave: '아이콘 색·이름',
+  pushG: '구글에 추가', fEvent: '일정 추가', fBlock: '불가 시간 추가', taskForm: '할 일 추가', importData: '파일 가져오기'
+};
+const UNDO_SKIP = new Set(['undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'aiCancel', 'cmdCancel']);
+function undoSnap() {
+  const o = { settings: JSON.parse(JSON.stringify(S.settings)) };
+  for (const c of COLS) o[c] = JSON.parse(JSON.stringify(S[c]));
+  return o;
+}
+function undoArm(label) { if (!UNDO.busy) UNDO.pending = { label: label || '변경', at: Date.now(), snap: undoSnap() }; }
+function undoCommit() {
+  const p = UNDO.pending; UNDO.pending = null;
+  if (!p || UNDO.busy || Date.now() - p.at > 90000) return;
+  UNDO.stack.push(p); if (UNDO.stack.length > UNDO.max) UNDO.stack.shift();
+  UNDO.redo = [];
+  setTimeout(renderUndo, 0);
+}
+function restoreSnap(snap) {
+  const now = Date.now(), touched = [];
+  const same = (a, b) => JSON.stringify({ ...a, _u: 0 }) === JSON.stringify({ ...b, _u: 0 });
+  for (const c of COLS) {
+    const want = new Map((snap[c] || []).map(x => [x.id, x]));
+    const cur = new Map(S[c].map(x => [x.id, x]));
+    S.deleted[c] ||= {};
+    for (const [id, old] of cur) if (!want.has(id)) { S.deleted[c][id] = now; if (c === 'events') touched.push({ before: old, after: null }); }
+    const next = [];
+    for (const [id, x] of want) {
+      const old = cur.get(id);
+      if (old && same(old, x)) next.push(old);
+      else { next.push({ ...JSON.parse(JSON.stringify(x)), _u: now }); if (c === 'events') touched.push({ before: old || null, after: x }); }
+      delete S.deleted[c][id];
+    }
+    S[c] = next;
+  }
+  S.settings = { ...DEFAULTS, ...JSON.parse(JSON.stringify(snap.settings)) }; S.settingsU = now;
+  UNDO.busy = true; try { changed(); } finally { UNDO.busy = false; }
+  return touched;
+}
+async function syncUndoToGoogle(touched) {
+  let fixed = 0, left = 0;
+  for (const t of touched) {
+    if (t.after && t.before && t.after.googleId && t.after.googleId === t.before.googleId) { if (await gUpdate(t.after.googleCal, t.after.googleId, t.after) === 'ok') fixed++; }
+    else if (!t.after && t.before && (t.before.googleId || t.before.googleSent)) left++;
+  }
+  if (fixed) gLoad(true);
+  return { fixed, left };
+}
+async function doUndo(redo) {
+  UNDO.pending = null;
+  const from = redo ? UNDO.redo : UNDO.stack, to = redo ? UNDO.stack : UNDO.redo;
+  const step = from.pop();
+  if (!step) { toast(redo ? '다시 할 것이 없습니다.' : '되돌릴 것이 없습니다.'); return; }
+  to.push({ label: step.label, at: Date.now(), snap: undoSnap() });
+  const touched = restoreSnap(step.snap);
+  renderUndo();
+  { const st = $('pasteStatus'); if (st && st.querySelector('[data-act="undo"]')) st.textContent = ''; }
+  const g = await syncUndoToGoogle(touched);
+  toast(`${redo ? '다시 했습니다' : '되돌렸습니다'}: ${step.label}${g.fixed ? ' · 구글 캘린더도 되돌렸습니다' : ''}${g.left ? ` · 이미 구글에 들어간 일정 ${g.left}개는 구글 캘린더에서 지워 주세요` : ''}`);
+}
+function renderUndo() {
+  const u = $('undoBtn'), r = $('redoBtn'); if (!u) return;
+  const last = UNDO.stack[UNDO.stack.length - 1], nx = UNDO.redo[UNDO.redo.length - 1];
+  u.disabled = !last;
+  u.title = last ? `되돌리기: ${last.label} (Ctrl+Z)` : '되돌릴 것이 없습니다';
+  u.querySelector('.ul').textContent = last ? `되돌리기 · ${last.label}` : '되돌리기';
+  r.hidden = !nx; r.title = nx ? `다시 하기: ${nx.label} (Ctrl+Shift+Z)` : '';
+}
+
+/* ---------- Claude API: automatic interpretation, always asked first ---------- */
+// The API key lives only in this browser (localStorage). It is never written to the Drive data file or the repo.
+const AI_MODELS = [['claude-sonnet-5-5', 'Sonnet 5.5 (추천)'], ['claude-haiku-5-5', 'Haiku 5.5 (빠르고 저렴)'], ['claude-opus-5-5', 'Opus 5.5 (가장 꼼꼼)']];
+const aiKey = () => { try { return localStorage.getItem('claudeKey') || ''; } catch { return ''; } };
+const aiModel = () => { try { return localStorage.getItem('claudeModel') || AI_MODELS[0][0]; } catch { return AI_MODELS[0][0]; } };
+const aiOn = () => /^sk-ant-[\w-]{20,}$/.test(aiKey());
+async function claudeCall(prompt, { json, signal, maxTokens = 8000, key, model } = {}) {
+  let r;
+  try {
+    r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST', signal,
+      headers: { 'content-type': 'application/json', 'x-api-key': key || aiKey(), 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+      body: JSON.stringify({ model: model || aiModel(), max_tokens: maxTokens, messages: [{ role: 'user', content: prompt + (json ? '\n\n설명이나 코드 블록 없이 JSON만 답하세요.' : '') }] })
+    });
+  } catch (e) { if (e && e.name === 'AbortError') throw Object.assign(new Error('cancelled'), { code: 'cancelled' }); throw Object.assign(new Error('net'), { code: 'ai_net' }); }
+  let j = null; try { j = await r.json(); } catch {}
+  if (!r.ok) {
+    const msg = (j && j.error && j.error.message) || `HTTP ${r.status}`;
+    const code = r.status === 401 || r.status === 403 ? 'ai_key' : r.status === 429 ? 'rate_limited' : r.status === 404 || /model/i.test(msg) ? 'ai_model' : r.status === 400 && /credit|balance|billing/i.test(msg) ? 'ai_credit' : r.status >= 500 ? 'ai_busy' : 'ai_err';
+    throw Object.assign(new Error(msg), { code });
+  }
+  if (j.stop_reason === 'refusal') throw Object.assign(new Error('refused'), { code: 'refused' });
+  const text = (j.content || []).filter(b => b.type === 'text').map(b => b.text).join('').trim();
+  if (!json) return text;
+  try { return parseLoose(text); } catch { throw Object.assign(new Error('json'), { code: 'invalid_json' }); }
+}
+function aiErrMsg(e) {
+  const c = e && e.code;
+  if (c === 'ai_key') return 'API 키가 맞지 않습니다. 설정 → Claude 자동 해석에서 키를 확인해 주세요.';
+  if (c === 'ai_credit') return 'Anthropic 계정의 크레딧이 부족합니다. console.anthropic.com의 결제(Billing)에서 충전해 주세요.';
+  if (c === 'ai_model') return '고른 모델을 쓸 수 없습니다. 설정에서 다른 모델을 골라 주세요.';
+  if (c === 'ai_busy') return 'Claude 쪽이 잠시 바쁩니다. 조금 뒤 다시 시도해 주세요.';
+  if (c === 'ai_net') return 'Claude에 연결하지 못했습니다. 인터넷 연결을 확인해 주세요.';
+  if (c === 'rate_limited') return '요청이 많아 잠시 쉬어야 합니다. 1분쯤 뒤 다시 시도해 주세요.';
+  if (c === 'invalid_json') return 'Claude의 답 형식이 맞지 않았습니다. 다시 시도해 주세요.';
+  if (c === 'refused') return 'Claude가 이 내용은 처리하지 않았습니다.';
+  return 'Claude 호출이 실패했습니다. ' + ((e && e.message) || '');
+}
+async function aiRun() {
+  const r = UI.relay; if (!r) return;
+  r.mode = 'run'; r.err = ''; r.ctl = new AbortController(); renderRelay();
+  try {
+    const out = await claudeCall(r.prompt, { json: r.json, signal: r.ctl.signal });
+    if (UI.relay !== r) return;
+    UI.relay = null; UI.dlg = null; $('dlgRoot').innerHTML = '';
+    r.resolve(out);
+  } catch (e) {
+    if (UI.relay !== r) return;
+    if (e && e.code === 'cancelled') { r.mode = 'ask'; renderRelay(); return; }
+    r.mode = 'err'; r.err = aiErrMsg(e); renderRelay();
+  }
+}
+function aiCancelRun() { const r = UI.relay; if (r && r.ctl) r.ctl.abort(); }
+async function aiTest() {
+  const out = $('aiTestOut'), key = $('sAiKey').value.trim(), model = $('sAiModel').value;
+  if (!/^sk-ant-/.test(key)) { out.className = 'status err'; out.textContent = 'sk-ant-로 시작하는 키를 넣어 주세요.'; return; }
+  out.className = 'status'; out.textContent = '확인 중…';
+  try { await claudeCall('연결 확인입니다. "ok"라고만 답하세요.', { key, model, maxTokens: 16 }); out.className = 'status'; out.innerHTML = `${ic('check')} 연결됐습니다. 저장을 누르면 이 PC에서 사용합니다.`; }
+  catch (e) { out.className = 'status err'; out.textContent = aiErrMsg(e); }
+}
+function aiSettingsHtml() {
+  const k = aiKey(), m = aiModel();
+  return `<div class="bsec"><b>${ic('spark')} Claude 자동 해석</b>
+    <span class="count">어려운 명령이나 메일을 Claude가 직접 해석해 처리합니다. 보내기 전에 매번 묻고, 결과도 바로 적용하지 않고 먼저 보여 드립니다. 키가 없으면 지금처럼 프롬프트 복사 방식으로 동작합니다.</span>
+    <span class="count">필요한 것: Anthropic API 키 (console.anthropic.com → API Keys, 쓴 만큼 요금이 나가며 Claude 구독과는 별도). 키는 <b>이 PC의 브라우저에만</b> 저장되고 드라이브 파일이나 GitHub에는 올라가지 않으므로, 다른 PC에서는 한 번 더 넣어 주세요.</span>
+    <label>API 키<input class="field" id="sAiKey" type="password" value="${esc(k)}" placeholder="sk-ant-…" autocomplete="off"></label>
+    <label>모델<select class="field" id="sAiModel">${AI_MODELS.map(([v, l]) => `<option value="${v}" ${v === m ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+    <div class="row"><button class="btn small" type="button" data-act="aiTest">${ic('refresh')}연결 확인</button>${aiOn() ? `<span class="gtag">${ic('check')}이 PC에서 사용 중</span>` : ''}</div>
+    <div class="status" id="aiTestOut"></div></div>`;
+}
+function aiSaveFromForm() {
+  if (!$('sAiKey')) return true;
+  const k = $('sAiKey').value.trim(), m = $('sAiModel').value;
+  if (k && !/^sk-ant-[\w-]{20,}$/.test(k)) { toast('API 키는 sk-ant-로 시작하는 긴 문자열입니다.'); $('sAiKey').focus(); return false; }
+  try { if (k) localStorage.setItem('claudeKey', k); else localStorage.removeItem('claudeKey'); localStorage.setItem('claudeModel', m); } catch {}
+  return true;
+}
+
+/* ---------- commands that change existing items (update / delete / done) ---------- */
+function refItem(ref) {
+  ref = String(ref || '');
+  if (ref.startsWith('e:')) { const o = S.events.find(x => x.id === ref.slice(2)); return o && { kind: 'e', o, title: o.title, when: (repDays(o) ? `매주 ${repDays(o).map(d => DOW_KO[d]).join('·')}` : fmtShort(o.date)) + (o.time ? ' ' + o.time : '') }; }
+  if (ref.startsWith('t:')) { const o = S.tasks.find(x => x.id === ref.slice(2)); return o && { kind: 't', o, title: o.title, when: o.due ? fmtShort(o.due) + '까지' : '' }; }
+  if (ref.startsWith('g:')) { const o = (G.events || []).find(x => gKey(x) === ref); return o && { kind: 'g', o, title: o.title, when: fmtShort(o.date) + (o.allDay ? '' : ' ' + o.time) }; }
+  return null;
+}
+function cmdContext() {
+  const t0 = todayStr(), from = addDays(t0, -7), to = addDays(t0, 120);
+  const evs = S.events.filter(e => repDays(e) ? (!e.repeat.until || e.repeat.until >= from) : (e.date >= from && e.date <= to)).sort((a, b) => (a.date + (a.time || '')).localeCompare(b.date + (b.time || ''))).slice(0, 150)
+    .map(e => `- [e:${e.id}] ${e.date}${repDays(e) ? ` 부터 매주 ${repDays(e).map(d => DOW_KO[d]).join('·')}` : ''} ${e.time ? e.time + '–' + fromMin(Math.min(evEnd(e), 1439)) : '종일'} ${e.title}${impOfEvent(e) === 'high' ? ' (중요)' : ''}${e.googleId ? ' (구글에도 있음)' : ''}`);
+  const gs = (G.events || []).filter(g => g.date >= from && g.date <= to).slice(0, 150).map(g => `- [${gKey(g)}] ${g.date} ${g.allDay ? '종일' : g.time + '–' + g.endTime} ${g.title}${g.recurring ? ' (구글 반복 일정)' : ''}`);
+  const ts = S.tasks.filter(t => !t.done).slice(0, 80).map(t => `- [t:${t.id}] ${t.due ? t.due + '까지' : '기한 없음'} ${t.title}`);
+  const sl = slotsForPrompt();
+  return `대시보드 일정 (번호는 [ ] 안):\n${evs.join('\n') || '- 없음'}\n\n구글 캘린더 일정:\n${gs.join('\n') || '- 없음 또는 연결 안 됨'}\n\n남은 할 일:\n${ts.join('\n') || '- 없음'}\n\n앞으로 2주 빈 시간:\n${sl.map(x => '- ' + x).join('\n') || '- 계산 못 함'}`;
+}
+function commandPrompt(text) {
+  return `당신은 한국 대학교 컴퓨터공학과 학과장의 일정 비서입니다. 학과장이 대시보드에 명령을 입력했습니다. 명령을 실행할 동작 목록으로 바꾸세요.
+${ctxLine()}
+요일 번호: 일0 월1 화2 수3 목4 금5 토6. "3시"처럼 오전/오후가 없으면 근무시간 기준으로 1~7시는 오후로 보세요.
+"빈 시간에", "가능한 시간에"처럼 시간을 맡기면 아래 빈 시간 목록에서 고르세요.
+
+${cmdContext()}
+
+아래 형식의 JSON 객체 하나로만 답하세요.
+{"actions": [동작, ...], "note": "학과장에게 알릴 한 줄 (확인이 필요한 점, 없으면 null)"}
+
+동작 종류
+1) 새로 만들기: {"type": "event | task | block", "title": "짧은 제목", "date": "YYYY-MM-DD 또는 null (반복이면 첫 날짜)", "time": "HH:MM 또는 null", "endTime": "HH:MM 또는 null", "allDay": true/false, "repeat": {"days": [요일 번호], "until": "YYYY-MM-DD 또는 null"} 또는 null, "due": "할 일 기한 YYYY-MM-DD 또는 null", "kind": "회의 | 행사 | 마감 | 학사", "important": true/false}
+   event는 일정, task는 할 일, block은 학과장이 안 되는 시간(불가 시간).
+2) 기존 항목 고치기: {"type": "update", "ref": "위 목록의 번호 (예: e:abc, t:xyz, g:...)", "title": "바뀌면", "date": "바뀌면", "time": "바뀌면", "endTime": "바뀌면", "allDay": 바뀌면, "due": "할 일 기한이 바뀌면", "important": 바뀌면} — 바뀌는 필드만 넣으세요.
+3) 지우기: {"type": "delete", "ref": "e:… 또는 t:…"} — 구글 캘린더 일정(g:)은 지울 수 없으니 note로 알려 주세요.
+4) 할 일 완료: {"type": "done", "ref": "t:…"}
+목록에 없는 항목은 지어내지 말고, 어느 항목인지 애매하면 동작을 만들지 말고 note에 물어볼 점을 쓰세요.
+
+명령: ${text}`;
+}
+const CMD_TYPES = ['event', 'task', 'block', 'update', 'delete', 'done'];
+function cleanChange(a) {
+  const hmRe = /^\d{2}:\d{2}$/, ch = {};
+  if (a.title) ch.title = String(a.title).slice(0, 120);
+  if (isDate(a.date)) ch.date = a.date;
+  if (hmRe.test(a.time || '')) ch.time = a.time;
+  if (hmRe.test(a.endTime || '')) ch.endTime = a.endTime;
+  if (typeof a.allDay === 'boolean') ch.allDay = a.allDay;
+  if (isDate(a.due)) ch.due = a.due;
+  if (typeof a.important === 'boolean') ch.imp = a.important ? 'high' : 'normal';
+  if (['회의', '행사', '마감', '학사'].includes(a.kind)) ch.kind = a.kind;
+  return ch;
+}
+function cleanRefAction(a) {
+  const it = refItem(a.ref); if (!it) return null;
+  const x = { type: a.type, ref: String(a.ref), title: it.title, notes: [] };
+  if (a.type === 'done') return it.kind === 't' ? x : null;
+  if (a.type === 'delete') { if (it.kind === 'g') return null; if (it.kind === 'e' && (it.o.googleId || it.o.googleSent)) x.notes.push('구글 캘린더에 있는 것은 구글에서 따로 지워야 합니다'); return x; }
+  x.ch = cleanChange(a);
+  if (it.kind === 't') x.ch = Object.fromEntries(Object.entries(x.ch).filter(([k]) => ['title', 'due', 'imp'].includes(k)));
+  if (it.kind === 'g' && it.o.recurring) { x.ch = x.ch.title ? { title: x.ch.title } : {}; x.notes.push('구글 반복 일정은 제목만 바꿉니다'); }
+  if (it.kind === 'g' && !gasOn()) x.notes.push('구글 일정을 고치려면 Apps Script 연결이 필요합니다');
+  if (x.ch.time && !x.ch.endTime && it.kind !== 't') { const o = it.o, len = it.kind === 'g' ? (o.allDay ? 60 : toMin(o.endTime) - toMin(o.time)) : (o.time ? evEnd(o) - toMin(o.time) : 60); x.ch.endTime = fromMin(Math.min(toMin(x.ch.time) + (len > 0 ? len : 60), 1439)); }
+  return Object.keys(x.ch).length ? x : null;
+}
+function describeRef(a) {
+  const it = refItem(a.ref);
+  if (a.type === 'done') return { typeKo: '완료', when: it ? it.when : '', title: a.title };
+  if (a.type === 'delete') return { typeKo: '삭제', when: it ? it.when : '', title: a.title };
+  const c = a.ch || {}, parts = [];
+  if (c.title && it && c.title !== it.title) parts.push(`이름 → ${c.title}`);
+  if (c.date) parts.push(`${it ? fmtShort(it.o.date) : ''} → ${fmtShort(c.date)}`);
+  if (c.allDay) parts.push('종일로'); else if (c.time) parts.push(`${c.time}–${c.endTime || ''}`);
+  if (c.due) parts.push(`기한 → ${fmtShort(c.due)}`);
+  if (c.imp) parts.push(c.imp === 'high' ? '중요로' : '일반으로');
+  if (c.kind) parts.push(`종류 → ${c.kind}`);
+  return { typeKo: '변경', when: parts.join(' · '), title: it ? it.title : a.title };
+}
+async function applyRefAction(a) {
+  const it = refItem(a.ref); if (!it) return { n: 0 };
+  const id = it.kind === 'g' ? a.ref : it.o.id;
+  if (a.type === 'done') { await patch('tasks', id, { done: true, doneAt: nowISO() }); return { n: 1 }; }
+  if (a.type === 'delete') { await del(it.kind === 'e' ? 'events' : 'tasks', id); return { n: 1, gLeft: it.kind === 'e' && (it.o.googleId || it.o.googleSent) ? 1 : 0 }; }
+  const c = a.ch || {};
+  if (it.kind === 't') { const upd = {}; if (c.title) upd.title = c.title; if (c.due) upd.due = c.due; if (c.imp) upd.priority = c.imp === 'high' ? 'high' : 'mid'; await patch('tasks', id, upd); return { n: 1, date: c.due }; }
+  if (it.kind === 'e') {
+    const e = it.o, upd = {};
+    if (c.title) upd.title = c.title; if (c.kind) upd.kind = c.kind; if (c.imp) upd.imp = c.imp;
+    if (c.date) { const len = isDate(e.endDate) && e.endDate > e.date ? Math.round((parse(e.endDate) - parse(e.date)) / 86400000) : 0; upd.date = c.date; upd.endDate = len ? addDays(c.date, len) : (e.endDate || ''); }
+    if (c.allDay) { upd.time = ''; upd.endTime = ''; } else if (c.time) { upd.time = c.time; upd.endTime = c.endTime || fromMin(Math.min(toMin(c.time) + 60, 1439)); }
+    await patch('events', id, upd);
+    const g = e.googleId && (upd.title || upd.date || upd.time != null) ? await gUpdate(e.googleCal, e.googleId, { ...e, ...upd }) : '';
+    return { n: 1, date: upd.date || e.date, g };
+  }
+  const g = it.o;
+  if (c.imp) setMark(a.ref, { imp: c.imp });
+  if (!(c.title || c.date || c.time || c.allDay)) return { n: 1 };
+  const nd = c.date || g.date, len = g.allDay && g.endDate > g.date ? Math.round((parse(g.endDate) - parse(g.date)) / 86400000) : 0;
+  const doc = g.recurring ? { title: c.title || g.title, location: g.loc || '', titleOnly: true }
+    : (c.allDay || (g.allDay && !c.time)) ? { title: c.title || g.title, date: nd, endDate: len ? addDays(nd, len) : '', location: g.loc || '' }
+    : { title: c.title || g.title, date: nd, time: c.time || g.time, endTime: c.time ? c.endTime : (g.endTime === '24:00' ? '23:59' : g.endTime), location: g.loc || '' };
+  const r = await gUpdate(g.cal, g.id, doc);
+  if (r === 'ok' && c.date && c.date !== g.date) { const m = S.marks.find(x => x.id === a.ref); if (m) setMark(`g:${g.id}:${c.date}`, { imp: m.imp, icon: m.icon }); }
+  return { n: r === 'ok' ? 1 : 0, date: nd, g: r || 'none' };
+}
 
 /* ---------- calendar (main) ---------- */
 const repDays = e => e.repeat && Array.isArray(e.repeat.days) && e.repeat.days.length ? e.repeat.days : null;
@@ -2437,7 +2720,7 @@ async function analyzeNew() {
   const prevId = $('threadOf').value;
   const prev = prevId ? S.emails.find(x => x.id === prevId) : null;
   const raw = prev ? `${prev.raw}\n\n----- 이어진 메일 (${todayStr()} 등록) -----\n${text}` : text;
-  st.className = 'status'; st.textContent = prev ? '이전 메일과 합친 스레드 분석 프롬프트를 만들었습니다. AI 창에서 진행해 주세요.' : 'AI 창이 열렸습니다. 프롬프트를 복사해 Claude나 ChatGPT에 붙여넣고, 답을 다시 붙여넣어 주세요.';
+  st.className = 'status'; st.textContent = aiOn() ? (prev ? '이전 메일과 합친 스레드를 Claude에게 맡길지 묻는 창을 열었습니다.' : '메일을 Claude에게 맡길지 묻는 창을 열었습니다.') : prev ? '이전 메일과 합친 스레드 분석 프롬프트를 만들었습니다. AI 창에서 진행해 주세요.' : 'AI 창이 열렸습니다. 프롬프트를 복사해 Claude나 ChatGPT에 붙여넣고, 답을 다시 붙여넣어 주세요.';
   $('analyzeBtn').disabled = true; $('stopBtn').hidden = false;
   let a = null, errMsg = '';
   if (sample) {
@@ -2445,6 +2728,7 @@ async function analyzeNew() {
     try { a = cleanAnalysis(await sample.json(analysisPrompt(raw, prev ? prev.category : cat), { title: '메일 분석 · ' + (text.split('\n').find(l => l.trim()) || '').slice(0, 40) })); }
     catch (e) { errMsg = sampleErr(e); if (e && e.code === 'cancelled') { done(); st.textContent = errMsg; return; } }
   }
+  undoArm(prev ? '이어진 메일 처리' : '메일 자동 처리');
   try {
     let id;
     if (prev) {
@@ -2580,9 +2864,9 @@ ${m.summary ? '요약: ' + m.summary : ''}`;
 
 async function runCommandAI(text) {
   const st = $('pasteStatus');
-  st.className = 'status'; st.textContent = 'AI 창에서 프롬프트를 복사해 붙여넣고, 답을 다시 붙여넣어 주세요.';
+  st.className = 'status'; st.textContent = aiOn() ? 'Claude에게 맡길지 묻는 창을 열었습니다.' : 'AI 창에서 프롬프트를 복사해 붙여넣고, 답을 다시 붙여넣어 주세요.';
   try {
-    const j = await sample.json(commandPrompt(text), { title: '명령 해석 · ' + text.slice(0, 30) });
+    const j = await sample.json(commandPrompt(text), { title: '명령 해석 · ' + text.slice(0, 40) });
     const acts = cleanActions(j && j.actions);
     if (!acts.length) { st.className = 'status err'; st.textContent = (j && j.note) || '실행할 내용을 찾지 못했습니다. 조금 더 구체적으로 적어 주세요.'; return; }
     renderCmdPreview(acts, text, true);
@@ -2621,6 +2905,7 @@ document.addEventListener('click', async ev0 => {
   if (el.dataset.tf && !el.dataset.act) { UI.tf = el.dataset.tf; syncTabs(); renderTasks(); return; }
   if (el.dataset.mf && !el.dataset.act) { UI.mf = el.dataset.mf; syncTabs(); renderMails(); return; }
   const act = el.dataset.act, id = el.dataset.id;
+  if (act && !UNDO_SKIP.has(act)) undoArm(UNDO_LABEL[act] || (el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 18) || '변경');
   const m = UI.openId ? S.emails.find(x => x.id === UI.openId) : null;
   try {
     switch (act) {
@@ -2685,7 +2970,20 @@ document.addEventListener('click', async ev0 => {
         return syncNow();
       case 'fsPick': return fsPick();
       case 'impT': { const e = S.events.find(x => x.id === id); if (e) await patch('events', id, { imp: impOfEvent(e) === 'high' ? 'normal' : 'high' }); return; }
-      case 'cmdApply': { const c = UI.cmd; if (!c) return; const n = await applyActions(c.actions); UI.cmd = null; $('rawMail').value = ''; const st = $('pasteStatus'); st.className = 'status'; st.textContent = `${n}건을 추가했습니다.`; toast(`${n}건을 추가했습니다.`); return; }
+      case 'cmdApply': {
+        const c = UI.cmd; if (!c) return;
+        const n = await applyActions(c.actions); UI.cmd = null; $('rawMail').value = '';
+        const g = UI.lastApplyG || {}, extra = [g.ok ? `구글 캘린더 ${g.ok}건 반영` : '', g.fail ? `구글 반영 못 함 ${g.fail}건` : '', g.left ? `구글에서 따로 지울 일정 ${g.left}건` : ''].filter(Boolean).join(' · ');
+        const st = $('pasteStatus'); st.className = 'status';
+        st.innerHTML = `${ic('check')} ${n}건을 처리했습니다.${extra ? ' ' + esc(extra) : ''} <button class="btn small" type="button" data-act="undo">${ic('undo')}잘못됐으면 되돌리기</button>`;
+        toast(`${n}건을 처리했습니다. 잘못됐으면 Ctrl+Z 또는 위쪽 "되돌리기"를 누르세요.`); return;
+      }
+      case 'undo': return doUndo(false);
+      case 'redo': return doUndo(true);
+      case 'aiRun': return aiRun();
+      case 'aiCancel': return aiCancelRun();
+      case 'aiManual': { const r = UI.relay; if (r) { r.mode = 'manual'; renderRelay(); } return; }
+      case 'aiTest': return aiTest();
       case 'cmdAI': { const c = UI.cmd; if (c) runCommandAI(c.text); return; }
       case 'cmdCancel': UI.cmd = null; $('pasteStatus').textContent = ''; return;
       case 'skipOcc': { const e = S.events.find(x => x.id === id); if (e) { await patch('events', id, { skip: [...(e.skip || []), el.dataset.day] }); toast(`${fmtShort(el.dataset.day)}만 반복에서 뺐습니다.`); } return; }
@@ -2748,6 +3046,7 @@ document.addEventListener('click', async ev0 => {
       case 'pickTime': { const i = el.dataset.i, t = el.dataset.t; UI.edits['ev-h-' + i] = t; UI.edits['ev-e-' + i] = fromMin(Math.min(toMin(t) + 60, 1439)); renderSheet(true); return; }
       case 'settings': UI.dlg = 'settings'; return openSettings();
       case 'saveSettings': {
+        if (!aiSaveFromForm()) return;
         const data = { ...S.settings, semesterLabel: $('sLabel').value.trim() || DEFAULTS.semesterLabel, semesterStart: isDate($('sStart').value) ? $('sStart').value : DEFAULTS.semesterStart, signature: $('sSig').value.trim() || DEFAULTS.signature, assistant: $('sAsst').value.trim() || DEFAULTS.assistant,
           googleShow: $('sGShow').checked, googleBusy: $('sGBusy').checked, googlePush: $('sGPush').checked };
         if ($('impMode')) { const iv = impFormValues(); const amber = getComputedStyle(document.documentElement).getPropertyValue('--amber').trim(); data.impStyle = { ...iv, color: iv.color.toLowerCase() === amber.toLowerCase() ? '' : iv.color }; }
@@ -2842,15 +3141,17 @@ document.addEventListener('keydown', e => {
   if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('[role="button"][data-act]')) { e.preventDefault(); e.target.click(); return; }
   if (e.key === 'Escape') { if (UI.dlg === 'relay') relayCancel(); else if ($('dlgRoot').innerHTML) { if (UI.dlg === 'settings') applyImpStyle(); $('dlgRoot').innerHTML = ''; UI.dlg = null; } else if (UI.openId) closeSheet(); else if (UI.dayForm) { UI.dayForm = null; renderDay(true); } }
   if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && e.target.id === 'rawMail') analyzeNew();
+  if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'z' || e.key === 'Z' || e.key === 'y') && !(e.target.closest && e.target.closest('input,textarea,select,[contenteditable]')) && !UI.dlg) { e.preventDefault(); doUndo(e.key === 'y' || e.shiftKey); }
 });
 $('taskForm').addEventListener('submit', async e => {
-  e.preventDefault();
+  e.preventDefault(); undoArm('할 일 추가');
   const title = $('tTitle').value.trim(); if (!title) return;
   try { await add('tasks', { title, due: $('tDue').value || '', priority: $('tPrio').value, done: false, source: 'manual', createdAt: nowISO() }); $('tTitle').value = ''; $('tDue').value = ''; }
   catch (err) { dbErr(err); }
 });
 document.addEventListener('submit', async e => {
   const f = e.target;
+  undoArm(UNDO_LABEL[f.id] || '추가');
   if (f.id === 'fEvent') {
     e.preventDefault();
     const title = $('fTitle').value.trim(), date = $('fDate').value;
@@ -2942,6 +3243,7 @@ function openSettings() {
     <label>개강 주 월요일 (주차 계산 기준)<input class="field" type="date" id="sStart" value="${esc(s.semesterStart)}"></label>
     <label>답장 서명<textarea class="field" id="sSig" rows="3">${esc(s.signature)}</textarea></label>
     <label>업무를 받는 조교 (이름·호칭)<input class="field" id="sAsst" value="${esc(s.assistant)}" placeholder="예: 김OO 조교"></label>
+    ${aiSettingsHtml()}
     ${impSettingsHtml(s)}
     <div class="bsec"><b>${ic('spark')} 아이콘</b><div><button class="btn small" type="button" data-act="iconMgr">${ic('pen')}아이콘 ${ICON_LEGEND.length + 1}종 색·이름 바꾸기</button></div></div>
     <div class="bsec"><b>${ic('spark')} 기억한 아이콘 규칙</b>
@@ -2996,6 +3298,7 @@ setTimeout(() => { if (gasOn()) signIn(); }, 400);
 setInterval(() => { syncNow(); if (gasOn() && !G.cals.length && G.state !== 'loading') signIn(); else if (gReady()) gLoad(false); else renderAll(); }, 60000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { syncNow(); if (gReady()) gLoad(false); } });
 window.addEventListener('beforeunload', e => { if (DRIVE.dirty && fsReady()) { syncNow(); e.preventDefault(); e.returnValue = ''; } });
+if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__dd = { S, add, UNDO };
 })();
 </script>
 </body>
