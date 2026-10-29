@@ -1839,6 +1839,7 @@ function looksLikeCommand(t) {
   const lines = s.split('\n').filter(x => x.trim());
   if (!s || s.length > 220 || lines.length > 3) return false;
   if (/보낸\s*사람|받는\s*사람|^from:|^to:|subject:|제목\s*:|-----|[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/im.test(s)) return false;
+  if (/안녕하세요|안녕하십니까|드림\s*$|올림\s*$|드립니다|감사합니다|(교수|선생)님\s*[,.]/m.test(s)) return false;
   return true;
 }
 function nextDow(dow, from, includeToday) {
@@ -2058,6 +2059,10 @@ function parseLoose(t) {
   if (isFinite(a) && b > a) tries.push(t.slice(a, b + 1));
   for (const x of tries) { try { return JSON.parse(x); } catch {} }
   for (const x of tries) { try { return JSON.parse(repairJson(x)); } catch {} }
+  // copied from a rendered chat page: HTML entities (&#x20; &nbsp; &quot; …) and no-break spaces
+  const dec = x => x.replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16))).replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(+d))
+    .replace(/&nbsp;/g, ' ').replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/[\u00a0\u2007\u202f\u200b\ufeff]/g, ' ');
+  for (const x of tries) { try { return JSON.parse(repairJson(dec(x))); } catch {} }
   throw new Error('json');
 }
 function relay({ title, prompt, json }) {
