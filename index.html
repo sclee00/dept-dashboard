@@ -433,6 +433,34 @@ a.btn{text-decoration:none;color:inherit}
 .chead{flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:.2rem}
 .dn{flex-direction:column;align-items:flex-start;gap:.1rem;line-height:1.1}
 .citems{justify-content:end}
+/* icon display rules: shapes, border width, effects */
+.ci2.sh-round{border-radius:6px} .ci2.sh-square{border-radius:1px} .ci2.sh-circle{border-radius:50%}
+.ci2.sh-drop{border-radius:50% 50% 50% 8%} .ci2.sh-leaf{border-radius:65% 8%}
+.ci2.sh-diamond{rotate:45deg;scale:.8;border-radius:3px} .ci2.sh-diamond .ic{rotate:-45deg;scale:1.15}
+.ci2.sh-hex{clip-path:polygon(25% 3%,75% 3%,100% 50%,75% 97%,25% 97%,0 50%);border-radius:0}
+.ci2.sh-none{background:transparent!important;border-color:transparent!important}
+.ci2.bw-0{border-width:0!important} .ci2.bw-1{border-width:1px!important} .ci2.bw-2{border-width:2px!important} .ci2.bw-3{border-width:3px!important}
+.ci2.fx-color .ic{color:var(--fxc)!important}
+.ci2[style*="--fxo"]{opacity:var(--fxo)}
+.ci2.fx-invert{background:var(--own)!important;border-color:var(--own)!important}
+.ci2.fx-invert .ic{color:var(--bg,#0b0d12)!important}
+.ci2.fx-bar{background-image:linear-gradient(var(--own),var(--own))!important;background-size:70% 3px!important;background-position:50% 100%!important;background-repeat:no-repeat!important}
+.ci2.fx-blink{animation:fxblink 2.2s ease-in-out infinite}
+@keyframes fxblink{0%,100%{opacity:var(--fxo,1)}50%{opacity:calc(var(--fxo,1) * .3)}}
+.ci2.fx-glow{filter:drop-shadow(0 0 4px var(--own))}
+.ci2.fx-small{scale:.72} .ci2.sh-diamond.fx-small{scale:.6}
+@media (prefers-reduced-motion:reduce){.ci2.fx-blink{animation:none}}
+.fxlist{display:flex;flex-direction:column;gap:.35rem}
+.fxrow{display:grid;grid-template-columns:minmax(0,1fr) 2.2rem;gap:.35rem .5rem;align-items:center;padding:.4rem .55rem;border:1px solid var(--line);border-radius:8px;opacity:.6}
+.fxctl{grid-column:1/-1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) auto minmax(4.5rem,1fr);gap:.4rem;align-items:end}
+.fxrow.on{opacity:1;border-color:var(--accent)}
+.fxrow label{font-size:.74rem;color:var(--muted);display:flex;flex-direction:column;gap:.15rem;min-width:0;white-space:nowrap}
+.fxrow label.chk{flex-direction:row;align-items:center;color:var(--ink);font-size:.86rem;align-self:center}
+.fxrow select.field{padding:.2rem .3rem;font-size:.8rem}
+.fxprev{display:grid;place-items:center;align-self:center;--cis:1.6rem}
+.fxprev .ci2{width:1.6rem;height:1.6rem}
+label.inl{display:inline-flex;align-items:center;gap:.3rem;font-size:.85rem} label.inl .field{width:4.5rem;padding:.2rem .35rem}
+@media (max-width:600px){.fxctl{grid-template-columns:repeat(2,minmax(0,1fr))}}
 /* "titles" mode: like Google Calendar, one line per item with a small icon and a cut-off title */
 .cell-titles .cell{display:flex;flex-direction:column}
 .cell-titles .chead{flex-direction:row;align-items:center;justify-content:space-between}
@@ -1035,7 +1063,7 @@ function applyImpStyle(v) {
   v = v || impStyle();
   const r = document.documentElement.style;
   if (/^#[0-9a-f]{6}$/i.test(v.color || '')) r.setProperty('--imp-c', v.color); else r.removeProperty('--imp-c');
-  r.setProperty('--imp-w', Math.max(1, Math.min(5, +v.width || 2)) + 'px');
+  r.setProperty('--imp-w', Math.max(0, Math.min(5, v.width === 0 || v.width === '0' ? 0 : (+v.width || 2))) + 'px');
   r.setProperty('--imp-s', Math.max(0.6, Math.min(6, +v.speed || 2.6)) + 's');
   r.setProperty('--imp-o', String(Math.max(0, Math.min(0.9, +v.dim))));
   r.setProperty('--past-o', String(Math.max(0.15, Math.min(1, v.pastDim == null ? 0.6 : +v.pastDim))));
@@ -1067,7 +1095,7 @@ function impSettingsHtml(s) {
       <label>효과<select class="field" id="impMode">${[['fade', '흐려졌다 밝아짐'], ['invert', '색 반전'], ['glow', '빛 번짐'], ['still', '깜빡임 없음 (테두리만)']].map(([k, l]) => `<option value="${k}" ${v.mode === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       <label>지나간 중요 일정<select class="field" id="impPast">${[['blink', '계속 깜빡임'], ['still', '테두리만 (깜빡임 멈춤)'], ['off', '중요 표시 끄기']].map(([k, l]) => `<option value="${k}" ${v.past === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       <label>지나간 날짜 아이콘 밝기 <span id="impPastDimV">${Math.round((v.pastDim ?? 0.6) * 100)}%</span><input type="range" id="impPastDim" min="0.15" max="1" step="0.05" value="${v.pastDim ?? 0.6}"></label>
-      <label>테두리 두께 <span id="impWidthV">${v.width}px</span><input type="range" id="impWidth" min="1" max="5" step="1" value="${v.width}"></label>
+      <label>테두리 두께 <span id="impWidthV">${v.width}px</span><input type="range" id="impWidth" min="0" max="5" step="1" value="${v.width}"></label>
       <label>한 번 깜빡이는 시간 <span id="impSpeedV">${v.speed}초</span><input type="range" id="impSpeed" min="0.6" max="6" step="0.2" value="${v.speed}"></label>
       <label>깜빡일 때 흐려지는 정도 <span id="impDimV">${Math.round((1 - v.dim) * 100)}%</span><input type="range" id="impDim" min="0" max="0.9" step="0.02" value="${v.dim}"></label>
       <div style="align-self:end"><button class="btn small" type="button" data-act="impReset">${ic('refresh')}기본값으로</button></div>
@@ -2127,7 +2155,7 @@ const UNDO_LABEL = {
   delRule: '아이콘 규칙 삭제', skipOcc: '반복 일정 한 번 빼기', edSave: '일정 편집', bdSave: '불가 시간 설정', saveSettings: '설정 변경', imSave: '아이콘 색·이름',
   pushG: '구글에 추가', fEvent: '일정 추가', fBlock: '불가 시간 추가', taskForm: '할 일 추가', importData: '파일 가져오기'
 };
-const UNDO_SKIP = new Set(['attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
+const UNDO_SKIP = new Set(['fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
 function undoSnap() {
   const o = { settings: JSON.parse(JSON.stringify(S.settings)) };
   for (const c of COLS) o[c] = JSON.parse(JSON.stringify(S[c]));
@@ -2480,6 +2508,95 @@ function attPromptBlock(list) {
 }
 const ATT_RULES = `첨부파일이 있으면 내용까지 읽고 반영하세요: 첨부 안의 날짜·마감·대상 목록·제출 양식을 events/tasks/답장/조교 지시에 쓰고, 조교 지시에는 어떤 첨부를 어떻게 처리할지(예: 엑셀의 노란색 행 검토) 구체적으로 쓰세요. "attachments" 항목에 첨부마다 한 줄 요약을 넣으세요.`;
 
+/* ---------- icon display rules: look of a chip by what kind of item it is ---------- */
+const FX_TRAITS = [
+  ['all', '모든 아이콘 (기본)'], ['allday', '종일 일정'], ['multi', '여러 날 일정'], ['morning', '오전에 시작'], ['afternoon', '오후에 시작'],
+  ['short', '짧은 일정'], ['long', '긴 일정'], ['recur', '반복 일정'], ['local', '내가 넣은 일정'], ['google', '구글 일정'], ['task', '할 일'], ['busy', '불가 시간']
+];
+const FX_SHAPES = [['', '그대로'], ['round', '둥근 사각형'], ['square', '사각형'], ['circle', '원'], ['diamond', '마름모'], ['hex', '육각형'], ['drop', '물방울'], ['leaf', '잎'], ['none', '모양 없음 (아이콘만)']];
+const FX_EFFECTS = [['', '없음'], ['invert', '반전 (색 채움)'], ['bar', '밑줄 막대'], ['blink', '깜빡임'], ['glow', '빛 번짐'], ['small', '작게']];
+const FX_BW = [['', '그대로'], ['0', '0 (없음)'], ['1', '1px'], ['2', '2px'], ['3', '3px']];
+const FX_DEF = { short: 60, long: 180, rules: {} };
+const FX_RECOMMEND = { allday: { on: true, effect: 'invert', shape: 'round' }, multi: { on: true, effect: 'bar' }, short: { on: true, effect: 'small' }, recur: { on: true, shape: 'circle' }, task: { on: true, shape: 'diamond', bw: '1' }, busy: { on: true, shape: 'none', op: 0.7 } };
+const fxCfg = () => UI.fxDraft || { ...FX_DEF, ...((S.settings && S.settings.fx) || {}), rules: { ...((S.settings && S.settings.fx && S.settings.fx.rules) || {}) } };
+function itemTraits(o) {
+  // o: { kind: 'event'|'google'|'task'|'busy', timed, s, e, days, recur }
+  const c = fxCfg(), t = ['all'];
+  if (o.kind === 'task') return [...t, 'task'];
+  if (o.kind === 'busy') return [...t, 'busy'];
+  t.push(o.kind === 'google' ? 'google' : 'local');
+  if (o.timed) { t.push(o.s < 720 ? 'morning' : 'afternoon'); const d = o.e - o.s; if (d <= (+c.short || 60)) t.push('short'); if (d >= (+c.long || 180)) t.push('long'); }
+  else { t.push('allday'); if ((o.days || 1) > 1) t.push('multi', 'long'); }
+  if (o.recur) t.push('recur');
+  return t;
+}
+// later rules in the list win for shape, border and color; effects add up; the dimmest brightness wins
+function fxFor(traits) {
+  const rules = fxCfg().rules || {}, out = { fx: [], shape: '', bw: '', color: '', op: 1 };
+  for (const [k] of FX_TRAITS) {
+    const r = rules[k]; if (!r || !r.on || !traits.includes(k)) continue;
+    if (r.effect && !out.fx.includes(r.effect)) out.fx.push(r.effect);
+    if (r.shape) out.shape = r.shape;
+    if (r.bw !== undefined && r.bw !== '') out.bw = String(r.bw);
+    if (r.useColor && /^#[0-9a-f]{6}$/i.test(r.color || '')) out.color = r.color;
+    if (r.op != null && +r.op < out.op) out.op = +r.op;
+  }
+  return out;
+}
+function fxAttrs(traits) {
+  const f = fxFor(traits);
+  const cls = [f.shape ? 'sh-' + f.shape : '', f.bw !== '' ? 'bw-' + f.bw : '', f.color ? 'fx-color' : ''].filter(Boolean).join(' ');
+  const st = [f.color ? `--fxc:${f.color}` : '', f.op < 1 ? `--fxo:${f.op}` : ''].filter(Boolean).join(';');
+  return { cls, st, data: f.fx.length ? ` data-fx="${f.fx.join(' ')}"` : '', op: f.op < 1 };
+}
+// effects that need the icon's own color are switched on after the chip is drawn, once its color is known
+function paintFx(root) {
+  (root || document).querySelectorAll('.ci2[data-fx]:not([data-fxp])').forEach(el => {
+    const sv = el.querySelector('.ic'); const own = el.classList.contains('fx-color') ? el.style.getPropertyValue('--fxc') : sv ? getComputedStyle(sv).color : '';
+    if (own) el.style.setProperty('--own', own);
+    for (const f of el.dataset.fx.split(' ')) if (f) el.classList.add('fx-' + f);
+    el.dataset.fxp = '1';
+  });
+}
+function fxSettingsHtml() {
+  const c = fxCfg(), r = c.rules || {};
+  const sel = (id, opts, v) => `<select class="field" data-fx-k="${id}">${opts.map(([k, l]) => `<option value="${k}" ${String(v ?? '') === k ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
+  return `<div class="bsec"><b>${ic('spark')} 아이콘 표시 규칙</b>
+    <span class="count">일정의 성격에 따라 아이콘 모양·테두리·효과·색·밝기를 다르게 합니다. 여러 규칙에 걸리면 효과는 겹치고, 모양·테두리·색은 아래쪽 규칙이 이깁니다. 바꾸면 뒤의 달력에 바로 보입니다.</span>
+    <div class="row"><label class="inl">짧은 일정: <input class="field" type="number" min="10" max="240" step="10" id="fxShort" value="${+c.short || 60}">분 이하</label><label class="inl">긴 일정: <input class="field" type="number" min="1" max="12" step="0.5" id="fxLong" value="${(+c.long || 180) / 60}">시간 이상</label></div>
+    <div class="fxlist">${FX_TRAITS.map(([k, l]) => { const x = r[k] || {}; const f = fxAttrs([k]); return `<div class="fxrow ${x.on ? 'on' : ''}" data-fx-row="${k}">
+      <label class="chk"><input type="checkbox" data-fx-k="on" ${x.on ? 'checked' : ''}>${esc(l)}</label>
+      <span class="fxprev"><span class="ci2 ${k === 'task' ? 'task' : k === 'busy' ? 'busy' : k === 'google' ? 'g' : ''} ${x.on ? fxAttrs([k]).cls : ''}" ${x.on && fxAttrs([k]).st ? `style="${fxAttrs([k]).st}"` : ''}${x.on ? fxAttrs([k]).data : ''}>${ic(k === 'task' ? '할일' : k === 'busy' ? 'lock' : k === 'google' ? 'gcal' : '회의', k === 'task' ? 'kc-할일' : k === 'google' ? 'kc-g' : k === 'busy' ? '' : 'kc-회의')}</span></span>
+      <div class="fxctl"><label>모양${sel('shape', FX_SHAPES, x.shape)}</label>
+      <label>테두리${sel('bw', FX_BW, x.bw)}</label>
+      <label>효과${sel('effect', FX_EFFECTS, x.effect)}</label>
+      <label>색 <span class="row" style="gap:.3rem;flex-wrap:nowrap"><input type="checkbox" data-fx-k="useColor" ${x.useColor ? 'checked' : ''} aria-label="색 바꾸기"><input type="color" data-fx-k="color" value="${esc(/^#[0-9a-f]{6}$/i.test(x.color || '') ? x.color : '#f3bf5e')}"></span></label>
+      <label>밝기 <span class="fxopv">${Math.round((x.op ?? 1) * 100)}%</span><input type="range" min="0.2" max="1" step="0.05" data-fx-k="op" value="${x.op ?? 1}"></label></div>
+    </div>`; }).join('')}</div>
+    <div class="row"><button class="btn small" type="button" data-act="fxRecommend">${ic('spark')}추천 설정 넣기</button><button class="btn small" type="button" data-act="fxClear">모두 끄기</button></div></div>`;
+}
+function fxReadForm() {
+  const rules = {};
+  document.querySelectorAll('[data-fx-row]').forEach(row => {
+    const g = k => row.querySelector(`[data-fx-k="${k}"]`);
+    const x = { on: g('on').checked, shape: g('shape').value, bw: g('bw').value, effect: g('effect').value, useColor: g('useColor').checked, color: g('color').value, op: +g('op').value };
+    if (x.on || x.shape || x.bw || x.effect || x.useColor || x.op < 1) rules[row.dataset.fxRow] = x;
+    row.classList.toggle('on', x.on); const v = row.querySelector('.fxopv'); if (v) v.textContent = Math.round(x.op * 100) + '%';
+  });
+  return { short: Math.max(10, +($('fxShort') || {}).value || 60), long: Math.max(60, Math.round((+($('fxLong') || {}).value || 3) * 60)), rules };
+}
+function fxLive() {
+  UI.fxDraft = fxReadForm();
+  document.querySelectorAll('[data-fx-row]').forEach(row => {
+    const k = row.dataset.fxRow, ch = row.querySelector('.fxprev .ci2'), on = row.querySelector('[data-fx-k="on"]').checked;
+    const base = k === 'task' ? 'task' : k === 'busy' ? 'busy' : k === 'google' ? 'g' : '';
+    const only = { ...UI.fxDraft, rules: { [k]: UI.fxDraft.rules[k] } }, keep = UI.fxDraft; UI.fxDraft = only;
+    const f = on ? fxAttrs([k]) : { cls: '', st: '', data: '' }; UI.fxDraft = keep;
+    ch.className = `ci2 ${base} ${f.cls}`; ch.setAttribute('style', f.st); ch.removeAttribute('data-fxp'); if (f.data) ch.dataset.fx = f.data.match(/"(.*)"/)[1]; else delete ch.dataset.fx;
+  });
+  paintFx($('dlgRoot')); renderCal();
+}
+
 /* ---------- calendar (main) ---------- */
 const repDays = e => e.repeat && Array.isArray(e.repeat.days) && e.repeat.days.length ? e.repeat.days : null;
 const repText = e => repDays(e) ? `매주 ${repDays(e).slice().sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7)).map(d => '일월화수목금토'[d]).join('·')}요일${isDate(e.repeat.until) ? ` · ${fmtShort(e.repeat.until)}까지` : ''}` : '';
@@ -2511,19 +2628,19 @@ function cellItems(day) {
   const items = [], grp = (k, d) => ICON_GROUP[k] || d;
   for (const e of expandEvents().filter(e => e.date === day)) {
     const due = e.kind === '마감', timed = !e.span && toMin(e.time) != null, k = iconOfEvent(e), dk = (e.occ ? 'r:' : 'e:') + e.id;
-    items.push({ o: due ? 0 : timed ? 20 + toMin(e.time) / 1440 : 10, ic: k, kc: grp(k, 'kc-' + (e.kind || '학사')), tm: timed ? e.time : '', nm: e.title, tx: (impOfEvent(e) === 'high' ? '[중요] ' : '') + e.title + (e.googleId ? ' (구글에도 있음)' : ''), cls: (due ? 'hot' : (e.googleId || e.googleSent) ? 'synced' : '') + (impOfEvent(e) === 'high' ? ' imp' : ''), dk });
+    items.push({ o: due ? 0 : timed ? 20 + toMin(e.time) / 1440 : 10, ic: k, kc: grp(k, 'kc-' + (e.kind || '학사')), tm: timed ? e.time : '', nm: e.title, tx: (impOfEvent(e) === 'high' ? '[중요] ' : '') + e.title + (e.googleId ? ' (구글에도 있음)' : ''), cls: (due ? 'hot' : (e.googleId || e.googleSent) ? 'synced' : '') + (impOfEvent(e) === 'high' ? ' imp' : ''), dk, tr: itemTraits({ kind: 'event', timed, s: toMin(e.time), e: timed ? evEnd(e) : 0, days: e.span && isDate(e.endDate) ? Math.round((parse(e.endDate) - parse(e.date)) / 86400000) + 1 : 1, recur: !!(e.occ || repDays(e)) }) });
   }
   for (const t of S.tasks.filter(t => !t.done && t.due === day)) {
     const k = iconOfTask(t);
-    items.push({ o: t.priority === 'high' ? 1 : 5, ic: k, kc: grp(k, 'kc-할일'), nm: t.title, tx: '할 일 · ' + t.title, dk: 't:' + t.id, cls: 'task' + (t.priority === 'high' ? ' hot' : t.priority === 'low' ? ' dim' : '') });
+    items.push({ o: t.priority === 'high' ? 1 : 5, ic: k, kc: grp(k, 'kc-할일'), nm: t.title, tx: '할 일 · ' + t.title, dk: 't:' + t.id, cls: 'task' + (t.priority === 'high' ? ' hot' : t.priority === 'low' ? ' dim' : ''), tr: itemTraits({ kind: 'task' }) });
   }
   for (const m of S.emails.filter(m => needsReplyNow(m) && m.replyDeadline === day))
     items.push({ o: 2, ic: 'reply', nm: '답장 · ' + (m.subject || ''), tx: '답장 기한 · ' + (m.subject || ''), cls: 'warn' });
-  for (const g of gAllDayOn(day)) { const k = iconOfG(g); items.push({ o: 9, ic: k, kc: grp(k, 'kc-g'), nm: g.title, tx: `${impOfG(g) === 'high' ? '[중요] ' : ''}${g.title} (구글 · ${g.calName || ''})`, cls: 'g' + (g.free ? ' dim' : '') + (impOfG(g) === 'high' ? ' imp' : ''), gc: g.color, dk: g.recurring ? '' : 'g:' + gKey(g) }); }
-  for (const g of gOn(day)) { const k = iconOfG(g); items.push({ o: 20 + g.s / 1440, ic: k, kc: grp(k, 'kc-g'), tm: g.time, nm: g.title, tx: `${impOfG(g) === 'high' ? '[중요] ' : ''}${g.title} (구글 · ${g.calName || ''})`, cls: 'g' + (g.free ? ' dim' : '') + (impOfG(g) === 'high' ? ' imp' : ''), gc: g.color, dk: g.recurring ? '' : 'g:' + gKey(g) }); }
+  for (const g of gAllDayOn(day)) { const k = iconOfG(g); items.push({ o: 9, ic: k, kc: grp(k, 'kc-g'), nm: g.title, tx: `${impOfG(g) === 'high' ? '[중요] ' : ''}${g.title} (구글 · ${g.calName || ''})`, cls: 'g' + (g.free ? ' dim' : '') + (impOfG(g) === 'high' ? ' imp' : ''), gc: g.color, dk: g.recurring ? '' : 'g:' + gKey(g), tr: itemTraits({ kind: 'google', timed: false, days: g.endDate && g.endDate > g.date ? Math.round((parse(g.endDate) - parse(g.date)) / 86400000) + 1 : 1, recur: g.recurring }) }); }
+  for (const g of gOn(day)) { const k = iconOfG(g); items.push({ o: 20 + g.s / 1440, ic: k, kc: grp(k, 'kc-g'), tm: g.time, nm: g.title, tx: `${impOfG(g) === 'high' ? '[중요] ' : ''}${g.title} (구글 · ${g.calName || ''})`, cls: 'g' + (g.free ? ' dim' : '') + (impOfG(g) === 'high' ? ' imp' : ''), gc: g.color, dk: g.recurring ? '' : 'g:' + gKey(g), tr: itemTraits({ kind: 'google', timed: true, s: g.s, e: g.e, recur: g.recurring }) }); }
   if (day >= todayStr()) for (const b of [...blocksOn(day), ...weeklyOn(day)]) {
     const k = iconOfBlock(b);
-    items.push({ o: 40 + b.s / 1440, ic: k, tm: b.allDay ? '종일' : fromMin(b.s) + '–' + fromMin(b.e), nm: b.label, tx: '불가 · ' + b.label, cls: 'busy' });
+    items.push({ o: 40 + b.s / 1440, ic: k, tm: b.allDay ? '종일' : fromMin(b.s) + '–' + fromMin(b.e), nm: b.label, tx: '불가 · ' + b.label, cls: 'busy', tr: itemTraits({ kind: 'busy' }) });
   }
   return items.sort((a, b) => a.o - b.o);
 }
@@ -2553,12 +2670,13 @@ function renderCal() {
     html += `<div role="button" tabindex="0" class="${cls}" data-act="pickDay" data-day="${s}" aria-label="${d.getMonth() + 1}월 ${d.getDate()}일, 항목 ${items.length}개">
       <span class="chead"><span class="dn">${wk && (d.getDate() === 1 || i === 0) ? `<b>${d.getMonth() + 1}월</b>` : ''}${d.getDate()}${s === t ? '<em>오늘</em>' : ''}</span>${freeBadge(s)}</span>
       <span class="citems">${shown.map(x => { const tip = esc((x.tm ? x.tm + ' ' : '') + x.tx) + (x.dk ? ' · 끌어서 날짜 옮기기' : ''), drag = x.dk ? ` draggable="true" data-dk="${esc(x.dk)}"` : '', st = x.gc ? ` style="--gc:${esc(x.gc)}"` : '';
-        const chip = `<span class="ci2 ${x.cls || ''}"${st}${titles ? '' : ` title="${tip}"${drag}`}>${ic(x.ic, x.kc || '')}</span>`;
+        const fa = x.tr ? fxAttrs(x.tr) : { cls: '', st: '', data: '' }, sty = [x.gc ? `--gc:${esc(x.gc)}` : '', fa.st].filter(Boolean).join(';');
+        const chip = `<span class="ci2 ${x.cls || ''} ${fa.cls}"${sty ? ` style="${sty}"` : ''}${fa.data}${titles ? '' : ` title="${tip}"${drag}`}>${ic(x.ic, x.kc || '')}</span>`;
         return titles ? `<span class="crow ${/busy/.test(x.cls || '') ? 'busy' : ''}" title="${tip}"${drag}>${chip}${x.tm && x.tm !== '종일' ? `<span class="ctm">${esc(x.tm.slice(0, 5))}</span>` : ''}<span class="cnm">${esc(x.nm || x.tx)}</span></span>` : chip; }).join('')}${more > 0 ? `<span class="more">+${more}</span>` : ''}</span>
     </div>`;
   }
   const g = $('cal'); g.style.setProperty('--rows', rows); g.innerHTML = html;
-  fitIcons(g);
+  fitIcons(g); paintFx(g);
   requestAnimationFrame(() => {
     if (UI.cap > 1 && [...g.querySelectorAll('.cell')].some(c => c.scrollHeight > c.clientHeight + 2)) { UI.cap--; renderCal(); }
   });
@@ -3321,6 +3439,11 @@ document.addEventListener('click', async ev0 => {
       case 'attRemove': UI.att = UI.att.filter(x => x.id !== id); return renderAttList();
       case 'attOpen': return openAttFile(el.dataset.id, el.dataset.name);
       case 'attAddMail': return $('attInput2') && $('attInput2').click();
+      case 'fxRecommend': case 'fxClear': {
+        document.querySelectorAll('[data-fx-row]').forEach(row => { const r = act === 'fxRecommend' ? FX_RECOMMEND[row.dataset.fxRow] : null, g = k => row.querySelector(`[data-fx-k="${k}"]`);
+          g('on').checked = !!(r && r.on); g('shape').value = (r && r.shape) || ''; g('bw').value = (r && r.bw) || ''; g('effect').value = (r && r.effect) || ''; g('useColor').checked = false; g('op').value = (r && r.op) || 1; });
+        return fxLive();
+      }
       case 'toChat': { const t = $('rawMail').value.trim(); if (!t) { const st = $('pasteStatus'); st.className = 'status err'; st.textContent = '먼저 명령을 적어 주세요.'; return; } return openChatPrompt(t); }
       case 'chatCopy': return chatCopy(el);
       case 'chatJson': { const t = UI.chat && UI.chat.text; $('dlgRoot').innerHTML = ''; UI.dlg = null; if (t) runCommandAI(t); return; }
@@ -3385,8 +3508,9 @@ document.addEventListener('click', async ev0 => {
       case 'pickTime': { const i = el.dataset.i, t = el.dataset.t; UI.edits['ev-h-' + i] = t; UI.edits['ev-e-' + i] = fromMin(Math.min(toMin(t) + 60, 1439)); renderSheet(true); return; }
       case 'settings': UI.dlg = 'settings'; return openSettings();
       case 'saveSettings': {
+        const fxData = $('fxShort') ? fxReadForm() : null;
         const data = { ...S.settings, semesterLabel: $('sLabel').value.trim() || DEFAULTS.semesterLabel, semesterStart: isDate($('sStart').value) ? $('sStart').value : DEFAULTS.semesterStart, signature: $('sSig').value.trim() || DEFAULTS.signature, assistant: $('sAsst').value.trim() || DEFAULTS.assistant,
-          cellMode: $('sCellMode') && $('sCellMode').value === 'titles' ? 'titles' : 'icons', googleShow: $('sGShow').checked, googleBusy: $('sGBusy').checked, googlePush: $('sGPush').checked };
+          ...(fxData ? { fx: fxData } : {}), cellMode: $('sCellMode') && $('sCellMode').value === 'titles' ? 'titles' : 'icons', googleShow: $('sGShow').checked, googleBusy: $('sGBusy').checked, googlePush: $('sGPush').checked };
         if ($('impMode')) { const iv = impFormValues(); const amber = getComputedStyle(document.documentElement).getPropertyValue('--amber').trim(); data.impStyle = { ...iv, color: iv.color.toLowerCase() === amber.toLowerCase() ? '' : iv.color }; }
         { const gu = $('sGasUrl').value.trim(), gk = $('sGasKey').value.trim();
           if (gu && !/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(gu)) { toast('웹 앱 주소는 https://script.google.com/macros/s/…/exec 형태여야 합니다.'); return; }
@@ -3399,9 +3523,9 @@ document.addEventListener('click', async ev0 => {
         if (bad) { toast(bad); $('sCid').focus(); return; }
         try { if (cid && cid !== (CFG.googleClientId || '')) localStorage.setItem('gClientId', cid); else localStorage.removeItem('gClientId'); } catch {}
         if (cid !== (G.cidUsed || '')) { G.tc = null; G.cidUsed = cid; }
-        await saveSettings(data); $('dlgRoot').innerHTML = ''; UI.dlg = null; toast('설정을 저장했습니다.'); watchGoogle(true); return;
+        UI.fxDraft = null; await saveSettings(data); $('dlgRoot').innerHTML = ''; UI.dlg = null; toast('설정을 저장했습니다.'); watchGoogle(true); return;
       }
-      case 'closeDlg': if (UI.dlg === 'relay') return relayCancel(); if (UI.dlg === 'settings') applyImpStyle(); $('dlgRoot').innerHTML = ''; UI.dlg = null; return;
+      case 'closeDlg': if (UI.dlg === 'relay') return relayCancel(); if (UI.dlg === 'settings') { applyImpStyle(); if (UI.fxDraft) { UI.fxDraft = null; renderCal(); } } $('dlgRoot').innerHTML = ''; UI.dlg = null; return;
       case 'noop': return;
       case 'gotoMf': UI.mf = el.dataset.mf; UI.rail = 'mail'; syncTabs(); renderMails(); renderRail(); if (window.innerWidth < 1100) $('rail').scrollIntoView({ block: 'start' }); return;
       case 'ignoreMail': { const mm = S.emails.find(x => x.id === id); if (!mm) return; const box = el.closest('.mbox,.ignban'); const cb = box && box.querySelector('input[type=checkbox]'); await ignoreMail(mm, !cb || cb.checked); if (UI.openId === id) closeSheet(); return; }
@@ -3473,6 +3597,8 @@ document.addEventListener('click', async ev0 => {
     }
   } catch (e) { dbErr(e); }
 });
+document.addEventListener('input', e => { if (e.target.matches && e.target.matches('[data-fx-k], #fxShort, #fxLong')) fxLive(); });
+document.addEventListener('change', e => { if (e.target.matches && e.target.matches('[data-fx-k], #fxShort, #fxLong')) fxLive(); });
 document.addEventListener('input', e => { if (e.target.closest('#sheetRoot') && e.target.id) UI.edits[e.target.id] = e.target.value; });
 document.addEventListener('change', e => { if (e.target.closest('#sheetRoot') && e.target.id && e.target.type !== 'file') UI.edits[e.target.id] = e.target.value; });
 document.addEventListener('change', e => {
@@ -3490,7 +3616,7 @@ document.addEventListener('drop', e => { if (e.dataTransfer && e.dataTransfer.fi
   $('rawMail').addEventListener('paste', e => { const fs = e.clipboardData && e.clipboardData.files; if (fs && fs.length) { e.preventDefault(); addAttFiles(fs); } }); }
 document.addEventListener('keydown', e => {
   if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('[role="button"][data-act]')) { e.preventDefault(); e.target.click(); return; }
-  if (e.key === 'Escape') { if (UI.dlg === 'relay') relayCancel(); else if ($('dlgRoot').innerHTML) { if (UI.dlg === 'settings') applyImpStyle(); $('dlgRoot').innerHTML = ''; UI.dlg = null; } else if (UI.openId) closeSheet(); else if (UI.dayForm) { UI.dayForm = null; renderDay(true); } }
+  if (e.key === 'Escape') { if (UI.dlg === 'relay') relayCancel(); else if ($('dlgRoot').innerHTML) { if (UI.dlg === 'settings') { applyImpStyle(); if (UI.fxDraft) { UI.fxDraft = null; renderCal(); } } $('dlgRoot').innerHTML = ''; UI.dlg = null; } else if (UI.openId) closeSheet(); else if (UI.dayForm) { UI.dayForm = null; renderDay(true); } }
   if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && e.target.id === 'rawMail') analyzeNew();
   if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'z' || e.key === 'Z' || e.key === 'y') && !(e.target.closest && e.target.closest('input,textarea,select,[contenteditable]')) && !UI.dlg) { e.preventDefault(); doUndo(e.key === 'y' || e.shiftKey); }
 });
@@ -3597,6 +3723,7 @@ function openSettings() {
     <div class="bsec"><b>${ic('cal')} 달력 칸 표시</b>
       <label>달력 칸에<select class="field" id="sCellMode"><option value="icons" ${s.cellMode !== 'titles' ? 'selected' : ''}>아이콘만 (3×3 격자)</option><option value="titles" ${s.cellMode === 'titles' ? 'selected' : ''}>아이콘과 제목 (구글 캘린더처럼 한 줄씩)</option></select></label>
       <span class="count">제목을 보이면 칸 너비만큼 앞부분만 보이고, 넘치는 것은 +숫자로 표시됩니다. 마우스를 올리면 전체 제목이 보입니다.</span></div>
+    ${fxSettingsHtml()}
     ${impSettingsHtml(s)}
     <div class="bsec"><b>${ic('spark')} 아이콘</b><div><button class="btn small" type="button" data-act="iconMgr">${ic('pen')}아이콘 ${ICON_LEGEND.length + 1}종 색·이름 바꾸기</button></div></div>
     <div class="bsec"><b>${ic('spark')} 기억한 아이콘 규칙</b>
