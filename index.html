@@ -412,6 +412,16 @@ a.btn{text-decoration:none;color:inherit}
 .spin{width:1rem;height:1rem;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;display:inline-block}
 @keyframes spin{to{transform:rotate(360deg)}}
 .pill.del{background:var(--red-soft,rgba(255,90,90,.15));color:var(--red)}
+.attlist{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.45rem}
+.attchip{display:inline-flex;align-items:center;gap:.35rem;max-width:100%;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:.25rem .45rem;font-size:.82rem}
+.attchip b{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:22rem}
+.attchip.fail{border-color:var(--red)} .attchip.ok{border-color:var(--green)}
+.attchip .ic{width:1rem;height:1rem}
+.quick.dropfile{outline:2px dashed var(--accent);outline-offset:-4px}
+.attrow{display:flex;flex-direction:column;gap:.3rem;padding:.45rem 0;border-top:1px solid var(--line)}
+.attrow:first-of-type{border-top:0}
+.attrow .gist{font-size:.86rem;color:var(--ink)}
+.attrow pre{max-height:16rem;overflow:auto;white-space:pre-wrap;font-size:.78rem;background:var(--surface-2);padding:.5rem;border-radius:6px;margin:.3rem 0 0}
 .cmdrow{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
 .cmdrow .ic{width:1.3rem;height:1.3rem}
 .ic.cu{color:var(--icc)}
@@ -576,10 +586,13 @@ a.btn{text-decoration:none;color:inherit}
           <option>대학본부·행정</option><option>교원</option><option>학생</option><option>외부기관</option><option>기타</option>
         </select>
         <select class="field" id="threadOf" aria-label="이어지는 메일"><option value="">새 메일로 등록</option></select>
+        <button class="btn small" type="button" data-act="attPick" title="메일에 딸린 파일(엑셀·한글·PDF·워드 등)을 같이 넣으면 내용까지 읽어 분석합니다. 이 칸에 끌어다 놓아도 됩니다" style="justify-content:center"><span data-ic="doc"></span>첨부파일 넣기</button>
         <button class="btn small" type="button" data-act="toChat" title="입력한 명령을 Claude 대화창에 붙여넣을 프롬프트로 만듭니다" style="justify-content:center"><span data-ic="copy"></span>Claude에게 시킬 프롬프트 만들기</button>
         <div class="row"><button class="btn" type="button" data-act="cancelAnalyze" id="stopBtn" hidden>중지</button><button class="btn primary grow" type="button" data-act="analyze" id="analyzeBtn"><span data-ic="spark"></span>자동 처리</button></div>
       </div>
     </div>
+    <div class="attlist" id="attList" hidden></div>
+    <input type="file" id="attInput" multiple hidden>
     <div class="status" id="pasteStatus"></div>
   </section>
 </div>
@@ -2114,7 +2127,7 @@ const UNDO_LABEL = {
   delRule: '아이콘 규칙 삭제', skipOcc: '반복 일정 한 번 빼기', edSave: '일정 편집', bdSave: '불가 시간 설정', saveSettings: '설정 변경', imSave: '아이콘 색·이름',
   pushG: '구글에 추가', fEvent: '일정 추가', fBlock: '불가 시간 추가', taskForm: '할 일 추가', importData: '파일 가져오기'
 };
-const UNDO_SKIP = new Set(['toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
+const UNDO_SKIP = new Set(['attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
 function undoSnap() {
   const o = { settings: JSON.parse(JSON.stringify(S.settings)) };
   for (const c of COLS) o[c] = JSON.parse(JSON.stringify(S[c]));
@@ -2286,6 +2299,186 @@ async function applyRefAction(a) {
   if (r === 'ok' && c.date && c.date !== g.date) { const m = S.marks.find(x => x.id === a.ref); if (m) setMark(`g:${g.id}:${c.date}`, { imp: m.imp, icon: m.icon }); }
   return { n: r === 'ok' ? 1 : 0, date: nd, g: r || 'none' };
 }
+
+/* ---------- attachments: read text in the browser, keep originals in the Drive folder ---------- */
+const LIBS = {
+  xlsx: 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js',
+  mammoth: 'https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js',
+  pdf: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js',
+  pdfWorker: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js',
+  jszip: 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js'
+};
+const _libs = {};
+function loadLib(k) {
+  return _libs[k] ||= new Promise((res, rej) => {
+    const s = document.createElement('script'); s.src = LIBS[k]; s.async = true;
+    s.onload = () => res(); s.onerror = () => { delete _libs[k]; rej(new Error('lib')); };
+    document.head.appendChild(s);
+  });
+}
+const ATT_FILE_MAX = 30000, ATT_PROMPT_MAX = 60000, ATT_SIZE_MAX = 25 * 1024 * 1024;
+const fmtSize = n => n < 1024 ? n + 'B' : n < 1048576 ? Math.round(n / 1024) + 'KB' : (n / 1048576).toFixed(1) + 'MB';
+function attKind(name) {
+  const ext = (String(name).toLowerCase().match(/\.([a-z0-9]+)$/) || [])[1] || '';
+  if (['xlsx', 'xlsm', 'xls', 'ods'].includes(ext)) return 'sheet';
+  if (ext === 'csv' || ext === 'tsv') return 'csv';
+  if (ext === 'docx') return 'docx';
+  if (ext === 'pdf') return 'pdf';
+  if (ext === 'hwpx') return 'hwpx';
+  if (ext === 'hwp') return 'hwp';
+  if (ext === 'pptx') return 'pptx';
+  if (['txt', 'md', 'json', 'html', 'htm', 'xml', 'eml'].includes(ext)) return 'text';
+  if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'heic'].includes(ext)) return 'image';
+  if (ext === 'zip') return 'zip';
+  return 'other';
+}
+const ATT_KO = { sheet: '엑셀', csv: 'CSV', docx: '워드', pdf: 'PDF', hwpx: '한글', hwp: '한글', pptx: '파워포인트', text: '텍스트', image: '이미지', zip: '압축', other: '파일' };
+// a colored cell fill (e.g. "the rows marked in yellow") is part of the meaning, so it is written next to the row
+function fillName(rgb) {
+  const h = String(rgb || '').replace(/^FF(?=[0-9A-F]{6}$)/i, '');
+  if (!/^[0-9a-f]{6}$/i.test(h)) return '';
+  const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
+  if (r > 235 && g > 235 && b > 235) return '';
+  if (r > 200 && g > 180 && b < 160) return '노란색';
+  if (r > 200 && g < 150 && b < 150) return '빨간색';
+  if (g > 160 && r < 190 && b < 190) return '초록색';
+  if (b > 170 && r < 190) return '파란색';
+  if (r > 200 && g > 120 && b < 100) return '주황색';
+  if (Math.abs(r - g) < 20 && Math.abs(g - b) < 20) return '회색';
+  return '색 #' + h.toUpperCase();
+}
+async function sheetText(buf) {
+  await loadLib('xlsx');
+  const wb = XLSX.read(buf, { type: 'array', cellStyles: true, cellDates: true });
+  const out = [], marks = {};
+  for (const name of wb.SheetNames.slice(0, 12)) {
+    const ws = wb.Sheets[name]; if (!ws || !ws['!ref']) continue;
+    const rg = XLSX.utils.decode_range(ws['!ref']); const lines = [];
+    for (let R = rg.s.r; R <= Math.min(rg.e.r, rg.s.r + 600); R++) {
+      const cells = []; let mark = '';
+      for (let C = rg.s.c; C <= Math.min(rg.e.c, rg.s.c + 40); C++) {
+        const c = ws[XLSX.utils.encode_cell({ r: R, c: C })];
+        const v = c ? String(c.w != null ? c.w : c.v != null ? c.v : '').replace(/\s+/g, ' ').trim() : '';
+        cells.push(v);
+        const s = c && c.s; const col = s && (s.patternType === 'solid' || s.fgColor) ? fillName((s.fgColor && s.fgColor.rgb) || (s.bgColor && s.bgColor.rgb)) : '';
+        if (col && v) mark = mark || col;
+      }
+      while (cells.length && !cells[cells.length - 1]) cells.pop();
+      if (!cells.length) continue;
+      if (mark) marks[mark] = (marks[mark] || 0) + 1;
+      lines.push(`${R + 1}행${mark ? ` [${mark} 표시]` : ''}: ${cells.join(' | ')}`);
+    }
+    if (rg.e.r - rg.s.r > 600) lines.push(`… (${rg.e.r - rg.s.r + 1}행 중 앞 600행만)`);
+    if (lines.length) out.push(`[시트: ${name}]\n${lines.join('\n')}`);
+  }
+  const mk = Object.entries(marks).map(([k, n]) => `${k} ${n}행`).join(', ');
+  return { text: out.join('\n\n'), note: mk ? `색 표시: ${mk}` : '' };
+}
+async function pdfText(buf) {
+  await loadLib('pdf');
+  const lib = window.pdfjsLib; lib.GlobalWorkerOptions.workerSrc = LIBS.pdfWorker;
+  const doc = await lib.getDocument({ data: new Uint8Array(buf) }).promise; const parts = [];
+  for (let i = 1; i <= Math.min(doc.numPages, 60); i++) {
+    const tc = await (await doc.getPage(i)).getTextContent();
+    parts.push(`[${i}쪽]\n` + tc.items.map(x => x.str + (x.hasEOL ? '\n' : ' ')).join('').replace(/[ \t]+\n/g, '\n').trim());
+  }
+  const t = parts.join('\n\n');
+  return { text: t, note: (doc.numPages > 60 ? `${doc.numPages}쪽 중 앞 60쪽만 · ` : '') + (t.replace(/\[\d+쪽\]|\s/g, '').length < 20 ? '글자가 거의 없습니다 (스캔 이미지 PDF일 수 있음)' : '') };
+}
+async function zipXmlText(buf, re, tagRe) {
+  await loadLib('jszip');
+  const z = await JSZip.loadAsync(buf);
+  const names = Object.keys(z.files).filter(n => re.test(n)).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  const parts = [];
+  for (const n of names) {
+    const x = await z.file(n).async('string');
+    parts.push(x.replace(/<\/(hp:p|a:p|w:p)>/g, '\n').replace(tagRe, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/\n{3,}/g, '\n\n').trim());
+  }
+  return parts.filter(Boolean);
+}
+async function extractAtt(file) {
+  const kind = attKind(file.name);
+  if (file.size > ATT_SIZE_MAX) return { kind, text: '', note: '25MB가 넘어 내용은 읽지 않았습니다' };
+  try {
+    if (kind === 'image') return { kind, text: '', note: '이미지는 글자를 읽지 못합니다. 중요하면 Claude 대화창에 이미지를 직접 올려 주세요' };
+    if (kind === 'hwp') return { kind, text: '', note: '옛 한글(.hwp)은 브라우저에서 읽을 수 없습니다. 한글에서 PDF나 .hwpx로 저장해 넣어 주세요' };
+    if (kind === 'zip' || kind === 'other') return { kind, text: '', note: '내용은 읽지 않고 파일만 보관합니다' };
+    if (kind === 'text' || kind === 'csv') { let t = await file.text(); if (/\.html?$/i.test(file.name)) t = t.replace(/<style[\s\S]*?<\/style>|<script[\s\S]*?<\/script>/gi, '').replace(/<[^>]+>/g, ' ').replace(/[ \t]+/g, ' '); return { kind, text: t, note: '' }; }
+    const buf = await file.arrayBuffer();
+    if (kind === 'sheet') return { kind, ...(await sheetText(buf)) };
+    if (kind === 'pdf') return { kind, ...(await pdfText(buf)) };
+    if (kind === 'docx') { await loadLib('mammoth'); const r = await mammoth.extractRawText({ arrayBuffer: buf }); return { kind, text: r.value, note: '' }; }
+    if (kind === 'hwpx') { const p = await zipXmlText(buf, /^Contents\/section\d+\.xml$/i, /<[^>]+>/g); return { kind, text: p.join('\n\n'), note: '' }; }
+    if (kind === 'pptx') { const p = await zipXmlText(buf, /^ppt\/slides\/slide\d+\.xml$/i, /<[^>]+>/g); return { kind, text: p.map((x, i) => `[슬라이드 ${i + 1}]\n${x}`).join('\n\n'), note: '' }; }
+  } catch (e) {
+    if (e && e.message === 'lib') return { kind, text: '', note: '파일을 읽는 도구를 불러오지 못했습니다 (인터넷 연결 확인)', fail: true };
+    return { kind, text: '', note: '내용을 읽지 못했습니다 (암호가 걸렸거나 손상된 파일일 수 있음)', fail: true };
+  }
+  return { kind, text: '', note: '' };
+}
+// pending attachments in the auto-processing box
+UI.att = [];
+function addAttFiles(files) {
+  for (const f of [...files].slice(0, 15)) {
+    if (UI.att.some(x => x.name === f.name && x.size === f.size)) continue;
+    const it = { id: uid(), file: f, name: f.name, size: f.size, state: 'reading', text: '', note: '' };
+    UI.att.push(it);
+    it.p = extractAtt(f).then(r => { Object.assign(it, r, { state: r.fail ? 'fail' : r.text ? 'ok' : 'skip' }); renderAttList(); });
+  }
+  renderAttList();
+}
+function attChip(x, removeAct) {
+  const st = x.state === 'reading' ? '<span class="spin"></span>읽는 중' : x.state === 'ok' ? `${ic('check')}${(x.chars || x.text.length).toLocaleString()}자` : x.state === 'fail' ? `${ic('alert')}못 읽음` : '보관만';
+  return `<span class="attchip ${x.state || ''}" title="${esc(x.name + (x.note ? ' · ' + x.note : ''))}">${ic('doc')}<b>${esc(x.name)}</b><span class="count">${ATT_KO[x.kind || attKind(x.name)]} · ${fmtSize(x.size || 0)} · ${st}</span>${removeAct ? `<button class="x" type="button" ${removeAct} aria-label="빼기">✕</button>` : ''}</span>`;
+}
+function renderAttList() {
+  const el = $('attList'); if (!el) return;
+  el.innerHTML = UI.att.map(x => attChip(x, `data-act="attRemove" data-id="${x.id}"`)).join('');
+  el.hidden = !UI.att.length;
+}
+async function pendingAtts() {
+  await Promise.all(UI.att.map(x => x.p));
+  return UI.att.map(x => ({ id: x.id, file: x.file, name: x.name, size: x.size, type: x.file.type || '', kind: x.kind || attKind(x.name), text: (x.text || '').slice(0, ATT_FILE_MAX), chars: (x.text || '').length, cut: (x.text || '').length > ATT_FILE_MAX, note: x.note || '', at: todayStr() }));
+}
+const safeName = n => String(n).replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').slice(0, 150) || 'file';
+async function saveAttFiles(emailId, list) {
+  if (!fsReady()) return false;
+  try {
+    const root = await FS.handle.getDirectoryHandle('attachments', { create: true });
+    const dir = await root.getDirectoryHandle(emailId, { create: true });
+    let all = true;
+    for (const [i, a] of list.entries()) {
+      if (!a.file) continue;
+      const ext = (a.name.match(/\.[A-Za-z0-9]{1,8}$/) || [''])[0];
+      for (const nm of [safeName(a.name), `file${i + 1}-${Date.now().toString(36)}${ext}`]) {
+        try { const fh = await dir.getFileHandle(nm, { create: true }); const w = await fh.createWritable(); await w.write(a.file); await w.close(); a.saved = true; a.stored = nm; break; } catch {}
+      }
+      if (!a.saved) all = false;
+    }
+    return all;
+  } catch { return false; }
+}
+const attRecord = list => list.map(({ file, ...r }) => r);
+async function openAttFile(emailId, name) {
+  const m = S.emails.find(x => x.id === emailId), rec = m && (m.attachments || []).find(x => x.name === name);
+  if (!fsReady()) { toast('저장 폴더가 연결되어 있어야 원본을 열 수 있습니다. 위쪽 "저장 폴더"를 눌러 주세요.'); return; }
+  try {
+    const f = await (await (await (await FS.handle.getDirectoryHandle('attachments')).getDirectoryHandle(emailId)).getFileHandle((rec && rec.stored) || safeName(name))).getFile();
+    const url = URL.createObjectURL(f); const a = document.createElement('a'); a.href = url; a.target = '_blank'; a.rel = 'noopener';
+    if (!/^(application\/pdf|image\/|text\/)/.test(f.type)) a.download = f.name;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch { toast('저장 폴더에서 이 파일을 찾지 못했습니다. 다른 PC에서 넣었다면 드라이브 동기화가 끝났는지 확인해 주세요.'); }
+}
+function attPromptBlock(list) {
+  const atts = (list || []).filter(Boolean); if (!atts.length) return '';
+  let budget = ATT_PROMPT_MAX;
+  const parts = atts.map((a, i) => {
+    const t = (a.text || '').slice(0, Math.max(0, Math.min(ATT_FILE_MAX, budget))); budget -= t.length;
+    return `[첨부 ${i + 1}] ${a.name} (${ATT_KO[a.kind] || '파일'}${a.note ? ' · ' + a.note : ''})${t ? `\n"""\n${t}${(a.cut || t.length < (a.text || '').length) ? '\n… (뒤는 생략)' : ''}\n"""` : '\n(내용을 읽지 못함 — 파일 이름과 메일 본문으로만 판단하세요)'}`;
+  });
+  return `\n\n첨부파일 ${atts.length}개. 브라우저에서 글자만 뽑은 것이라 표 모양이나 서식은 일부 빠졌습니다. 엑셀은 "N행: 칸 | 칸" 형태이고, 셀에 색이 칠해진 행은 [노란색 표시]처럼 적혀 있습니다.\n${parts.join('\n\n')}`;
+}
+const ATT_RULES = `첨부파일이 있으면 내용까지 읽고 반영하세요: 첨부 안의 날짜·마감·대상 목록·제출 양식을 events/tasks/답장/조교 지시에 쓰고, 조교 지시에는 어떤 첨부를 어떻게 처리할지(예: 엑셀의 노란색 행 검토) 구체적으로 쓰세요. "attachments" 항목에 첨부마다 한 줄 요약을 넣으세요.`;
 
 /* ---------- calendar (main) ---------- */
 const repDays = e => e.repeat && Array.isArray(e.repeat.days) && e.repeat.days.length ? e.repeat.days : null;
@@ -2549,6 +2742,29 @@ function renderBusy() {
 
 /* ---------- email sheet ---------- */
 function ev(id, def) { return esc(UI.edits[id] ?? def ?? ''); }
+function attSection(m) {
+  const list = m.attachments || []; const gists = (m.analysis && m.analysis.attachments) || [];
+  return `<div class="sec"><h4><span>${ic('doc')} 첨부파일 ${list.length}</span><button class="btn small" type="button" data-act="attAddMail">${ic('plus')}파일 추가</button></h4>
+    ${list.length ? list.map((x, i) => { const g = gists.find(y => y.name === x.name) || gists[i];
+      return `<div class="attrow">${attChip({ ...x, state: x.text ? 'ok' : x.note && /못/.test(x.note) ? 'fail' : 'skip' })}
+        ${g && g.gist ? `<div class="gist">${esc(g.gist)}</div>` : ''}${x.note ? `<div class="count">${esc(x.note)}</div>` : ''}
+        <div class="row">${x.saved ? `<button class="btn small" type="button" data-act="attOpen" data-id="${m.id}" data-name="${esc(x.name)}">${ic('ext')}원본 열기</button>` : '<span class="count">원본은 보관 안 됨 (저장 폴더 연결 필요)</span>'}
+        ${x.text ? `<details><summary class="count" style="cursor:pointer">읽은 내용 보기 (${(x.chars || x.text.length).toLocaleString()}자${x.cut ? ', 앞부분만 분석에 사용' : ''})</summary><pre>${esc(x.text.slice(0, 8000))}${x.text.length > 8000 ? '\n…' : ''}</pre></details>` : ''}</div></div>`; }).join('')
+      : '<div class="count">첨부파일이 없습니다. 메일에 딸린 파일이 있으면 "파일 추가"로 넣고 다시 분석하세요.</div>'}
+    <input type="file" id="attInput2" multiple hidden></div>`;
+}
+async function addAttToMail(m, files) {
+  const items = [...files].slice(0, 15).map(f => ({ id: uid(), file: f, name: f.name, size: f.size }));
+  toast('첨부파일을 읽는 중…');
+  for (const it of items) Object.assign(it, await extractAtt(it.file));
+  const rec = items.map(x => ({ id: x.id, file: x.file, name: x.name, size: x.size, type: x.file.type || '', kind: x.kind, text: (x.text || '').slice(0, ATT_FILE_MAX), chars: (x.text || '').length, cut: (x.text || '').length > ATT_FILE_MAX, note: x.note || '', at: todayStr() }));
+  undoArm('첨부파일 추가');
+  await patch('emails', m.id, { attachments: [...(m.attachments || []), ...attRecord(rec)] });
+  const ok = await saveAttFiles(m.id, rec);
+  { const mm = S.emails.find(x => x.id === m.id); const done = new Map(rec.filter(x => x.saved).map(x => [x.name, x.stored])); if (done.size) await patch('emails', m.id, { attachments: mm.attachments.map(x => done.has(x.name) ? { ...x, saved: true, stored: done.get(x.name) } : x) }); }
+  renderSheet(true);
+  toast(`첨부파일 ${rec.length}개를 넣었습니다. "다시 분석"을 누르면 내용이 분석에 반영됩니다.`);
+}
 function renderSheet(force) {
   const root = $('sheetRoot');
   if (!UI.openId) { root.innerHTML = ''; return; }
@@ -2602,6 +2818,7 @@ function renderSheet(force) {
       ${askIgnore(m) ? `<div class="ignban"><div>${ic('ban')} <b>나와 상관없는 메일 같습니다.</b> ${esc(m.ignoreReason || '')}</div><div class="row"><button class="btn primary" type="button" data-act="ignoreMail" data-id="${m.id}">${ic('ban')}무시하기</button><button class="btn" type="button" data-act="keepMail" data-id="${m.id}">아니요, 처리할게요</button><label class="chk"><input type="checkbox" checked>비슷한 메일은 다음에도 무시 제안</label></div></div>` : ''}
       ${m.analysis ? `<div class="sec"><h4>요약</h4><div class="summary">${esc(m.summary)}
         ${(a.openIssues || []).length ? `<ul class="issues">${a.openIssues.map(x => `<li>${ic('alert')}<span>${esc(x)}</span></li>`).join('')}</ul>` : ''}</div></div>
+        ${attSection(m)}
         ${(a.thread || []).length > 1 ? `<div class="sec"><h4><span>${ic('thread')} 스레드 흐름 ${a.thread.length}통</span></h4><ol class="timeline">${a.thread.map(t => `<li><div><div class="who">${t.date ? esc(fmtShort(t.date)) + ' · ' : ''}${esc(t.from)}</div>${esc(t.gist)}</div></li>`).join('')}</ol></div>` : ''}` :
         `<div class="sec"><div class="summary">아직 분석되지 않은 메일입니다. <button class="btn small primary" type="button" data-act="reanalyze">지금 분석</button></div></div>`}
       ${m.analysis ? `
@@ -2673,7 +2890,7 @@ function closeSheet() { if (UI.draftCtl) UI.draftCtl.abort(); UI.openId = null; 
 
 /* ---------- Claude prompts ---------- */
 function ctxLine() { const d = new Date(); return `오늘 날짜: ${ymd(d)} (${WD[d.getDay()]}요일). 현재 학기: ${S.settings.semesterLabel}.`; }
-function analysisPrompt(raw, cat) {
+function analysisPrompt(raw, cat, atts) {
   return `당신은 한국 대학교 컴퓨터공학과 학과장의 업무 비서입니다. 학과장이 붙여넣은 이메일을 분석하세요.
 ${ctxLine()}
 학과장이 직접 고른 분류: ${cat}
@@ -2710,10 +2927,11 @@ ${(S.settings.ignoreHints || []).length ? '학과장이 전에 "상관없다"며
 답장 초안 규칙: 받는 사람에 맞는 인사 → 요청에 대한 답 → 확인·요청 사항 → 맺음말. 학과장이 아직 정하지 않은 사실(참석 여부, 승인 여부, 구체적 수치)은 [대괄호]로 비워 두세요. 마지막 줄 서명은 "${S.settings.signature}".
 제출·회신 마감은 events(종류 "마감")와 tasks 양쪽에 넣지 말고, 학과장이 직접 해야 하는 일은 tasks에, 참석하거나 기억해야 할 날짜는 events에 넣으세요.
 
+${(atts || []).length ? ATT_RULES + ' 형식: "attachments": [{"name": "파일 이름", "gist": "한 줄 요약"}]\n' : ''}
 이메일:
 """
 ${raw.slice(0, 24000)}
-"""`;
+"""${attPromptBlock(atts)}`;
 }
 function cleanAnalysis(a) {
   a = a && typeof a === 'object' ? a : {};
@@ -2729,6 +2947,7 @@ function cleanAnalysis(a) {
     tasks: (Array.isArray(a.tasks) ? a.tasks : []).filter(t => t && t.title).slice(0, 12).map(t => ({
       title: String(t.title).slice(0, 200), due: isDate(t.due) ? t.due : '', priority: pr(t.priority), added: false })),
     replyDraft: a.replyDraft ? String(a.replyDraft).slice(0, 8000) : '',
+    attachments: (Array.isArray(a.attachments) ? a.attachments : []).filter(x => x && x.name).slice(0, 20).map(x => ({ name: String(x.name).slice(0, 160), gist: String(x.gist || '').slice(0, 400) })),
     thread: (Array.isArray(a.thread) ? a.thread : []).filter(t => t && t.gist).slice(0, 30).map(t => ({ date: isDate(t.date) ? t.date : '', from: String(t.from || '').slice(0, 80), gist: String(t.gist).slice(0, 300) })),
     openIssues: (Array.isArray(a.openIssues) ? a.openIssues : []).filter(Boolean).slice(0, 10).map(x => String(x).slice(0, 200)),
     delegable: !!a.delegable,
@@ -2756,7 +2975,7 @@ function fieldsFrom(a, emailId) {
   const tks = a.tasks.map(t => ({ ...t, added: S.tasks.some(x => x.emailId === emailId && norm(x.title) === norm(t.title)) }));
   return {
     ...(a.subject ? { subject: a.subject } : {}), from: a.from, summary: a.summary, priority: a.priority, needsReply: a.needsReply,
-    replyDeadline: a.replyDeadline, analysis: { events: evs, tasks: tks, thread: a.thread, openIssues: a.openIssues },
+    replyDeadline: a.replyDeadline, analysis: { events: evs, tasks: tks, thread: a.thread, openIssues: a.openIssues, attachments: a.attachments },
     reply: { draft: a.replyOptions.length ? '' : a.replyDraft }, replyOptions: a.replyOptions, replyChoice: null,
     relevance: a.relevance, ignoreReason: a.ignoreReason, relevanceDecided: null,
     delegable: a.relevance === 'irrelevant' ? false : a.delegable, delegate: { draft: a.relevance === 'irrelevant' ? '' : a.delegateDraft }
@@ -2765,39 +2984,47 @@ function fieldsFrom(a, emailId) {
 async function analyzeNew() {
   const text = $('rawMail').value.trim();
   const st = $('pasteStatus');
-  if (!text) { st.className = 'status err'; st.textContent = '메일을 붙여넣거나 명령을 적어 주세요.'; return; }
-  if (looksLikeCommand(text) && !$('threadOf').value) {
+  if (!text && !UI.att.length) { st.className = 'status err'; st.textContent = '메일을 붙여넣거나 명령을 적어 주세요.'; return; }
+  if (!UI.att.length && looksLikeCommand(text) && !$('threadOf').value) {
     const r = parseCommand(text);
     if (r.sure) renderCmdPreview([r], text, false);
     else openChatPrompt(text);
     return;
   }
-  if (text.length < 10) { st.className = 'status err'; st.textContent = '메일 내용을 붙여넣어 주세요.'; return; }
+  if (text.length < 10 && !UI.att.length) { st.className = 'status err'; st.textContent = '메일 내용을 붙여넣어 주세요.'; return; }
   const cat = $('mailCat').value;
   const prevId = $('threadOf').value;
   const prev = prevId ? S.emails.find(x => x.id === prevId) : null;
-  const raw = prev ? `${prev.raw}\n\n----- 이어진 메일 (${todayStr()} 등록) -----\n${text}` : text;
+  if (UI.att.some(x => x.state === 'reading')) { st.className = 'status'; st.textContent = '첨부파일을 읽고 있습니다…'; }
+  const atts = await pendingAtts();
+  const body = text || `(본문 없음 · 첨부파일: ${atts.map(a => a.name).join(', ')})`;
+  const raw = prev ? `${prev.raw}\n\n----- 이어진 메일 (${todayStr()} 등록) -----\n${body}` : body;
+  const allAtts = [...((prev && prev.attachments) || []), ...atts];
   st.className = 'status'; st.textContent = prev ? '이전 메일과 합친 스레드 분석 프롬프트를 만들었습니다. AI 창에서 진행해 주세요.' : 'AI 창이 열렸습니다. 프롬프트를 복사해 Claude나 ChatGPT에 붙여넣고, 답을 다시 붙여넣어 주세요.';
   $('analyzeBtn').disabled = true; $('stopBtn').hidden = false;
   let a = null, errMsg = '';
   if (sample) {
     UI.analyzeCtl = new AbortController();
-    try { a = cleanAnalysis(await sample.json(analysisPrompt(raw, prev ? prev.category : cat), { title: '메일 분석 · ' + (text.split('\n').find(l => l.trim()) || '').slice(0, 40) })); }
+    try { a = cleanAnalysis(await sample.json(analysisPrompt(raw, prev ? prev.category : cat, allAtts), { title: '메일 분석 · ' + ((text.split('\n').find(l => l.trim()) || (atts[0] && atts[0].name) || '')).slice(0, 40) + (atts.length ? ` · 첨부 ${atts.length}` : '') })); }
     catch (e) { errMsg = sampleErr(e); if (e && e.code === 'cancelled') { done(); st.textContent = errMsg; return; } }
   }
   undoArm(prev ? '이어진 메일 처리' : '메일 자동 처리');
   try {
     let id;
     if (prev) {
-      const upd = { raw, status: 'open', replied: false, updatedAt: nowISO(), ...(a ? fieldsFrom(a, prev.id) : {}) };
+      const upd = { raw, status: 'open', replied: false, updatedAt: nowISO(), attachments: attRecord(allAtts), ...(a ? fieldsFrom(a, prev.id) : {}) };
       await patch('emails', prev.id, upd); id = prev.id;
     } else {
       const doc = { raw, category: cat, createdAt: nowISO(), status: 'open', replied: false,
-        subject: (text.split('\n').find(l => l.trim()) || '(제목 없음)').slice(0, 80), from: '', summary: '', priority: 'mid',
+        subject: (text.split('\n').find(l => l.trim()) || (atts[0] && atts[0].name) || '(제목 없음)').slice(0, 80), from: '', summary: '', priority: 'mid', attachments: attRecord(atts),
         needsReply: false, replyDeadline: null, analysis: null, reply: { draft: '' }, delegate: { draft: '' } };
       id = await add('emails', a ? { ...doc, ...fieldsFrom(a, '') } : doc);
     }
     $('rawMail').value = ''; $('threadOf').value = '';
+    if (atts.length) {
+      UI.att = []; renderAttList();
+      saveAttFiles(id, atts).then(ok => { const mm = S.emails.find(x => x.id === id); if (!mm) return; const done = new Map(atts.filter(x => x.saved).map(x => [x.name, x.stored])); if (done.size) patch('emails', id, { attachments: (mm.attachments || []).map(x => done.has(x.name) ? { ...x, saved: true, stored: done.get(x.name) } : x) }); if (!ok) toast(fsReady() ? '첨부파일 일부를 저장 폴더에 보관하지 못했습니다.' : '첨부파일 내용은 저장했지만, 저장 폴더가 연결되지 않아 원본 파일은 보관하지 못했습니다.'); });
+    }
     st.className = errMsg ? 'status err' : 'status';
     st.textContent = errMsg || `${a.relevance === 'irrelevant' ? '상관없는 메일로 보입니다. 무시할지 확인해 주세요' : `${prev ? '스레드를 갱신했습니다' : '등록했습니다'}. 일정 ${a.events.length}건, 할 일 ${a.tasks.length}건${a.replyOptions.length ? `, 답장 옵션 ${a.replyOptions.length}개` : a.replyDraft ? ', 답장 초안' : ''}${a.delegable ? ', 조교 지시 메일' : ''}`}.`;
     UI.mf = 'open'; UI.rail = 'mail'; syncTabs(); renderAll();
@@ -2811,7 +3038,7 @@ async function reanalyze(m) {
   if (!sample) { toast('이 화면에서는 Claude를 쓸 수 없습니다.'); return; }
   toast('분석 중…');
   try {
-    const a = cleanAnalysis(await sample.json(analysisPrompt(m.raw, m.category), { title: '다시 분석 · ' + (m.subject || '').slice(0, 40) }));
+    const a = cleanAnalysis(await sample.json(analysisPrompt(m.raw, m.category, m.attachments), { title: '다시 분석 · ' + (m.subject || '').slice(0, 40) }));
     const fx = fieldsFrom(a, m.id);
     if (m.relevanceDecided === 'kept') { fx.relevance = 'relevant'; fx.relevanceDecided = 'kept'; }
     await patch('emails', m.id, fx);
@@ -2825,7 +3052,7 @@ async function writeDelegate(m) {
   const note = ($('delegNote').value || '').trim(), current = ta.value.trim();
   const a = m.analysis || {};
   const prompt = `당신은 한국 대학교 컴퓨터공학과 학과장의 비서입니다. 학과장이 ${S.settings.assistant}에게 보낼 업무 지시 메일을 쓰세요. 설명 없이 메일만 출력합니다.
-${ctxLine()}
+${ctxLine()}${(m.attachments || []).length ? `\n이 메일의 첨부파일(조교에게 함께 전달함): ${m.attachments.map(x => x.name).join(', ')}. 지시에서 파일 이름으로 가리키고 무엇을 확인·작성할지 쓰세요.` : ''}
 형식: 첫 줄 "제목: ...", 빈 줄, 본문. 본문은 배경 한두 문장 → 해야 할 일을 번호 목록으로(각 항목에 산출물과 기한) → 참고할 원메일·자료 → 학과장 확인이 필요한 지점 → 완료 보고 방식. 조교가 원메일을 따로 보지 않아도 일할 수 있게 구체적으로. 학과장이 정할 사항은 [대괄호]. 서명은 "학과장".
 스레드라면 이전 메일에서 이미 처리된 일은 빼고, 가장 최근 메일 기준으로 남은 일만 지시하세요.
 ${note ? '학과장의 추가 지시: ' + note : ''}
@@ -3090,6 +3317,10 @@ document.addEventListener('click', async ev0 => {
       case 'undo': return doUndo(false);
       case 'redo': return doUndo(true);
       case 'cmdAI': { const c = UI.cmd; if (c) openChatPrompt(c.text); return; }
+      case 'attPick': return $('attInput').click();
+      case 'attRemove': UI.att = UI.att.filter(x => x.id !== id); return renderAttList();
+      case 'attOpen': return openAttFile(el.dataset.id, el.dataset.name);
+      case 'attAddMail': return $('attInput2') && $('attInput2').click();
       case 'toChat': { const t = $('rawMail').value.trim(); if (!t) { const st = $('pasteStatus'); st.className = 'status err'; st.textContent = '먼저 명령을 적어 주세요.'; return; } return openChatPrompt(t); }
       case 'chatCopy': return chatCopy(el);
       case 'chatJson': { const t = UI.chat && UI.chat.text; $('dlgRoot').innerHTML = ''; UI.dlg = null; if (t) runCommandAI(t); return; }
@@ -3243,7 +3474,20 @@ document.addEventListener('click', async ev0 => {
   } catch (e) { dbErr(e); }
 });
 document.addEventListener('input', e => { if (e.target.closest('#sheetRoot') && e.target.id) UI.edits[e.target.id] = e.target.value; });
-document.addEventListener('change', e => { if (e.target.closest('#sheetRoot') && e.target.id) UI.edits[e.target.id] = e.target.value; });
+document.addEventListener('change', e => { if (e.target.closest('#sheetRoot') && e.target.id && e.target.type !== 'file') UI.edits[e.target.id] = e.target.value; });
+document.addEventListener('change', e => {
+  if (e.target.id === 'attInput' && e.target.files.length) { addAttFiles(e.target.files); e.target.value = ''; }
+  if (e.target.id === 'attInput2' && e.target.files.length) { const mm = UI.openId && S.emails.find(x => x.id === UI.openId); if (mm) addAttToMail(mm, e.target.files); e.target.value = ''; }
+});
+// a file dropped anywhere else must not replace the dashboard page
+document.addEventListener('dragover', e => { if (e.dataTransfer && [...(e.dataTransfer.types || [])].includes('Files')) e.preventDefault(); });
+document.addEventListener('drop', e => { if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length && !e.target.closest('.quick')) { e.preventDefault(); addAttFiles(e.dataTransfer.files); toast('첨부파일로 넣었습니다. 아래 자동 처리 칸을 확인하세요.'); } });
+{ const q = document.querySelector('.quick');
+  const isFiles = e => e.dataTransfer && [...(e.dataTransfer.types || [])].includes('Files');
+  q.addEventListener('dragover', e => { if (!isFiles(e)) return; e.preventDefault(); q.classList.add('dropfile'); });
+  q.addEventListener('dragleave', e => { if (!q.contains(e.relatedTarget)) q.classList.remove('dropfile'); });
+  q.addEventListener('drop', e => { if (!isFiles(e)) return; e.preventDefault(); q.classList.remove('dropfile'); if (e.dataTransfer.files.length) addAttFiles(e.dataTransfer.files); });
+  $('rawMail').addEventListener('paste', e => { const fs = e.clipboardData && e.clipboardData.files; if (fs && fs.length) { e.preventDefault(); addAttFiles(fs); } }); }
 document.addEventListener('keydown', e => {
   if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('[role="button"][data-act]')) { e.preventDefault(); e.target.click(); return; }
   if (e.key === 'Escape') { if (UI.dlg === 'relay') relayCancel(); else if ($('dlgRoot').innerHTML) { if (UI.dlg === 'settings') applyImpStyle(); $('dlgRoot').innerHTML = ''; UI.dlg = null; } else if (UI.openId) closeSheet(); else if (UI.dayForm) { UI.dayForm = null; renderDay(true); } }
@@ -3408,7 +3652,7 @@ setTimeout(() => { if (gasOn()) signIn(); }, 400);
 setInterval(() => { syncNow(); if (gasOn() && !G.cals.length && G.state !== 'loading') signIn(); else if (gReady()) gLoad(false); else renderAll(); }, 60000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { syncNow(); if (gReady()) gLoad(false); } });
 window.addEventListener('beforeunload', e => { if (DRIVE.dirty && fsReady()) { syncNow(); e.preventDefault(); e.returnValue = ''; } });
-if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__dd = { S, add, UNDO, snapshot, mergeIn, renderAll };
+if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__dd = { S, add, UNDO, snapshot, mergeIn, renderAll, FS };
 })();
 </script>
 </body>
