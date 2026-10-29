@@ -304,7 +304,7 @@ textarea.field{resize:vertical;width:100%;line-height:1.55}
 .ev{grid-template-columns:1.2rem 1fr auto}
 .btn{display:inline-flex;align-items:center;gap:.35rem}
 .timeline{list-style:none;margin:0;padding:0 0 0 .3rem;display:flex;flex-direction:column}
-.timeline li{display:grid;grid-template-columns:.8rem 1fr;gap:.6rem;position:relative;padding-bottom:.6rem}
+.timeline li{display:grid;grid-template-columns:.8rem minmax(0,1fr);gap:.6rem;position:relative;padding-bottom:.6rem}
 .timeline li::before{content:"";width:.55rem;height:.55rem;border-radius:50%;background:var(--line);margin-top:.45rem}
 .timeline li:last-child::before{background:var(--accent)}
 .timeline li:not(:last-child)::after{content:"";position:absolute;left:.25rem;top:1.1rem;bottom:0;width:1px;background:var(--line)}
@@ -2602,7 +2602,7 @@ function renderSheet(force) {
       ${askIgnore(m) ? `<div class="ignban"><div>${ic('ban')} <b>나와 상관없는 메일 같습니다.</b> ${esc(m.ignoreReason || '')}</div><div class="row"><button class="btn primary" type="button" data-act="ignoreMail" data-id="${m.id}">${ic('ban')}무시하기</button><button class="btn" type="button" data-act="keepMail" data-id="${m.id}">아니요, 처리할게요</button><label class="chk"><input type="checkbox" checked>비슷한 메일은 다음에도 무시 제안</label></div></div>` : ''}
       ${m.analysis ? `<div class="sec"><h4>요약</h4><div class="summary">${esc(m.summary)}
         ${(a.openIssues || []).length ? `<ul class="issues">${a.openIssues.map(x => `<li>${ic('alert')}<span>${esc(x)}</span></li>`).join('')}</ul>` : ''}</div></div>
-        ${(a.thread || []).length > 1 ? `<div class="sec"><h4><span>${ic('thread')} 스레드 흐름 ${a.thread.length}통</span></h4><ol class="timeline">${a.thread.map(t => `<li><span></span><div><div class="who">${t.date ? esc(fmtShort(t.date)) + ' · ' : ''}${esc(t.from)}</div>${esc(t.gist)}</div></li>`).join('')}</ol></div>` : ''}` :
+        ${(a.thread || []).length > 1 ? `<div class="sec"><h4><span>${ic('thread')} 스레드 흐름 ${a.thread.length}통</span></h4><ol class="timeline">${a.thread.map(t => `<li><div><div class="who">${t.date ? esc(fmtShort(t.date)) + ' · ' : ''}${esc(t.from)}</div>${esc(t.gist)}</div></li>`).join('')}</ol></div>` : ''}` :
         `<div class="sec"><div class="summary">아직 분석되지 않은 메일입니다. <button class="btn small primary" type="button" data-act="reanalyze">지금 분석</button></div></div>`}
       ${m.analysis ? `
       <div class="sec"><h4><span>일정 ${evs.length}</span>${evs.filter(e => !e.added && !e.skipped).length > 1 ? '<button class="btn small" type="button" data-act="addAllEv">모두 추가</button>' : ''}</h4>
