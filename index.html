@@ -423,6 +423,21 @@ a.btn{text-decoration:none;color:inherit}
 .chead{flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:.2rem}
 .dn{flex-direction:column;align-items:flex-start;gap:.1rem;line-height:1.1}
 .citems{justify-content:end}
+/* "titles" mode: like Google Calendar, one line per item with a small icon and a cut-off title */
+.cell-titles .cell{display:flex;flex-direction:column}
+.cell-titles .chead{flex-direction:row;align-items:center;justify-content:space-between}
+.cell-titles .dn{flex-direction:row;align-items:center;gap:.3rem}
+.cell-titles .citems{display:flex!important;flex-direction:column;gap:1px!important;justify-content:start}
+.cell-titles .ci2{--cis:.92rem;width:.92rem;height:.92rem;border-radius:3px;border-width:1px}
+.cell-titles .ci2 .ic{width:.66rem;height:.66rem}
+.crow{display:flex;align-items:center;gap:.22rem;min-width:0;font-size:.7rem;line-height:1.15;padding:0 .1rem;border-radius:3px;white-space:nowrap}
+.crow:hover{background:var(--surface)}
+.crow .ctm{font-family:var(--mono);font-size:.66rem;color:var(--muted);flex:none}
+.crow .cnm{overflow:hidden;text-overflow:ellipsis;min-width:0}
+.crow.busy .cnm{color:var(--muted)}
+.crow[draggable="true"]{cursor:grab}
+.cell{position:relative}
+.cell-titles .citems .more{position:absolute;right:.3rem;bottom:.2rem;width:auto;height:auto;padding:0 .3rem;border:0;border-radius:4px;background:var(--surface);color:var(--ink);font-size:.62rem;line-height:1.3}
 .cell:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
 .imlist{display:grid;grid-template-columns:repeat(auto-fill,minmax(15rem,1fr));gap:.35rem;max-height:56vh;overflow:auto}
 .imrow{display:grid;grid-template-columns:1.6rem minmax(0,1fr) 2.2rem auto;gap:.4rem;align-items:center;background:var(--surface-2);border-radius:8px;padding:.3rem .45rem}
@@ -2003,12 +2018,46 @@ async function applyActions(actions) {
 }
 
 /* ---------- AI relay: copy prompt → paste answer ---------- */
+// repairs what chat apps do to JSON when it is copied: real line breaks inside strings, stray backslashes, smart quotes, trailing commas
+function repairJson(t) {
+  let out = '', inStr = false;
+  for (let i = 0; i < t.length; i++) {
+    const c = t[i];
+    if (!inStr) {
+      if (c === '"' || c === '“' || c === '”') { inStr = true; out += '"'; continue; }
+      if (c === '\\') continue;
+      if (c === ',') { let j = i + 1; while (j < t.length && /\s/.test(t[j])) j++; if (t[j] === '}' || t[j] === ']') continue; }
+      out += c; continue;
+    }
+    if (c === '\\') {
+      const n = t[i + 1];
+      if (n === undefined) break;
+      if (n === '\n' || n === '\r') { i++; if (n === '\r' && t[i + 1] === '\n') i++; continue; }
+      if ('"\\/bfnrt'.includes(n)) { out += c + n; i++; continue; }
+      if (n === 'u' && /^[0-9a-fA-F]{4}$/.test(t.slice(i + 2, i + 6))) { out += t.slice(i, i + 6); i += 5; continue; }
+      continue;
+    }
+    if (c === '"') {
+      // a quote that does not end the string (next non-space char is not , : } ]) is part of the text
+      let j = i + 1; while (j < t.length && /[ \t]/.test(t[j])) j++;
+      if (j < t.length && !/[,:}\]\r\n\\]/.test(t[j])) { out += '\\"'; continue; }
+      inStr = false; out += '"'; continue;
+    }
+    if (c === '\n') { out += '\\n'; continue; }
+    if (c === '\r') continue;
+    if (c === '\t') { out += '\\t'; continue; }
+    out += c;
+  }
+  return out;
+}
 function parseLoose(t) {
   t = String(t || '').trim();
-  try { return JSON.parse(t); } catch {}
-  const f = t.match(/```(?:json)?\s*([\s\S]*?)```/); if (f) { try { return JSON.parse(f[1]); } catch {} }
+  const tries = [t];
+  const f = t.match(/```(?:json)?\s*([\s\S]*?)```/); if (f) tries.push(f[1]);
   const a = Math.min(...['{', '['].map(c => t.indexOf(c)).filter(i => i >= 0)), b = Math.max(t.lastIndexOf('}'), t.lastIndexOf(']'));
-  if (isFinite(a) && b > a) { try { return JSON.parse(t.slice(a, b + 1)); } catch {} }
+  if (isFinite(a) && b > a) tries.push(t.slice(a, b + 1));
+  for (const x of tries) { try { return JSON.parse(x); } catch {} }
+  for (const x of tries) { try { return JSON.parse(repairJson(x)); } catch {} }
   throw new Error('json');
 }
 function relay({ title, prompt, json }) {
@@ -2264,19 +2313,19 @@ function cellItems(day) {
   const items = [], grp = (k, d) => ICON_GROUP[k] || d;
   for (const e of expandEvents().filter(e => e.date === day)) {
     const due = e.kind === '마감', timed = !e.span && toMin(e.time) != null, k = iconOfEvent(e), dk = (e.occ ? 'r:' : 'e:') + e.id;
-    items.push({ o: due ? 0 : timed ? 20 + toMin(e.time) / 1440 : 10, ic: k, kc: grp(k, 'kc-' + (e.kind || '학사')), tm: timed ? e.time : '', tx: (impOfEvent(e) === 'high' ? '[중요] ' : '') + e.title + (e.googleId ? ' (구글에도 있음)' : ''), cls: (due ? 'hot' : (e.googleId || e.googleSent) ? 'synced' : '') + (impOfEvent(e) === 'high' ? ' imp' : ''), dk });
+    items.push({ o: due ? 0 : timed ? 20 + toMin(e.time) / 1440 : 10, ic: k, kc: grp(k, 'kc-' + (e.kind || '학사')), tm: timed ? e.time : '', nm: e.title, tx: (impOfEvent(e) === 'high' ? '[중요] ' : '') + e.title + (e.googleId ? ' (구글에도 있음)' : ''), cls: (due ? 'hot' : (e.googleId || e.googleSent) ? 'synced' : '') + (impOfEvent(e) === 'high' ? ' imp' : ''), dk });
   }
   for (const t of S.tasks.filter(t => !t.done && t.due === day)) {
     const k = iconOfTask(t);
-    items.push({ o: t.priority === 'high' ? 1 : 5, ic: k, kc: grp(k, 'kc-할일'), tx: '할 일 · ' + t.title, dk: 't:' + t.id, cls: 'task' + (t.priority === 'high' ? ' hot' : t.priority === 'low' ? ' dim' : '') });
+    items.push({ o: t.priority === 'high' ? 1 : 5, ic: k, kc: grp(k, 'kc-할일'), nm: t.title, tx: '할 일 · ' + t.title, dk: 't:' + t.id, cls: 'task' + (t.priority === 'high' ? ' hot' : t.priority === 'low' ? ' dim' : '') });
   }
   for (const m of S.emails.filter(m => needsReplyNow(m) && m.replyDeadline === day))
-    items.push({ o: 2, ic: 'reply', tx: '답장 기한 · ' + (m.subject || ''), cls: 'warn' });
-  for (const g of gAllDayOn(day)) { const k = iconOfG(g); items.push({ o: 9, ic: k, kc: grp(k, 'kc-g'), tx: `${impOfG(g) === 'high' ? '[중요] ' : ''}${g.title} (구글 · ${g.calName || ''})`, cls: 'g' + (g.free ? ' dim' : '') + (impOfG(g) === 'high' ? ' imp' : ''), gc: g.color, dk: g.recurring ? '' : 'g:' + gKey(g) }); }
-  for (const g of gOn(day)) { const k = iconOfG(g); items.push({ o: 20 + g.s / 1440, ic: k, kc: grp(k, 'kc-g'), tm: g.time, tx: `${impOfG(g) === 'high' ? '[중요] ' : ''}${g.title} (구글 · ${g.calName || ''})`, cls: 'g' + (g.free ? ' dim' : '') + (impOfG(g) === 'high' ? ' imp' : ''), gc: g.color, dk: g.recurring ? '' : 'g:' + gKey(g) }); }
+    items.push({ o: 2, ic: 'reply', nm: '답장 · ' + (m.subject || ''), tx: '답장 기한 · ' + (m.subject || ''), cls: 'warn' });
+  for (const g of gAllDayOn(day)) { const k = iconOfG(g); items.push({ o: 9, ic: k, kc: grp(k, 'kc-g'), nm: g.title, tx: `${impOfG(g) === 'high' ? '[중요] ' : ''}${g.title} (구글 · ${g.calName || ''})`, cls: 'g' + (g.free ? ' dim' : '') + (impOfG(g) === 'high' ? ' imp' : ''), gc: g.color, dk: g.recurring ? '' : 'g:' + gKey(g) }); }
+  for (const g of gOn(day)) { const k = iconOfG(g); items.push({ o: 20 + g.s / 1440, ic: k, kc: grp(k, 'kc-g'), tm: g.time, nm: g.title, tx: `${impOfG(g) === 'high' ? '[중요] ' : ''}${g.title} (구글 · ${g.calName || ''})`, cls: 'g' + (g.free ? ' dim' : '') + (impOfG(g) === 'high' ? ' imp' : ''), gc: g.color, dk: g.recurring ? '' : 'g:' + gKey(g) }); }
   if (day >= todayStr()) for (const b of [...blocksOn(day), ...weeklyOn(day)]) {
     const k = iconOfBlock(b);
-    items.push({ o: 40 + b.s / 1440, ic: k, tm: b.allDay ? '종일' : fromMin(b.s) + '–' + fromMin(b.e), tx: '불가 · ' + b.label, cls: 'busy' });
+    items.push({ o: 40 + b.s / 1440, ic: k, tm: b.allDay ? '종일' : fromMin(b.s) + '–' + fromMin(b.e), nm: b.label, tx: '불가 · ' + b.label, cls: 'busy' });
   }
   return items.sort((a, b) => a.o - b.o);
 }
@@ -2289,7 +2338,8 @@ function freeBadge(day) {
 }
 function renderCal() {
   if (!UI.month) { const d = new Date(); UI.month = new Date(d.getFullYear(), d.getMonth(), 1); }
-  const m = UI.month, t = todayStr(), wk = UI.view !== 'month';
+  const m = UI.month, t = todayStr(), wk = UI.view !== 'month', titles = S.settings.cellMode === 'titles';
+  document.body.classList.toggle('cell-titles', titles);
   const start = parse(gridStart()), rows = gridRows();
   if (wk) { const e = parse(addDays(gridStart(), rows * 7 - 1)); $('monthLabel').textContent = `${start.getMonth() + 1}월 ${start.getDate()}일 – ${e.getMonth() + 1}월 ${e.getDate()}일`; }
   else $('monthLabel').textContent = `${m.getFullYear()}년 ${m.getMonth() + 1}월`;
@@ -2304,7 +2354,9 @@ function renderCal() {
       s === t ? 'today' : '', s === UI.selDay ? 'sel' : '', s < t ? 'past' : '', workWin(s) ? '' : 'off'].join(' ');
     html += `<div role="button" tabindex="0" class="${cls}" data-act="pickDay" data-day="${s}" aria-label="${d.getMonth() + 1}월 ${d.getDate()}일, 항목 ${items.length}개">
       <span class="chead"><span class="dn">${wk && (d.getDate() === 1 || i === 0) ? `<b>${d.getMonth() + 1}월</b>` : ''}${d.getDate()}${s === t ? '<em>오늘</em>' : ''}</span>${freeBadge(s)}</span>
-      <span class="citems">${shown.map(x => `<span class="ci2 ${x.cls || ''}" title="${esc((x.tm ? x.tm + ' ' : '') + x.tx)}${x.dk ? ' · 끌어서 날짜 옮기기' : ''}"${x.gc ? ` style="--gc:${esc(x.gc)}"` : ''}${x.dk ? ` draggable="true" data-dk="${esc(x.dk)}"` : ''}>${ic(x.ic, x.kc || '')}</span>`).join('')}${more > 0 ? `<span class="more">+${more}</span>` : ''}</span>
+      <span class="citems">${shown.map(x => { const tip = esc((x.tm ? x.tm + ' ' : '') + x.tx) + (x.dk ? ' · 끌어서 날짜 옮기기' : ''), drag = x.dk ? ` draggable="true" data-dk="${esc(x.dk)}"` : '', st = x.gc ? ` style="--gc:${esc(x.gc)}"` : '';
+        const chip = `<span class="ci2 ${x.cls || ''}"${st}${titles ? '' : ` title="${tip}"${drag}`}>${ic(x.ic, x.kc || '')}</span>`;
+        return titles ? `<span class="crow ${/busy/.test(x.cls || '') ? 'busy' : ''}" title="${tip}"${drag}>${chip}${x.tm && x.tm !== '종일' ? `<span class="ctm">${esc(x.tm.slice(0, 5))}</span>` : ''}<span class="cnm">${esc(x.nm || x.tx)}</span></span>` : chip; }).join('')}${more > 0 ? `<span class="more">+${more}</span>` : ''}</span>
     </div>`;
   }
   const g = $('cal'); g.style.setProperty('--rows', rows); g.innerHTML = html;
@@ -2316,6 +2368,7 @@ function renderCal() {
 
 // size icons so a 3 x 3 grid fits inside one day cell
 function fitIcons(g) {
+  if (S.settings.cellMode === 'titles') { g.style.removeProperty('--cis'); return; }
   const c = g.querySelector('.cell'), h = c && c.querySelector('.chead'); if (!c || !h) return;
   const cs = getComputedStyle(c), gap = window.innerWidth <= 700 ? 1 : window.innerWidth >= 1100 ? 4 : 3;
   let hw = 0; g.querySelectorAll('.cell .chead').forEach(x => { hw = Math.max(hw, x.offsetWidth); });
@@ -3097,7 +3150,7 @@ document.addEventListener('click', async ev0 => {
       case 'settings': UI.dlg = 'settings'; return openSettings();
       case 'saveSettings': {
         const data = { ...S.settings, semesterLabel: $('sLabel').value.trim() || DEFAULTS.semesterLabel, semesterStart: isDate($('sStart').value) ? $('sStart').value : DEFAULTS.semesterStart, signature: $('sSig').value.trim() || DEFAULTS.signature, assistant: $('sAsst').value.trim() || DEFAULTS.assistant,
-          googleShow: $('sGShow').checked, googleBusy: $('sGBusy').checked, googlePush: $('sGPush').checked };
+          cellMode: $('sCellMode') && $('sCellMode').value === 'titles' ? 'titles' : 'icons', googleShow: $('sGShow').checked, googleBusy: $('sGBusy').checked, googlePush: $('sGPush').checked };
         if ($('impMode')) { const iv = impFormValues(); const amber = getComputedStyle(document.documentElement).getPropertyValue('--amber').trim(); data.impStyle = { ...iv, color: iv.color.toLowerCase() === amber.toLowerCase() ? '' : iv.color }; }
         { const gu = $('sGasUrl').value.trim(), gk = $('sGasKey').value.trim();
           if (gu && !/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(gu)) { toast('웹 앱 주소는 https://script.google.com/macros/s/…/exec 형태여야 합니다.'); return; }
@@ -3292,6 +3345,9 @@ function openSettings() {
     <label>개강 주 월요일 (주차 계산 기준)<input class="field" type="date" id="sStart" value="${esc(s.semesterStart)}"></label>
     <label>답장 서명<textarea class="field" id="sSig" rows="3">${esc(s.signature)}</textarea></label>
     <label>업무를 받는 조교 (이름·호칭)<input class="field" id="sAsst" value="${esc(s.assistant)}" placeholder="예: 김OO 조교"></label>
+    <div class="bsec"><b>${ic('cal')} 달력 칸 표시</b>
+      <label>달력 칸에<select class="field" id="sCellMode"><option value="icons" ${s.cellMode !== 'titles' ? 'selected' : ''}>아이콘만 (3×3 격자)</option><option value="titles" ${s.cellMode === 'titles' ? 'selected' : ''}>아이콘과 제목 (구글 캘린더처럼 한 줄씩)</option></select></label>
+      <span class="count">제목을 보이면 칸 너비만큼 앞부분만 보이고, 넘치는 것은 +숫자로 표시됩니다. 마우스를 올리면 전체 제목이 보입니다.</span></div>
     ${impSettingsHtml(s)}
     <div class="bsec"><b>${ic('spark')} 아이콘</b><div><button class="btn small" type="button" data-act="iconMgr">${ic('pen')}아이콘 ${ICON_LEGEND.length + 1}종 색·이름 바꾸기</button></div></div>
     <div class="bsec"><b>${ic('spark')} 기억한 아이콘 규칙</b>
