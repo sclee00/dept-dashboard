@@ -487,9 +487,9 @@ a.btn{text-decoration:none;color:inherit}
 .sheet{width:min(var(--sheetw,46rem),100%)}
 .gutter.sgrip{display:block;position:absolute;left:-5px;top:0;bottom:0;width:10px;z-index:2}
 .gutter.sgrip::after{top:45%;bottom:45%;left:50%;width:4px;transform:translateX(-50%);opacity:.5}
-.quick.sized{height:var(--qh);min-height:7rem;flex:none}
-.quick.sized .qbody{flex:1;min-height:0}
-.quick.sized #rawMail{height:100%;min-height:3rem;resize:none}
+.quick.sized{height:var(--qh);flex:none;overflow:auto;box-sizing:border-box}
+.quick.sized .qbody{flex:1 0 auto;min-height:0;grid-template-rows:minmax(0,1fr)}
+.quick.sized #rawMail{height:100%;min-height:2.6rem;resize:none;box-sizing:border-box}
 body.resizing{user-select:none} body.rs-col,body.rs-col *{cursor:col-resize!important} body.rs-row,body.rs-row *{cursor:row-resize!important}
 .cmdrow{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
 .cmdrow .ic{width:1.3rem;height:1.3rem}
@@ -2805,8 +2805,14 @@ let LAY = {}; try { LAY = JSON.parse(localStorage.getItem('dashLayout') || '{}')
 function applyLayout() {
   const r = document.documentElement.style, q = document.querySelector('.quick');
   for (const [k, a, b] of [['board', '--c1', '--c2'], ['rail', '--r1', '--r2']]) { if (LAY[k]) { r.setProperty(a, LAY[k][0] + 'fr'); r.setProperty(b, LAY[k][1] + 'fr'); } else { r.removeProperty(a); r.removeProperty(b); } }
-  if (LAY.qh && matchMedia('(min-width:1100px)').matches) { r.setProperty('--qh', LAY.qh + 'px'); q && q.classList.add('sized'); } else { r.removeProperty('--qh'); q && q.classList.remove('sized'); }
+  if (LAY.qh && matchMedia('(min-width:1100px)').matches) { r.setProperty('--qh', Math.max(LAY.qh, quickMin()) + 'px'); q && q.classList.add('sized'); } else { r.removeProperty('--qh'); q && q.classList.remove('sized'); }
   if (LAY.sheetw) r.setProperty('--sheetw', LAY.sheetw + 'px'); else r.removeProperty('--sheetw');
+}
+// the auto-processing box never gets smaller than its title row + buttons, so nothing spills over its border
+function quickMin() {
+  const q = document.querySelector('.quick'); if (!q) return 140;
+  const cs = getComputedStyle(q), h = q.querySelector('.qhead'), c = q.querySelector('.qctl');
+  return Math.ceil((h ? h.offsetHeight : 24) + (c ? c.offsetHeight : 90) + parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom) + 2 * (parseFloat(cs.rowGap) || 8) + 4);
 }
 const saveLayout = () => { try { localStorage.setItem('dashLayout', JSON.stringify(LAY)); } catch {} };
 function splitSizes(kind) {
@@ -2819,7 +2825,7 @@ function splitSizes(kind) {
 }
 function setSplit(kind, [a, b], dx, dy) {
   if (kind === 'board' || kind === 'rail') { const min = kind === 'board' ? 320 : 240, x = Math.max(min, Math.min(a + b - min, a + dx)); LAY[kind] = [Math.round(x), Math.round(a + b - x)]; }
-  if (kind === 'quick') LAY.qh = Math.round(Math.max(110, Math.min(window.innerHeight * 0.6, a - dy)));
+  if (kind === 'quick') LAY.qh = Math.round(Math.max(quickMin(), Math.min(window.innerHeight * 0.6, a - dy)));
   if (kind === 'sheet') LAY.sheetw = Math.round(Math.max(380, Math.min(window.innerWidth - 40, a - dx)));
   applyLayout(); const g = $('cal'); if (g) fitIcons(g);
 }
