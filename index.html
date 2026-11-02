@@ -472,6 +472,9 @@ a.btn{text-decoration:none;color:inherit}
 .fontcard .fsample.small{font-size:.76rem;color:var(--muted)}
 .tam{color:#7CC4FF} .tpm{color:#FFB45E}
 .tam,.tpm{font-variant-numeric:tabular-nums}
+.cmdnote{display:flex;gap:.4rem;align-items:flex-start;font-size:.9rem;line-height:1.5;white-space:pre-wrap;background:var(--surface);border-radius:8px;padding:.45rem .6rem}
+.cmdnote .ic{flex:none;margin-top:.15rem}
+.nextocc{color:var(--k-g)}
 .cmdrow{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
 .cmdrow .ic{width:1.3rem;height:1.3rem}
 .ic.cu{color:var(--icc)}
@@ -1680,6 +1683,7 @@ function renderGChip() {
   el.title = G.state === 'ok' ? '눌러서 새로 불러오기' : '';
 }
 async function pushGoogle(doc, id, calId, quiet) {
+  if (repComplex(doc)) { if (!quiet) toast('이 반복 규칙은 구글로 자동으로 보낼 수 없습니다. 날짜를 눌러 일정 옆 "구글에 추가" 링크로 넣어 주세요.'); return; }
   if (!gReady()) { toast('구글에 로그인한 뒤 "구글로" 버튼으로 다시 보내세요.'); return; }
   const body = { summary: doc.title, description: '학과장실 대시보드에서 추가' + (doc.emailId ? ' (메일에서 가져온 일정)' : '') };
   if (doc.location) body.location = doc.location;
@@ -1891,7 +1895,8 @@ function renderSync() {
     : st === 'broken' ? `${FILE_NAME}이 깨져 있어 덮어쓰지 않았습니다. 폴더의 backup 안 파일을 확인해 주세요.` : '눌러서 지금 저장·불러오기';
 }
 const BYDAY = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
-const rrule = e => repDays(e) ? `RRULE:FREQ=WEEKLY;BYDAY=${repDays(e).map(d => BYDAY[d]).join(',')}${isDate(e.repeat.until) ? ';UNTIL=' + e.repeat.until.replace(/-/g, '') + 'T235959' : ''}` : '';
+const rrule = e => repDays(e) && e.repeat.freq === 'monthly' && (e.repeat.nth || []).length ? `RRULE:FREQ=MONTHLY;BYDAY=${e.repeat.nth.flatMap(n => repDays(e).map(d => n + BYDAY[d])).join(',')}${isDate(e.repeat.until) ? ';UNTIL=' + e.repeat.until.replace(/-/g, '') + 'T235959' : ''}`
+  : repDays(e) ? `RRULE:FREQ=WEEKLY${(+e.repeat.interval || 1) > 1 ? ';INTERVAL=' + e.repeat.interval : ''};BYDAY=${repDays(e).map(d => BYDAY[d]).join(',')}${isDate(e.repeat.until) ? ';UNTIL=' + e.repeat.until.replace(/-/g, '') + 'T235959' : ''}` : '';
 function gTemplateUrl(e) {
   const q = new URLSearchParams({ action: 'TEMPLATE', text: e.title || '', details: '학과장실 대시보드에서 추가', ctz: TZ });
   if (rrule(e)) q.set('recur', rrule(e));
@@ -2049,35 +2054,36 @@ function parseCommand(raw) {
   return r;
 }
 function describeAction(a) {
-  if (['update', 'delete', 'done'].includes(a.type)) return describeRef(a);
-  const rep = a.repeat && a.repeat.days && a.repeat.days.length ? `매주 ${a.repeat.days.map(d => DOW_KO[d]).join('·')}요일` + (a.repeat.until ? ` (${fmtShort(a.repeat.until)}까지)` : '') : '';
+  if (['update', 'delete', 'done', 'skip'].includes(a.type)) return describeRef(a);
+  const rep = a.repeat && a.repeat.days && a.repeat.days.length ? repText({ repeat: a.repeat }) : '';
   const when = a.type === 'task' ? (a.due ? `${fmtShort(a.due)}까지` : '기한 없음')
     : [rep || (a.date ? fmtShort(a.date) : ''), a.allDay ? '종일' : a.time ? `${a.time}–${a.endTime || ''}` : ''].filter(Boolean).join(' ');
   const typeKo = { event: '일정', task: '할 일', block: '불가 시간' }[a.type] || '일정';
   return { typeKo, when, title: a.title };
 }
-function renderCmdPreview(actions, sourceText, fromAI) {
+function renderCmdPreview(actions, sourceText, fromAI, note) {
   UI.cmd = { actions, text: sourceText };
   const st = $('pasteStatus');
   st.className = 'status';
   st.innerHTML = `<div class="cmdbox">
-    <div class="cmdhead">${ic('spark')}<b>${fromAI ? 'Claude가 해석한 내용 · 확인 후 실행하세요' : '이렇게 처리할까요?'}</b></div>
-    ${actions.map((a, i) => { const d = describeAction(a); const k = a.type === 'update' ? 'pen' : a.type === 'done' ? 'check' : a.type === 'delete' ? 'ban' : a.type === 'block' ? 'lock' : a.type === 'task' ? iconFor(a.title, '할일') : iconFor(a.title, a.kind || '회의');
-      return `<div class="cmdrow">${ic(k, ICON_GROUP[k] || '')}<span class="pill ${a.type === 'delete' ? 'del' : 'pend'}">${d.typeKo}</span><b>${esc(d.title)}</b><span class="count">${esc(d.when)}</span>${a.type === 'event' && a.imp === 'high' ? '<span class="impbtn on">중요</span>' : ''}${(a.notes || []).map(n => `<span class="warnline">${esc(n)}</span>`).join('')}</div>`; }).join('')}
-    <div class="row"><button class="btn small primary" type="button" data-act="cmdApply">${ic('check')}${actions.length > 1 ? `${actions.length}개 모두 ` : ''}${actions.some(a => ['update', 'delete', 'done'].includes(a.type)) ? '실행' : '추가'}</button>
-      ${fromAI ? '' : `<button class="btn small" type="button" data-act="cmdAI">${ic('spark')}다르게 이해했어요 · Claude에게 맡기기</button>`}
+    <div class="cmdhead">${ic('spark')}<b>${fromAI ? 'AI가 해석한 내용 · 확인 후 실행하세요' : '이렇게 처리할까요?'}</b></div>
+    ${note ? `<div class="cmdnote">${ic('chat')}<span>${esc(note)}</span></div>` : ''}
+    ${actions.map((a, i) => { const d = describeAction(a); const k = a.type === 'update' ? 'pen' : a.type === 'done' ? 'check' : a.type === 'skip' ? 'dash' : a.type === 'delete' ? 'ban' : a.type === 'block' ? 'lock' : a.type === 'task' ? iconFor(a.title, '할일') : iconFor(a.title, a.kind || '회의');
+      return `<div class="cmdrow">${ic(k, ICON_GROUP[k] || '')}<span class="pill ${a.type === 'delete' ? 'del' : 'pend'}">${d.typeKo}</span><b>${esc(d.title)}</b><span class="count">${colorTimes(esc(d.when))}</span>${a.repeat ? `<span class="count nextocc">다음: ${nextOccurrences({ date: a.date, repeat: a.repeat }, 4, todayStr()).map(fmtShort).join(', ')}</span>` : ''}${a.type === 'event' && a.imp === 'high' ? '<span class="impbtn on">중요</span>' : ''}${(a.notes || []).map(n => `<span class="warnline">${esc(n)}</span>`).join('')}</div>`; }).join('')}
+    <div class="row"><button class="btn small primary" type="button" data-act="cmdApply">${ic('check')}${actions.length > 1 ? `${actions.length}개 모두 ` : ''}${actions.some(a => ['update', 'delete', 'done', 'skip'].includes(a.type)) ? '실행' : '추가'}</button>
+      ${fromAI ? '' : `<button class="btn small" type="button" data-act="cmdAI">${ic('spark')}다르게 이해했어요 · AI에게 맡기기</button>`}
       <button class="btn small" type="button" data-act="cmdCancel">취소</button></div>
   </div>`;
 }
 function cleanActions(arr) {
-  return (Array.isArray(arr) ? arr : []).slice(0, 30).map(a => !a ? null : ['update', 'delete', 'done'].includes(a.type) ? cleanRefAction(a) : a.title ? cleanNewActions([a])[0] : null).filter(Boolean);
+  return (Array.isArray(arr) ? arr : []).slice(0, 40).map(a => !a ? null : ['update', 'delete', 'done', 'skip'].includes(a.type) ? cleanRefAction(a) : a.title ? cleanNewActions([a])[0] : null).filter(Boolean);
 }
 function cleanNewActions(arr) {
   const kinds = ['회의', '행사', '마감', '학사'], hmRe = /^\d{2}:\d{2}$/;
   return (Array.isArray(arr) ? arr : []).filter(a => a && a.title).slice(0, 20).map(a => {
     const x = { type: ['event', 'task', 'block'].includes(a.type) ? a.type : 'event', title: String(a.title).slice(0, 120), date: isDate(a.date) ? a.date : '', time: hmRe.test(a.time || '') ? a.time : '', endTime: hmRe.test(a.endTime || '') ? a.endTime : '', allDay: !!a.allDay, due: isDate(a.due) ? a.due : '', kind: kinds.includes(a.kind) ? a.kind : '회의', notes: [] };
-    if (a.repeat && Array.isArray(a.repeat.days)) { const days = a.repeat.days.map(Number).filter(n => n >= 0 && n <= 6); if (days.length) x.repeat = { days: [...new Set(days)], ...(isDate(a.repeat.until) ? { until: a.repeat.until } : {}) }; }
-    if (x.repeat && !x.date) x.date = x.repeat.days.map(dw => nextDow(dw, todayStr(), true)).sort()[0];
+    const rp = cleanRepeat(a.repeat); if (rp) x.repeat = rp;
+    if (x.repeat && (!x.date || !repMatch({ date: x.date, repeat: x.repeat }, x.date))) { const from = x.date || todayStr(); x.date = nextOccurrences({ date: from, repeat: x.repeat }, 1)[0] || from; }
     if (x.time && !x.endTime) x.endTime = fromMin(Math.min(toMin(x.time) + 60, 1439));
     if (x.type === 'event' && !x.date) x.date = todayStr();
     x.imp = typeof a.important === 'boolean' ? (a.important ? 'high' : 'normal') : autoImp(x.title, x.kind);
@@ -2089,10 +2095,12 @@ async function applyActions(actions) {
   const gs = { ok: 0, fail: 0, left: 0 };
   UI.lastApplyG = gs;
   for (const a of actions) {
-    if (['update', 'delete', 'done'].includes(a.type)) { const r = await applyRefAction(a); n += r.n; if (r.date) first = first || r.date; if (r.g === 'ok') gs.ok++; else if (r.g === 'fail' || r.g === 'none' || r.g === 'unknown') gs.fail++; gs.left += r.gLeft || 0; continue; }
+    if (['update', 'delete', 'done', 'skip'].includes(a.type)) { const r = await applyRefAction(a); n += r.n; if (r.date) first = first || r.date; if (r.g === 'ok') gs.ok++; else if (r.g === 'fail' || r.g === 'none' || r.g === 'unknown') gs.fail++; gs.left += r.gLeft || 0; continue; }
     if (a.type === 'task') { await add('tasks', { title: a.title, due: a.due || '', priority: a.imp === 'high' ? 'high' : 'mid', done: false, source: 'command', createdAt: nowISO() }); n++; if (a.due) first = first || a.due; continue; }
     if (a.type === 'block') {
-      if (a.repeat && !a.allDay && a.time) {
+      if (a.repeat && repComplex(a)) {
+        for (const d of nextOccurrences({ date: a.date, repeat: a.repeat }, 40).filter(d => d <= addDays(todayStr(), 190))) await add('blocks', { date: d, allDay: a.allDay || !a.time, start: a.allDay ? '' : a.time, end: a.allDay ? '' : (a.endTime || fromMin(Math.min(toMin(a.time) + 60, 1439))), label: a.title, createdAt: nowISO() });
+      } else if (a.repeat && !a.allDay && a.time) {
         const weekly = [...(S.settings.weekly || []), { id: 'w' + Math.random().toString(36).slice(2, 8), days: a.repeat.days, start: a.time, end: a.endTime || fromMin(Math.min(toMin(a.time) + 60, 1439)), label: a.title }];
         await saveSettings({ ...S.settings, weekly });
       } else if (a.repeat) {
@@ -2101,7 +2109,7 @@ async function applyActions(actions) {
       n++; first = first || a.date; continue;
     }
     const doc = { title: a.title, date: a.date, time: a.allDay ? '' : a.time, endTime: a.allDay ? '' : a.endTime, location: '', kind: a.kind || '회의', imp: a.imp, source: 'command', createdAt: nowISO() };
-    if (a.repeat) doc.repeat = { days: a.repeat.days, ...(a.repeat.until ? { until: a.repeat.until } : {}) };
+    if (a.repeat) doc.repeat = JSON.parse(JSON.stringify(a.repeat));
     const nid = await add('events', doc);
     if (S.settings.googlePush === true && gReady()) pushGoogle(doc, nid);
     n++; first = first || a.date;
@@ -2159,9 +2167,9 @@ function parseLoose(t) {
   for (const x of tries) { try { return JSON.parse(repairJson(dec(x))); } catch {} }
   throw new Error('json');
 }
-function relay({ title, prompt, json }) {
+function relay({ title, prompt, json, alt }) {
   if (UI.relay) UI.relay.reject({ code: 'cancelled' });
-  return new Promise((resolve, reject) => { UI.relay = { title, prompt, json, resolve, reject, mode: 'manual' }; UI.dlg = 'relay'; renderRelay(); });
+  return new Promise((resolve, reject) => { UI.relay = { title, prompt, json, alt, resolve, reject, mode: 'manual' }; UI.dlg = 'relay'; renderRelay(); });
 }
 function renderRelay() {
   const r = UI.relay; if (!r) return;
@@ -2176,7 +2184,7 @@ function renderRelay() {
     <div class="rstep"><b>2</b><div>AI가 답하면 답 전체를 복사해 여기에 붙여넣고 적용을 누르세요.${r.json ? ' (JSON 앞뒤에 설명이 붙어 있어도 됩니다)' : ''}
       <textarea class="field" id="relayOut" rows="8" style="margin-top:.45rem" placeholder="AI의 답을 붙여넣으세요"></textarea>
       <div class="status err" id="relayErr"></div></div></div>
-    <div class="row" style="justify-content:flex-end"><button class="btn" type="button" data-act="relayCancel">취소</button><button class="btn primary" type="button" data-act="relayApply">${ic('check')}적용</button></div>
+    <div class="row" style="justify-content:space-between">${r.alt ? `<button class="btn small" type="button" data-act="relayAlt" title="구글 캘린더가 연결된 Claude 대화창이 구글 캘린더에 직접 넣습니다">${ic('gcal', 'kc-g')}${esc(r.alt.label)}</button>` : '<span></span>'}<span class="row"><button class="btn" type="button" data-act="relayCancel">취소</button><button class="btn primary" type="button" data-act="relayApply">${ic('check')}적용</button></span></div>
   </div></div>`;
 }
 async function relayCopy() {
@@ -2208,7 +2216,7 @@ const UNDO_LABEL = {
   delRule: '아이콘 규칙 삭제', skipOcc: '반복 일정 한 번 빼기', edSave: '일정 편집', bdSave: '불가 시간 설정', saveSettings: '설정 변경', imSave: '아이콘 색·이름',
   pushG: '구글에 추가', fEvent: '일정 추가', fBlock: '불가 시간 추가', taskForm: '할 일 추가', importData: '파일 가져오기'
 };
-const UNDO_SKIP = new Set(['sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
+const UNDO_SKIP = new Set(['relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
 function undoSnap() {
   const o = { settings: JSON.parse(JSON.stringify(S.settings)) };
   for (const c of COLS) o[c] = JSON.parse(JSON.stringify(S[c]));
@@ -2288,14 +2296,14 @@ function refItem(ref) {
 function cmdContext() {
   const t0 = todayStr(), from = addDays(t0, -7), to = addDays(t0, 120);
   const evs = S.events.filter(e => repDays(e) ? (!e.repeat.until || e.repeat.until >= from) : (e.date >= from && e.date <= to)).sort((a, b) => (a.date + (a.time || '')).localeCompare(b.date + (b.time || ''))).slice(0, 150)
-    .map(e => `- [e:${e.id}] ${e.date}${repDays(e) ? ` 부터 매주 ${repDays(e).map(d => DOW_KO[d]).join('·')}` : ''} ${e.time ? e.time + '–' + fromMin(Math.min(evEnd(e), 1439)) : '종일'} ${e.title}${impOfEvent(e) === 'high' ? ' (중요)' : ''}${e.googleId ? ' (구글에도 있음)' : ''}`);
+    .map(e => `- [e:${e.id}] ${e.date}${repDays(e) ? ` 부터 ${repText(e)}${(e.skip || []).length ? ' (뺀 날: ' + e.skip.join(', ') + ')' : ''}` : ''} ${e.time ? e.time + '–' + fromMin(Math.min(evEnd(e), 1439)) : '종일'} ${e.title}${impOfEvent(e) === 'high' ? ' (중요)' : ''}${e.googleId ? ' (구글에도 있음)' : ''}`);
   const gs = (G.events || []).filter(g => g.date >= from && g.date <= to).slice(0, 150).map(g => `- [${gKey(g)}] ${g.date} ${g.allDay ? '종일' : g.time + '–' + g.endTime} ${g.title}${g.recurring ? ' (구글 반복 일정)' : ''}`);
   const ts = S.tasks.filter(t => !t.done).slice(0, 80).map(t => `- [t:${t.id}] ${t.due ? t.due + '까지' : '기한 없음'} ${t.title}`);
   const sl = slotsForPrompt();
   return `대시보드 일정 (번호는 [ ] 안):\n${evs.join('\n') || '- 없음'}\n\n구글 캘린더 일정:\n${gs.join('\n') || '- 없음 또는 연결 안 됨'}\n\n남은 할 일:\n${ts.join('\n') || '- 없음'}\n\n앞으로 2주 빈 시간:\n${sl.map(x => '- ' + x).join('\n') || '- 계산 못 함'}`;
 }
 function commandPrompt(text) {
-  return `당신은 한국 대학교 컴퓨터공학과 학과장의 일정 비서입니다. 학과장이 대시보드에 명령을 입력했습니다. 명령을 실행할 동작 목록으로 바꾸세요.
+  return `당신은 한국 대학교 컴퓨터공학과 학과장의 일정 비서입니다. 학과장이 대시보드에 말하듯 명령했습니다. 명령을 대시보드가 실행할 동작 목록으로 바꾸세요.
 ${ctxLine()}
 요일 번호: 일0 월1 화2 수3 목4 금5 토6. "3시"처럼 오전/오후가 없으면 근무시간 기준으로 1~7시는 오후로 보세요.
 "빈 시간에", "가능한 시간에"처럼 시간을 맡기면 아래 빈 시간 목록에서 고르세요.
@@ -2303,19 +2311,46 @@ ${ctxLine()}
 ${cmdContext()}
 
 아래 형식의 JSON 객체 하나로만 답하세요.
-{"actions": [동작, ...], "note": "학과장에게 알릴 한 줄 (확인이 필요한 점, 없으면 null)"}
+{"actions": [동작, ...], "note": "학과장에게 알릴 말 (확인할 점, 질문에 대한 답, 없으면 null)"}
 
 동작 종류
-1) 새로 만들기: {"type": "event | task | block", "title": "짧은 제목", "date": "YYYY-MM-DD 또는 null (반복이면 첫 날짜)", "time": "HH:MM 또는 null", "endTime": "HH:MM 또는 null", "allDay": true/false, "repeat": {"days": [요일 번호], "until": "YYYY-MM-DD 또는 null"} 또는 null, "due": "할 일 기한 YYYY-MM-DD 또는 null", "kind": "회의 | 행사 | 마감 | 학사", "important": true/false}
+1) 새로 만들기: {"type": "event | task | block", "title": "짧은 제목", "date": "YYYY-MM-DD 또는 null (반복이면 첫 날짜, 모르면 null)", "time": "HH:MM 또는 null", "endTime": "HH:MM 또는 null", "allDay": true/false, "repeat": 반복 또는 null, "due": "할 일 기한 YYYY-MM-DD 또는 null", "kind": "회의 | 행사 | 마감 | 학사", "important": true/false}
    event는 일정, task는 할 일, block은 학과장이 안 되는 시간(불가 시간).
-2) 기존 항목 고치기: {"type": "update", "ref": "위 목록의 번호 (예: e:abc, t:xyz, g:...)", "title": "바뀌면", "date": "바뀌면", "time": "바뀌면", "endTime": "바뀌면", "allDay": 바뀌면, "due": "할 일 기한이 바뀌면", "important": 바뀌면} — 바뀌는 필드만 넣으세요.
+2) 기존 항목 고치기: {"type": "update", "ref": "위 목록의 번호 (예: e:abc, t:xyz, g:...)", 바뀌는 필드만: "title", "date", "time", "endTime", "allDay", "due", "important", "repeat"}
 3) 지우기: {"type": "delete", "ref": "e:… 또는 t:…"} — 구글 캘린더 일정(g:)은 지울 수 없으니 note로 알려 주세요.
-4) 할 일 완료: {"type": "done", "ref": "t:…"}
+4) 반복 일정에서 하루만 빼기: {"type": "skip", "ref": "e:…", "date": "YYYY-MM-DD"}
+5) 할 일 완료: {"type": "done", "ref": "t:…"}
+
+반복(repeat) 형식 — 필요한 항목만:
+{"freq": "weekly | monthly", "days": [요일 번호], "interval": N주마다(격주는 2), "nth": [매월 몇째 주의 그 요일: 1~5, 마지막은 -1], "skipIfWeekHas": {"day": 요일 번호, "nth": 1~5 또는 -1}, "until": "YYYY-MM-DD 또는 null"}
+- 매주 화요일: {"freq":"weekly","days":[2]}
+- 격주 금요일: {"freq":"weekly","days":[5],"interval":2}
+- 매월 마지막 주 화요일: {"freq":"monthly","days":[2],"nth":[-1]}
+- 매월 첫째·셋째 월요일: {"freq":"monthly","days":[1],"nth":[1,3]}
+- 조건이 갈리는 반복은 일정을 나눠 만드세요. 예) "매월 마지막 주만 화요일 9시, 나머지 주는 수요일 3시 회의" →
+  ① {"type":"event","title":"회의","time":"09:00","repeat":{"freq":"monthly","days":[2],"nth":[-1]}}
+  ② {"type":"event","title":"회의","time":"15:00","repeat":{"freq":"weekly","days":[3],"skipIfWeekHas":{"day":2,"nth":-1}}}
+  (skipIfWeekHas: 그 달의 마지막 화요일이 들어 있는 주(월~일)에는 ②가 생기지 않음)
+- 기존 반복 일정을 이렇게 바꾸라면 update로 repeat을 통째로 새로 주거나, 지우고(delete) 새로 만드세요.
+
+중복 정리: "중복된 일정 지워줘"처럼 말하면 제목이 같거나 거의 같고 날짜·시간이 같은 일정끼리 묶어, 하나(중요 표시나 구글 연결이 있는 쪽)만 남기고 나머지를 delete 하세요. 구글 일정끼리의 중복은 지울 수 없으니 note에 목록으로 알려 주세요.
+일정에 대한 질문("다음 주 빈 시간 언제야?", "이번 달 회의 몇 개야?")이면 actions는 빈 배열, note에 답을 쓰세요.
 목록에 없는 항목은 지어내지 말고, 어느 항목인지 애매하면 동작을 만들지 말고 note에 물어볼 점을 쓰세요.
 
 명령: ${text}`;
 }
-const CMD_TYPES = ['event', 'task', 'block', 'update', 'delete', 'done'];
+const CMD_TYPES = ['event', 'task', 'block', 'update', 'delete', 'done', 'skip'];
+function cleanRepeat(r) {
+  if (!r || !Array.isArray(r.days)) return null;
+  const days = [...new Set(r.days.map(Number).filter(n => n >= 0 && n <= 6))]; if (!days.length) return null;
+  const x = { days };
+  const nth = (Array.isArray(r.nth) ? r.nth : Array.isArray(r.weeks) ? r.weeks : []).map(Number).filter(n => n === -1 || (n >= 1 && n <= 5));
+  if (r.freq === 'monthly' && nth.length) { x.freq = 'monthly'; x.nth = [...new Set(nth)]; }
+  if ((+r.interval || 1) > 1 && x.freq !== 'monthly') x.interval = Math.min(8, Math.round(+r.interval));
+  const sk = r.skipIfWeekHas; if (sk && +sk.day >= 0 && +sk.day <= 6 && (+sk.nth === -1 || (+sk.nth >= 1 && +sk.nth <= 5))) x.skipIfWeekHas = { day: +sk.day, nth: +sk.nth };
+  if (isDate(r.until)) x.until = r.until;
+  return x;
+}
 function cleanChange(a) {
   const hmRe = /^\d{2}:\d{2}$/, ch = {};
   if (a.title) ch.title = String(a.title).slice(0, 120);
@@ -2332,8 +2367,10 @@ function cleanRefAction(a) {
   const it = refItem(a.ref); if (!it) return null;
   const x = { type: a.type, ref: String(a.ref), title: it.title, notes: [] };
   if (a.type === 'done') return it.kind === 't' ? x : null;
+  if (a.type === 'skip') { if (it.kind !== 'e' || !repDays(it.o) || !isDate(a.date)) return null; x.date = a.date; return x; }
   if (a.type === 'delete') { if (it.kind === 'g') return null; if (it.kind === 'e' && (it.o.googleId || it.o.googleSent)) x.notes.push('구글 캘린더에 있는 것은 구글에서 따로 지워야 합니다'); return x; }
   x.ch = cleanChange(a);
+  if (it.kind === 'e' && a.repeat !== undefined) { const rp = cleanRepeat(a.repeat); x.ch.repeat = rp || 'none'; }
   if (it.kind === 't') x.ch = Object.fromEntries(Object.entries(x.ch).filter(([k]) => ['title', 'due', 'imp'].includes(k)));
   if (it.kind === 'g' && it.o.recurring) { x.ch = x.ch.title ? { title: x.ch.title } : {}; x.notes.push('구글 반복 일정은 제목만 바꿉니다'); }
   if (it.kind === 'g' && !gasOn()) x.notes.push('구글 일정을 고치려면 Apps Script 연결이 필요합니다');
@@ -2344,6 +2381,7 @@ function describeRef(a) {
   const it = refItem(a.ref);
   if (a.type === 'done') return { typeKo: '완료', when: it ? it.when : '', title: a.title };
   if (a.type === 'delete') return { typeKo: '삭제', when: it ? it.when : '', title: a.title };
+  if (a.type === 'skip') return { typeKo: '하루 빼기', when: fmtShort(a.date), title: a.title };
   const c = a.ch || {}, parts = [];
   if (c.title && it && c.title !== it.title) parts.push(`이름 → ${c.title}`);
   if (c.date) parts.push(`${it ? fmtShort(it.o.date) : ''} → ${fmtShort(c.date)}`);
@@ -2351,12 +2389,14 @@ function describeRef(a) {
   if (c.due) parts.push(`기한 → ${fmtShort(c.due)}`);
   if (c.imp) parts.push(c.imp === 'high' ? '중요로' : '일반으로');
   if (c.kind) parts.push(`종류 → ${c.kind}`);
+  if (c.repeat) parts.push(c.repeat === 'none' ? '반복 없앰' : '반복 → ' + repText({ repeat: c.repeat }));
   return { typeKo: '변경', when: parts.join(' · '), title: it ? it.title : a.title };
 }
 async function applyRefAction(a) {
   const it = refItem(a.ref); if (!it) return { n: 0 };
   const id = it.kind === 'g' ? a.ref : it.o.id;
   if (a.type === 'done') { await patch('tasks', id, { done: true, doneAt: nowISO() }); return { n: 1 }; }
+  if (a.type === 'skip') { await patch('events', id, { skip: [...new Set([...(it.o.skip || []), a.date])] }); return { n: 1, date: a.date }; }
   if (a.type === 'delete') { await del(it.kind === 'e' ? 'events' : 'tasks', id); return { n: 1, gLeft: it.kind === 'e' && (it.o.googleId || it.o.googleSent) ? 1 : 0 }; }
   const c = a.ch || {};
   if (it.kind === 't') { const upd = {}; if (c.title) upd.title = c.title; if (c.due) upd.due = c.due; if (c.imp) upd.priority = c.imp === 'high' ? 'high' : 'mid'; await patch('tasks', id, upd); return { n: 1, date: c.due }; }
@@ -2365,6 +2405,7 @@ async function applyRefAction(a) {
     if (c.title) upd.title = c.title; if (c.kind) upd.kind = c.kind; if (c.imp) upd.imp = c.imp;
     if (c.date) { const len = isDate(e.endDate) && e.endDate > e.date ? Math.round((parse(e.endDate) - parse(e.date)) / 86400000) : 0; upd.date = c.date; upd.endDate = len ? addDays(c.date, len) : (e.endDate || ''); }
     if (c.allDay) { upd.time = ''; upd.endTime = ''; } else if (c.time) { upd.time = c.time; upd.endTime = c.endTime || fromMin(Math.min(toMin(c.time) + 60, 1439)); }
+    if (c.repeat) { await patch('events', id, { repeat: null }); if (c.repeat !== 'none') { upd.repeat = c.repeat; if (!repMatch({ date: upd.date || e.date, repeat: c.repeat }, upd.date || e.date)) upd.date = nextOccurrences({ date: upd.date || e.date, repeat: c.repeat }, 1)[0] || upd.date || e.date; } }
     await patch('events', id, upd);
     const g = e.googleId && (upd.title || upd.date || upd.time != null) ? await gUpdate(e.googleCal, e.googleId, { ...e, ...upd }) : '';
     return { n: 1, date: upd.date || e.date, g };
@@ -2741,7 +2782,24 @@ function fontLive() {
 
 /* ---------- calendar (main) ---------- */
 const repDays = e => e.repeat && Array.isArray(e.repeat.days) && e.repeat.days.length ? e.repeat.days : null;
-const repText = e => repDays(e) ? `매주 ${repDays(e).slice().sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7)).map(d => '일월화수목금토'[d]).join('·')}요일${isDate(e.repeat.until) ? ` · ${fmtShort(e.repeat.until)}까지` : ''}` : '';
+// repeat: { days:[요일], freq:'weekly'|'monthly', interval:N (N주마다), nth:[1..5,-1] (매월 몇째 주, -1=마지막), skipIfWeekHas:{day, nth} (그 요일이 있는 주는 건너뜀), until }
+const NTH_KO = n => n === -1 ? '마지막' : ['', '첫째', '둘째', '셋째', '넷째', '다섯째'][n] || n + '째';
+const repComplex = e => !!(e && e.repeat && (e.repeat.freq === 'monthly' || (+e.repeat.interval || 1) > 1 || e.repeat.skipIfWeekHas));
+function nthMatch(d, list) { const dt = parse(d), day = dt.getDate(), dim = new Date(dt.getFullYear(), dt.getMonth() + 1, 0).getDate(); return list.some(k => +k === -1 ? day + 7 > dim : Math.ceil(day / 7) === +k); }
+const weekMon = d => addDays(d, -((parse(d).getDay() + 6) % 7));
+function weekHas(d, sp) { const mon = weekMon(d); for (let i = 0; i < 7; i++) { const x = addDays(mon, i); if (parse(x).getDay() === +sp.day && nthMatch(x, [sp.nth])) return true; } return false; }
+function repMatch(e, d) {
+  const r = e.repeat || {}, days = repDays(e); if (!days || !days.includes(parse(d).getDay())) return false;
+  if (r.freq === 'monthly' && Array.isArray(r.nth) && r.nth.length && !nthMatch(d, r.nth)) return false;
+  const iv = +r.interval || 1; if (iv > 1 && Math.round((parse(weekMon(d)) - parse(weekMon(e.date))) / 604800000) % iv) return false;
+  if (r.skipIfWeekHas && weekHas(d, r.skipIfWeekHas)) return false;
+  return true;
+}
+function nextOccurrences(e, n, from) { const out = []; let d = from && from > e.date ? from : e.date; const end = isDate(e.repeat && e.repeat.until) ? e.repeat.until : addDays(d, 500); for (let i = 0; i < 500 && d <= end && out.length < n; i++, d = addDays(d, 1)) if (repMatch(e, d) && !(e.skip || []).includes(d)) out.push(d); return out; }
+const repText = e => repComplex(e) ? (() => { const r = e.repeat, dk = repDays(e).map(d => '일월화수목금토'[d]).join('·');
+    let t = r.freq === 'monthly' ? `매월 ${(r.nth || []).map(NTH_KO).join('·')} ${dk}요일` : `${(+r.interval || 1) > 1 ? r.interval + '주마다' : '매주'} ${dk}요일`;
+    if (r.skipIfWeekHas) t += ` (${NTH_KO(+r.skipIfWeekHas.nth)} ${'일월화수목금토'[r.skipIfWeekHas.day]}요일이 있는 주는 빼고)`;
+    return t + (isDate(r.until) ? ` · ${fmtShort(r.until)}까지` : ''); })() : repDays(e) ? `매주 ${repDays(e).slice().sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7)).map(d => '일월화수목금토'[d]).join('·')}요일${isDate(e.repeat.until) ? ` · ${fmtShort(e.repeat.until)}까지` : ''}` : '';
 let _expMemo = { key: '', out: [] };
 function expandEvents() {
   const t = todayStr();
@@ -2755,7 +2813,8 @@ function expandEvents() {
       const end = isDate(e.repeat.until) ? e.repeat.until : addDays(t, 400);
       const skip = new Set(e.skip || []);
       let d = e.date < addDays(t, -150) ? addDays(t, -150) : e.date;
-      for (let i = 0; d <= end && i < 600; i++, d = addDays(d, 1)) if (days.includes(parse(d).getDay()) && !skip.has(d)) out.push({ ...e, date: d, occ: true, seriesStart: e.date });
+      const cx = repComplex(e);
+      for (let i = 0; d <= end && i < 600; i++, d = addDays(d, 1)) if ((cx ? repMatch(e, d) : days.includes(parse(d).getDay())) && !skip.has(d)) out.push({ ...e, date: d, occ: true, seriesStart: e.date });
       continue;
     }
     if (isDate(e.endDate) && e.endDate > e.date) {
@@ -2844,7 +2903,7 @@ function srow({ t, icon, kc, title, sub, cls, acts, tag, fixed, iconAct }) {
 function eventActs(e) {
   const imp = `<button class="x" type="button" data-act="edOpen" data-kind="e" data-id="${e.id}" title="날짜·시간 편집" aria-label="편집">${ic('pen')}</button>` + impBtn(impOfEvent(e) === 'high', 'impT', `data-id="${e.id}"`) + absentBtn(!!e.absent, 'absentT', `data-id="${e.id}"`);
   const sync = e.googleId ? `<span class="gtag" title="구글 캘린더에 있음">${ic('gcal')}✓</span>`
-    : gReady() ? `<button class="btn small" type="button" data-act="pushG" data-id="${e.id}" title="구글 캘린더에 추가">${ic('gcal')}구글에 추가</button>`
+    : gReady() && !repComplex(e) ? `<button class="btn small" type="button" data-act="pushG" data-id="${e.id}" title="구글 캘린더에 추가">${ic('gcal')}구글에 추가</button>`
     : `<a class="btn small" href="${esc(gTemplateUrl(e))}" target="_blank" rel="noopener" data-act="gTpl" data-id="${e.id}" title="구글 캘린더 일정 만들기 화면 열기">${ic('gcal')}${e.googleSent ? '다시 보내기' : '구글에 추가'}</a>`;
   const skip = e.occ ? `<button class="btn small" type="button" data-act="skipOcc" data-id="${e.id}" data-day="${e.date}" title="이 날짜만 반복에서 빼기">이번만 빼기</button>` : '';
   return `${imp}${skip}${sync}${e.emailId ? `<button class="x" type="button" data-act="openMail" data-id="${e.emailId}" aria-label="관련 메일" title="관련 메일">${ic('mail')}</button>` : ''}<button class="x" type="button" data-act="delEvent" data-id="${e.id}" aria-label="${e.occ ? '반복 일정 전체 삭제' : '일정 삭제'}" title="${e.occ ? '반복 일정 전체 삭제' : '일정 삭제'}">✕</button>`;
@@ -3289,7 +3348,7 @@ async function analyzeNew() {
   if (!UI.att.length && looksLikeCommand(text) && !$('threadOf').value) {
     const r = parseCommand(text);
     if (r.sure) renderCmdPreview([r], text, false);
-    else openChatPrompt(text);
+    else runCommandAI(text);
     return;
   }
   if (text.length < 10 && !UI.att.length) { st.className = 'status err'; st.textContent = '메일 내용을 붙여넣어 주세요.'; return; }
@@ -3503,13 +3562,12 @@ async function chatCopy(el) {
 
 async function runCommandAI(text) {
   const st = $('pasteStatus');
-  st.className = 'status'; st.textContent = 'AI 창에서 프롬프트를 복사해 붙여넣고, 답을 다시 붙여넣어 주세요.';
+  st.className = 'status'; st.textContent = 'GPT나 Claude에 프롬프트를 붙여넣고, 답을 다시 붙여넣어 주세요.';
   try {
-    const j = await sample.json(commandPrompt(text), { title: '명령 해석 · ' + text.slice(0, 40) });
-    const acts = cleanActions(j && j.actions);
-    if (!acts.length) { st.className = 'status err'; st.textContent = (j && j.note) || '실행할 내용을 찾지 못했습니다. 조금 더 구체적으로 적어 주세요.'; return; }
-    renderCmdPreview(acts, text, true);
-    if (j.note) toast(String(j.note).slice(0, 120));
+    const j = await relay({ title: '일정 명령 · ' + text.slice(0, 40), prompt: commandPrompt(text), json: true, alt: { label: '대신 Claude가 구글 캘린더에 직접', text } });
+    const acts = cleanActions(j && j.actions), note = j && j.note ? String(j.note).slice(0, 1500) : '';
+    if (!acts.length) { if (note) { st.className = 'status'; st.innerHTML = `<div class="cmdbox"><div class="cmdhead">${ic('chat')}<b>AI의 답</b></div><div class="cmdnote"><span>${esc(note)}</span></div><div class="row"><button class="btn small" type="button" data-act="cmdCancel">닫기</button></div></div>`; } else { st.className = 'status err'; st.textContent = '실행할 내용을 찾지 못했습니다. 조금 더 구체적으로 적어 주세요.'; } return; }
+    renderCmdPreview(acts, text, true, note);
   } catch (e) { st.className = 'status'; st.textContent = e && e.code === 'cancelled' ? '취소했습니다.' : sampleErr(e); }
 }
 
@@ -3619,7 +3677,7 @@ document.addEventListener('click', async ev0 => {
       }
       case 'undo': return doUndo(false);
       case 'redo': return doUndo(true);
-      case 'cmdAI': { const c = UI.cmd; if (c) openChatPrompt(c.text); return; }
+      case 'cmdAI': { const c = UI.cmd; if (c) runCommandAI(c.text); return; }
       case 'attPick': return $('attInput').click();
       case 'attRemove': UI.att = UI.att.filter(x => x.id !== id); return renderAttList();
       case 'attOpen': return openAttFile(el.dataset.id, el.dataset.name);
@@ -3669,6 +3727,7 @@ document.addEventListener('click', async ev0 => {
       case 'relayCopy': return relayCopy();
       case 'relayApply': return relayApply();
       case 'relayCancel': return relayCancel();
+      case 'relayAlt': { const t = UI.relay && UI.relay.alt && UI.relay.alt.text; relayCancel(); if (t) setTimeout(() => openChatPrompt(t), 0); return; }
       case 'exportData': return exportData();
       case 'importData': return $('importFile').click();
       case 'signOut': if (G.token && gisLoaded()) google.accounts.oauth2.revoke(G.token, () => {}); G.token = null; G.exp = 0; G.events = []; G.storedAt = 0; G.changedAt = 0; gCacheClear(); DRIVE.fileId = null; DRIVE.remoteMod = null; renderAll(); toast('구글 연결을 해제했습니다. 데이터는 드라이브와 이 브라우저에 남아 있습니다.'); return;
