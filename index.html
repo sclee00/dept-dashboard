@@ -493,6 +493,17 @@ a.btn{text-decoration:none;color:inherit}
 body.resizing{user-select:none} body.rs-col,body.rs-col *{cursor:col-resize!important} body.rs-row,body.rs-row *{cursor:row-resize!important}
 .tools [data-ok],.stats [data-ok]{cursor:grab}
 .reo-drag{opacity:.4;outline:2px dashed var(--accent);outline-offset:2px}
+.setbox{display:flex;flex-direction:column;max-height:min(88vh,60rem)}
+.settabs{display:flex;flex-wrap:wrap;gap:.25rem;border-bottom:1px solid var(--line);padding-bottom:.5rem;margin-bottom:.6rem}
+.settabs button{display:inline-flex;align-items:center;gap:.35rem;background:none;border:1px solid transparent;border-radius:8px;padding:.35rem .7rem;color:var(--muted);font:inherit;font-size:.88rem;cursor:pointer}
+.settabs button .ic{width:1rem;height:1rem}
+.settabs button[aria-selected="true"]{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
+.setbody{overflow:auto;min-height:0;flex:1;display:flex;flex-direction:column;gap:.7rem;padding-right:.2rem}
+.stab{display:flex;flex-direction:column;gap:.7rem} .stab[hidden]{display:none}
+.wclist{display:flex;flex-direction:column;gap:.35rem}
+.wcrow{display:grid;grid-template-columns:minmax(0,1fr) 2.6rem auto auto auto;gap:.45rem;align-items:center}
+.wcrow label.chk{flex-direction:row;font-size:.8rem;white-space:nowrap}
+.wc{border-radius:3px;padding:0 .05em}
 .cmdrow{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
 .cmdrow .ic{width:1.3rem;height:1.3rem}
 .ic.cu{color:var(--icc)}
@@ -2239,7 +2250,7 @@ const UNDO_LABEL = {
   delRule: '아이콘 규칙 삭제', skipOcc: '반복 일정 한 번 빼기', edSave: '일정 편집', bdSave: '불가 시간 설정', saveSettings: '설정 변경', imSave: '아이콘 색·이름',
   pushG: '구글에 추가', fEvent: '일정 추가', fBlock: '불가 시간 추가', taskForm: '할 일 추가', importData: '파일 가져오기'
 };
-const UNDO_SKIP = new Set(['relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
+const UNDO_SKIP = new Set(['setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
 function undoSnap() {
   const o = { settings: JSON.parse(JSON.stringify(S.settings)) };
   for (const c of COLS) o[c] = JSON.parse(JSON.stringify(S[c]));
@@ -2875,6 +2886,56 @@ document.addEventListener('keydown', e => {
   e.preventDefault(); setSplit(k, splitSizes(k), d[0], d[1]); splitDone();
 });
 window.addEventListener('resize', () => applyLayout());
+
+/* ---------- word colors: chosen words always show in a chosen color ---------- */
+const wcRules = () => (UI.wcDraft || (S.settings && S.settings.wordColors) || []).filter(r => r && r.w && String(r.w).trim() && /^#[0-9a-f]{6}$/i.test(r.color || ''));
+let _wc = { key: null, re: null, map: {} };
+function wcState() {
+  const rs = wcRules(), key = JSON.stringify(rs);
+  if (key !== _wc.key) {
+    const words = rs.map(r => String(r.w).trim()).sort((a, b) => b.length - a.length);
+    _wc = { key, re: words.length ? new RegExp(words.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'gi') : null, map: Object.fromEntries(rs.map(r => [String(r.w).trim().toLowerCase(), r])), changed: true };
+  }
+  return _wc;
+}
+const WC_SKIP = 'textarea,input,select,option,script,style,svg,.wc,.wcoff,[contenteditable]';
+function paintWords() {
+  const st = wcState();
+  if (st.changed) { document.querySelectorAll('span.wc').forEach(sp => sp.replaceWith(document.createTextNode(sp.textContent))); st.changed = false; document.body.normalize(); }
+  const re = st.re; if (!re) return;
+  for (const root of document.querySelectorAll(WC_ROOTS)) paintIn(root, re, st);
+}
+// only content (event titles, mails, tasks, notes), never menu labels or legends
+const WC_ROOTS = '#cal, #dayPanel, #taskList, #pane-tasks, #mailList, #sheetRoot, #focus, #pasteStatus, .wcprev';
+function paintIn(root, re, st) {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, { acceptNode: n => !n.nodeValue.trim() || (n.parentElement && n.parentElement.closest(WC_SKIP)) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT });
+  const hits = []; let n;
+  while ((n = walker.nextNode())) { re.lastIndex = 0; if (re.test(n.nodeValue)) hits.push(n); }
+  for (const node of hits) {
+    const text = node.nodeValue, frag = document.createDocumentFragment(); let p = 0; re.lastIndex = 0; let m;
+    while ((m = re.exec(text))) {
+      if (m.index > p) frag.appendChild(document.createTextNode(text.slice(p, m.index)));
+      const r = st.map[m[0].toLowerCase()] || {}, sp = document.createElement('span');
+      sp.className = 'wc'; sp.textContent = m[0]; sp.style.color = r.color; if (r.bold) sp.style.fontWeight = '700'; if (r.bg) sp.style.background = r.color + '26';
+      frag.appendChild(sp); p = m.index + m[0].length; if (!m[0].length) re.lastIndex++;
+    }
+    if (p < text.length) frag.appendChild(document.createTextNode(text.slice(p)));
+    node.replaceWith(frag);
+  }
+}
+new MutationObserver(() => { cancelAnimationFrame(paintWords._r); paintWords._r = requestAnimationFrame(paintWords); }).observe(document.body, { childList: true, subtree: true, characterData: true });
+function wordSettingsHtml() {
+  const rs = UI.wcDraft || S.settings.wordColors || [];
+  const row = (r, i) => `<div class="wcrow" data-i="${i}"><input class="field" data-wc="w" value="${esc(r.w || '')}" placeholder="단어 (예: 대학원, 마감, 김OO)" autocomplete="off"><input type="color" data-wc="color" value="${esc(/^#[0-9a-f]{6}$/i.test(r.color || '') ? r.color : '#ff6b6b')}" aria-label="색"><label class="chk"><input type="checkbox" data-wc="bold" ${r.bold ? 'checked' : ''}>굵게</label><label class="chk"><input type="checkbox" data-wc="bg" ${r.bg ? 'checked' : ''}>바탕색</label><button class="x" type="button" data-act="wcDel" data-i="${i}" aria-label="지우기">✕</button></div>`;
+  return `<div class="bsec"><b>${ic('pen')} 단어 색 지정</b>
+    <span class="count">여기 넣은 단어는 일정 제목, 메일 목록·내용, 할 일 등 화면 어디에 나와도 정한 색으로 보입니다. 입력 칸 안의 글자는 바뀌지 않습니다.</span>
+    <div class="wclist">${rs.map(row).join('') || ''}</div>
+    <div class="row"><button class="btn small" type="button" data-act="wcAdd">${ic('plus')}단어 추가</button><span class="wcprev count">미리 보기: <span class="wcoffhold">${esc(rs.map(r => r.w).filter(Boolean).slice(0, 6).join(' · ') || '단어를 넣으면 여기서 색이 보입니다')}</span></span></div></div>`;
+}
+function wcReadForm() {
+  return [...document.querySelectorAll('.wcrow')].map(row => { const g = k => row.querySelector(`[data-wc="${k}"]`); return { w: g('w').value.trim().slice(0, 40), color: g('color').value, bold: g('bold').checked, bg: g('bg').checked }; }).filter(r => r.w);
+}
+function wcLive() { UI.wcDraft = wcReadForm(); const pv = document.querySelector('.wcoffhold'); if (pv) pv.textContent = UI.wcDraft.map(r => r.w).slice(0, 6).join(' · ') || '단어를 넣으면 여기서 색이 보입니다'; paintWords(); }
 
 /* ---------- calendar (main) ---------- */
 const repDays = e => e.repeat && Array.isArray(e.repeat.days) && e.repeat.days.length ? e.repeat.days : null;
@@ -3789,6 +3850,9 @@ document.addEventListener('click', async ev0 => {
       case 'evAbsent': UI.edits['ev-a-' + el.dataset.i] = el.checked ? '1' : ''; return renderSheet(true);
       case 'absentT': { const e = S.events.find(x => x.id === id); if (e) await patch('events', id, { absent: !e.absent }); return; }
       case 'absentG': { const k = el.dataset.k; const g = G.events.find(x => gKey(x) === k); if (g) setMark(k, { absent: !absentOfG(g) }); return; }
+      case 'setTab': UI.setTab = el.dataset.t; document.querySelectorAll('.stab').forEach(x => x.hidden = x.dataset.tab !== el.dataset.t); document.querySelectorAll('.settabs [data-act="setTab"]').forEach(x => x.setAttribute('aria-selected', String(x.dataset.t === el.dataset.t))); return;
+      case 'wcAdd': { UI.wcDraft = [...wcReadForm(), { w: '', color: '#ff6b6b', bold: false }]; const box = document.querySelector('.wclist'); if (box) { const t = document.createElement('div'); t.innerHTML = wordSettingsHtml(); box.replaceWith(t.querySelector('.wclist')); const ins = document.querySelectorAll('.wcrow [data-wc="w"]'); ins.length && ins[ins.length - 1].focus(); } return; }
+      case 'wcDel': { el.closest('.wcrow').remove(); return wcLive(); }
       case 'fxRecommend': case 'fxClear': {
         document.querySelectorAll('[data-fx-row]').forEach(row => { const r = act === 'fxRecommend' ? FX_RECOMMEND[row.dataset.fxRow] : null, g = k => row.querySelector(`[data-fx-k="${k}"]`);
           g('on').checked = !!(r && r.on); g('shape').value = (r && r.shape) || ''; g('bw').value = (r && r.bw) || ''; g('effect').value = (r && r.effect) || ''; g('useColor').checked = false; g('op').value = (r && r.op) || 1; });
@@ -3859,9 +3923,9 @@ document.addEventListener('click', async ev0 => {
       case 'pickTime': { const i = el.dataset.i, t = el.dataset.t; UI.edits['ev-h-' + i] = t; UI.edits['ev-e-' + i] = fromMin(Math.min(toMin(t) + 60, 1439)); renderSheet(true); return; }
       case 'settings': UI.dlg = 'settings'; return openSettings();
       case 'saveSettings': {
-        const fxData = $('fxShort') ? fxReadForm() : null, fontData = $('fontSize') ? fontReadForm() : null;
+        const fxData = $('fxShort') ? fxReadForm() : null, fontData = $('fontSize') ? fontReadForm() : null, wcData = document.querySelector('.wclist') ? wcReadForm() : null;
         const data = { ...S.settings, semesterLabel: $('sLabel').value.trim() || DEFAULTS.semesterLabel, semesterStart: isDate($('sStart').value) ? $('sStart').value : DEFAULTS.semesterStart, signature: $('sSig').value.trim() || DEFAULTS.signature, assistant: $('sAsst').value.trim() || DEFAULTS.assistant,
-          ...(fxData ? { fx: fxData } : {}), ...(fontData ? { font: fontData } : {}), cellMode: $('sCellMode') && $('sCellMode').value === 'titles' ? 'titles' : 'icons', googleShow: $('sGShow').checked, googleBusy: $('sGBusy').checked, googlePush: $('sGPush').checked };
+          ...(fxData ? { fx: fxData } : {}), ...(fontData ? { font: fontData } : {}), ...(wcData ? { wordColors: wcData } : {}), cellMode: $('sCellMode') && $('sCellMode').value === 'titles' ? 'titles' : 'icons', googleShow: $('sGShow').checked, googleBusy: $('sGBusy').checked, googlePush: $('sGPush').checked };
         if ($('impMode')) { const iv = impFormValues(); const amber = getComputedStyle(document.documentElement).getPropertyValue('--amber').trim(); data.impStyle = { ...iv, color: iv.color.toLowerCase() === amber.toLowerCase() ? '' : iv.color }; }
         { const gu = $('sGasUrl').value.trim(), gk = $('sGasKey').value.trim();
           if (gu && !/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(gu)) { toast('웹 앱 주소는 https://script.google.com/macros/s/…/exec 형태여야 합니다.'); return; }
@@ -3874,9 +3938,9 @@ document.addEventListener('click', async ev0 => {
         if (bad) { toast(bad); $('sCid').focus(); return; }
         try { if (cid && cid !== (CFG.googleClientId || '')) localStorage.setItem('gClientId', cid); else localStorage.removeItem('gClientId'); } catch {}
         if (cid !== (G.cidUsed || '')) { G.tc = null; G.cidUsed = cid; }
-        UI.fxDraft = null; UI.fontDraft = null; await saveSettings(data); $('dlgRoot').innerHTML = ''; UI.dlg = null; toast('설정을 저장했습니다.'); watchGoogle(true); return;
+        UI.fxDraft = null; UI.fontDraft = null; UI.wcDraft = null; await saveSettings(data); $('dlgRoot').innerHTML = ''; UI.dlg = null; toast('설정을 저장했습니다.'); watchGoogle(true); return;
       }
-      case 'closeDlg': if (UI.dlg === 'relay') return relayCancel(); if (UI.dlg === 'settings') { applyImpStyle(); if (UI.fontDraft) { UI.fontDraft = null; applyFont(); } if (UI.fxDraft) { UI.fxDraft = null; renderCal(); } } $('dlgRoot').innerHTML = ''; UI.dlg = null; return;
+      case 'closeDlg': if (UI.dlg === 'relay') return relayCancel(); if (UI.dlg === 'settings') { applyImpStyle(); if (UI.wcDraft) { UI.wcDraft = null; paintWords(); } if (UI.fontDraft) { UI.fontDraft = null; applyFont(); } if (UI.fxDraft) { UI.fxDraft = null; renderCal(); } } $('dlgRoot').innerHTML = ''; UI.dlg = null; return;
       case 'noop': return;
       case 'gotoMf': UI.mf = el.dataset.mf; UI.rail = 'mail'; syncTabs(); renderMails(); renderRail(); if (window.innerWidth < 1100) $('rail').scrollIntoView({ block: 'start' }); return;
       case 'ignoreMail': { const mm = S.emails.find(x => x.id === id); if (!mm) return; const box = el.closest('.mbox,.ignban'); const cb = box && box.querySelector('input[type=checkbox]'); await ignoreMail(mm, !cb || cb.checked); if (UI.openId === id) closeSheet(); return; }
@@ -3948,8 +4012,8 @@ document.addEventListener('click', async ev0 => {
     }
   } catch (e) { dbErr(e); }
 });
-document.addEventListener('input', e => { if (e.target.matches && e.target.matches('[data-fx-k], #fxShort, #fxLong')) fxLive(); if (e.target.matches && e.target.matches('input[name=fontBody], #fontHead, #fontSmall, #fontSize')) fontLive(); });
-document.addEventListener('change', e => { if (e.target.matches && e.target.matches('[data-fx-k], #fxShort, #fxLong')) fxLive(); if (e.target.matches && e.target.matches('input[name=fontBody], #fontHead, #fontSmall, #fontSize')) fontLive(); });
+document.addEventListener('input', e => { if (e.target.matches && e.target.matches('[data-wc]')) wcLive(); if (e.target.matches && e.target.matches('[data-fx-k], #fxShort, #fxLong')) fxLive(); if (e.target.matches && e.target.matches('input[name=fontBody], #fontHead, #fontSmall, #fontSize')) fontLive(); });
+document.addEventListener('change', e => { if (e.target.matches && e.target.matches('[data-wc]')) wcLive(); if (e.target.matches && e.target.matches('[data-fx-k], #fxShort, #fxLong')) fxLive(); if (e.target.matches && e.target.matches('input[name=fontBody], #fontHead, #fontSmall, #fontSize')) fontLive(); });
 document.addEventListener('input', e => { if (e.target.closest('#sheetRoot') && e.target.id) UI.edits[e.target.id] = e.target.value; });
 document.addEventListener('change', e => { if (e.target.closest('#sheetRoot') && e.target.id && e.target.type !== 'file') UI.edits[e.target.id] = e.target.value; });
 document.addEventListener('change', e => {
@@ -3967,7 +4031,7 @@ document.addEventListener('drop', e => { if (e.dataTransfer && e.dataTransfer.fi
   $('rawMail').addEventListener('paste', e => { const fs = e.clipboardData && e.clipboardData.files; if (fs && fs.length) { e.preventDefault(); addAttFiles(fs); } }); }
 document.addEventListener('keydown', e => {
   if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('[role="button"][data-act]')) { e.preventDefault(); e.target.click(); return; }
-  if (e.key === 'Escape') { if (UI.dlg === 'relay') relayCancel(); else if ($('dlgRoot').innerHTML) { if (UI.dlg === 'settings') { applyImpStyle(); if (UI.fontDraft) { UI.fontDraft = null; applyFont(); } if (UI.fxDraft) { UI.fxDraft = null; renderCal(); } } $('dlgRoot').innerHTML = ''; UI.dlg = null; } else if (UI.openId) closeSheet(); else if (UI.dayForm) { UI.dayForm = null; renderDay(true); } }
+  if (e.key === 'Escape') { if (UI.dlg === 'relay') relayCancel(); else if ($('dlgRoot').innerHTML) { if (UI.dlg === 'settings') { applyImpStyle(); if (UI.wcDraft) { UI.wcDraft = null; paintWords(); } if (UI.fontDraft) { UI.fontDraft = null; applyFont(); } if (UI.fxDraft) { UI.fxDraft = null; renderCal(); } } $('dlgRoot').innerHTML = ''; UI.dlg = null; } else if (UI.openId) closeSheet(); else if (UI.dayForm) { UI.dayForm = null; renderDay(true); } }
   if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && e.target.id === 'rawMail') analyzeNew();
   if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'z' || e.key === 'Z' || e.key === 'y') && !(e.target.closest && e.target.closest('input,textarea,select,[contenteditable]')) && !UI.dlg) { e.preventDefault(); doUndo(e.key === 'y' || e.shiftKey); }
 });
@@ -4063,23 +4127,32 @@ $('cal').addEventListener('wheel', e => {
   shiftCalMonth(k);
 }, { passive: false });
 let rsT; window.addEventListener('resize', () => { clearTimeout(rsT); rsT = setTimeout(() => { UI.cap = 9; renderCal(); renderRail(); }, 200); });
+const SET_TABS = [['general', '기본', 'gear'], ['display', '화면·글꼴', 'cal'], ['icons', '아이콘', 'spark'], ['emph', '중요·강조', '행사'], ['link', '저장·구글', 'drive']];
 function openSettings() {
-  const s = S.settings;
-  $('dlgRoot').innerHTML = `<div class="scrim" data-act="closeDlg"></div><div class="dlg"><div class="dlgbox" role="dialog" aria-modal="true" aria-labelledby="dlgT">
+  const s = S.settings, tab = UI.setTab || 'general';
+  $('dlgRoot').innerHTML = `<div class="scrim" data-act="closeDlg"></div><div class="dlg"><div class="dlgbox wide setbox" role="dialog" aria-modal="true" aria-labelledby="dlgT">
     <h3 id="dlgT">설정</h3>
+    <div class="settabs" role="tablist">${SET_TABS.map(([k, l, i]) => `<button type="button" role="tab" data-act="setTab" data-t="${k}" aria-selected="${tab === k}">${ic(i)}${l}</button>`).join('')}</div>
+    <div class="setbody">
+    <div class="stab" data-tab="general" ${tab === 'general' ? '' : 'hidden'}>
     <label>학기 이름<input class="field" id="sLabel" value="${esc(s.semesterLabel)}"></label>
     <label>개강 주 월요일 (주차 계산 기준)<input class="field" type="date" id="sStart" value="${esc(s.semesterStart)}"></label>
     <label>답장 서명<textarea class="field" id="sSig" rows="3">${esc(s.signature)}</textarea></label>
     <label>업무를 받는 조교 (이름·호칭)<input class="field" id="sAsst" value="${esc(s.assistant)}" placeholder="예: 김OO 조교"></label>
+    </div><div class="stab" data-tab="display" ${tab === 'display' ? '' : 'hidden'}>
     <div class="bsec"><b>${ic('cal')} 달력 칸 표시</b>
       <label>달력 칸에<select class="field" id="sCellMode"><option value="icons" ${s.cellMode !== 'titles' ? 'selected' : ''}>아이콘만 (3×3 격자)</option><option value="titles" ${s.cellMode === 'titles' ? 'selected' : ''}>아이콘과 제목 (구글 캘린더처럼 한 줄씩)</option></select></label>
       <span class="count">제목을 보이면 칸 너비만큼 앞부분만 보이고, 넘치는 것은 +숫자로 표시됩니다. 마우스를 올리면 전체 제목이 보입니다.</span></div>
     ${fontSettingsHtml()}
+    </div><div class="stab" data-tab="icons" ${tab === 'icons' ? '' : 'hidden'}>
     ${fxSettingsHtml()}
-    ${impSettingsHtml(s)}
     <div class="bsec"><b>${ic('spark')} 아이콘</b><div><button class="btn small" type="button" data-act="iconMgr">${ic('pen')}아이콘 ${ICON_LEGEND.length + 1}종 색·이름 바꾸기</button></div></div>
     <div class="bsec"><b>${ic('spark')} 기억한 아이콘 규칙</b>
       ${(s.iconRules || []).length ? `<div class="rulelist">${s.iconRules.map(r => `<span class="rule">${ic(r.icon, iconKc(r.icon))}<b>${esc(r.w)}</b><button class="x" type="button" data-act="delRule" data-w="${esc(r.w)}" aria-label="규칙 지우기">✕</button></span>`).join('')}</div>` : '<span class="count">아직 없습니다. 날짜를 눌러 일정 왼쪽 아이콘을 누르면 바꿀 수 있고, 그때 단어를 기억시킬 수 있습니다.</span>'}</div>
+    </div><div class="stab" data-tab="emph" ${tab === 'emph' ? '' : 'hidden'}>
+    ${impSettingsHtml(s)}
+    ${wordSettingsHtml()}
+    </div><div class="stab" data-tab="link" ${tab === 'link' ? '' : 'hidden'}>
     <div class="bsec"><b>${ic('drive')} 저장 폴더</b>
       <span class="count">PC에 <b>Google Drive 데스크톱 앱</b>을 설치하면 내 드라이브가 일반 폴더(예: G:\\내 드라이브)로 보입니다. 그 안에 "학과장실 대시보드" 폴더를 만들어 고르면 데이터가 그 폴더의 ${FILE_NAME}에 저장되고, 드라이브가 다른 PC로 동기화합니다. 다른 PC에서도 같은 폴더를 한 번 고르면 됩니다.</span>
       ${!fsOK ? `<span class="count" style="color:var(--amber)">이 브라우저는 폴더 저장을 지원하지 않습니다. 크롬이나 엣지에서 열어 주세요.</span>` : `<div class="row"><span>${FS.handle ? `현재 폴더: <b>${esc(FS.handle.name)}</b>` : '아직 고른 폴더가 없습니다.'}</span><button class="btn small ${FS.handle ? '' : 'primary'}" type="button" data-act="fsPick">${ic('drive')}${FS.handle ? '폴더 바꾸기' : '폴더 고르기'}</button></div>`}
@@ -4106,6 +4179,7 @@ function openSettings() {
 
       <label>OAuth 클라이언트 ID<input class="field" id="sCid" value="${esc(clientId())}" placeholder="...apps.googleusercontent.com" autocomplete="off"></label>
       ${gReady() ? `<div><button class="btn small" type="button" data-act="signOut">구글 연결 해제</button></div>` : ''}</div>
+    </div></div>
     <div class="row" style="justify-content:flex-end"><button class="btn" type="button" data-act="closeDlg">취소</button><button class="btn primary" type="button" data-act="saveSettings">저장</button></div>
   </div></div>`;
 }
