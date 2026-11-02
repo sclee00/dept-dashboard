@@ -491,6 +491,8 @@ a.btn{text-decoration:none;color:inherit}
 .quick.sized .qbody{flex:1 0 auto;min-height:0;grid-template-rows:minmax(0,1fr)}
 .quick.sized #rawMail{height:100%;min-height:2.6rem;resize:none;box-sizing:border-box}
 body.resizing{user-select:none} body.rs-col,body.rs-col *{cursor:col-resize!important} body.rs-row,body.rs-row *{cursor:row-resize!important}
+.tools [data-ok],.stats [data-ok]{cursor:grab}
+.reo-drag{opacity:.4;outline:2px dashed var(--accent);outline-offset:2px}
 .cmdrow{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
 .cmdrow .ic{width:1.3rem;height:1.3rem}
 .ic.cu{color:var(--icc)}
@@ -608,13 +610,13 @@ label.inl{display:inline-flex;align-items:center;gap:.3rem;font-size:.85rem} lab
     </div>
     <div class="stats" id="stats"></div>
     <div class="tools">
-      <button class="gchip" id="syncchip" type="button" data-act="sync"><span data-ic="drive"></span><span>저장 위치 확인 중</span></button>
-      <button class="gchip" id="gchip" type="button" data-act="gchip"><span data-ic="gcal"></span><span>구글 로그인</span></button>
-      <button class="iconbtn" id="undoBtn" data-act="undo" type="button" disabled title="되돌릴 것이 없습니다"><span data-ic="undo"></span><span class="ul">되돌리기</span></button>
-      <button class="iconbtn" id="redoBtn" data-act="redo" type="button" hidden aria-label="다시 하기"><span data-ic="redo"></span></button>
-      <button class="iconbtn" data-act="openFinder" type="button"><span data-ic="search"></span>빈 시간 찾기</button>
-      <button class="iconbtn" data-act="openBusy" type="button"><span data-ic="lock"></span>불가 시간</button>
-      <button class="iconbtn" data-act="settings" type="button"><span data-ic="gear"></span>설정</button>
+      <button class="gchip" id="syncchip" type="button" data-act="sync" data-ok="sync" draggable="true"><span data-ic="drive"></span><span>저장 위치 확인 중</span></button>
+      <button class="gchip" id="gchip" type="button" data-act="gchip" data-ok="gchip" draggable="true"><span data-ic="gcal"></span><span>구글 로그인</span></button>
+      <button class="iconbtn" id="undoBtn" data-act="undo" data-ok="undo" draggable="true" type="button" disabled title="되돌릴 것이 없습니다"><span data-ic="undo"></span><span class="ul">되돌리기</span></button>
+      <button class="iconbtn" id="redoBtn" data-act="redo" data-ok="redo" draggable="true" type="button" hidden aria-label="다시 하기"><span data-ic="redo"></span></button>
+      <button class="iconbtn" data-act="openFinder" data-ok="finder" draggable="true" type="button"><span data-ic="search"></span>빈 시간 찾기</button>
+      <button class="iconbtn" data-act="openBusy" data-ok="busy" draggable="true" type="button"><span data-ic="lock"></span>불가 시간</button>
+      <button class="iconbtn" data-act="settings" data-ok="settings" draggable="true" type="button"><span data-ic="gear"></span>설정</button>
     </div>
   </header>
 
@@ -1229,7 +1231,8 @@ function renderHeader() {
     [deleg, '조교 전달 대기', deleg ? 'warn' : '', 'hand'],
     [open, '처리 중 메일', '', 'mail'],
     [weekN, '7일 내 일정', '', 'cal']
-  ].map(([n, l, c, i]) => `<div class="stat ${c}">${ic(i)}<div class="n">${n}</div><div class="l">${l}</div></div>`).join('');
+  ].map(([n, l, c, i]) => `<div class="stat ${c}" data-ok="${i}" draggable="true" title="끌어서 순서 바꾸기">${ic(i)}<div class="n">${n}</div><div class="l">${l}</div></div>`).join('');
+  applyOrder($('stats'), 'stats');
   renderFocus();
 }
 
@@ -2800,6 +2803,31 @@ function fontLive() {
   if ($('fontSizeV')) $('fontSizeV').textContent = Math.round(UI.fontDraft.size * 100) + '%';
 }
 
+/* ---------- drag to reorder the top buttons and number cards ---------- */
+function applyOrder(box, key) {
+  const ord = (LAY.order || {})[key]; if (!box || !Array.isArray(ord)) return;
+  const items = [...box.querySelectorAll(':scope > [data-ok]')], rank = k => { const i = ord.indexOf(k); return i < 0 ? 999 : i; };
+  items.slice().sort((a, b) => rank(a.dataset.ok) - rank(b.dataset.ok)).forEach(el => box.appendChild(el));
+}
+let reo = null;
+document.addEventListener('dragstart', e => {
+  const el = e.target.closest && e.target.closest('[data-ok]'); if (!el) return;
+  const box = el.parentElement; reo = { el, box, key: box.id === 'stats' ? 'stats' : 'tools' };
+  try { e.dataTransfer.setData('text/plain', 'reorder'); e.dataTransfer.effectAllowed = 'move'; } catch {}
+  el.classList.add('reo-drag');
+});
+document.addEventListener('dragover', e => {
+  if (!reo) return; const t = e.target.closest && e.target.closest('[data-ok]'); if (!t || t === reo.el || t.parentElement !== reo.box) return;
+  e.preventDefault(); const r = t.getBoundingClientRect(), after = e.clientX > r.left + r.width / 2;
+  reo.box.insertBefore(reo.el, after ? t.nextSibling : t);
+});
+document.addEventListener('drop', e => { if (reo) e.preventDefault(); });
+document.addEventListener('dragend', () => {
+  if (!reo) return; reo.el.classList.remove('reo-drag');
+  LAY.order = { ...(LAY.order || {}), [reo.key]: [...reo.box.querySelectorAll(':scope > [data-ok]')].map(x => x.dataset.ok) };
+  saveLayout(); reo = null;
+});
+
 /* ---------- resizable panels (per PC, kept in this browser) ---------- */
 let LAY = {}; try { LAY = JSON.parse(localStorage.getItem('dashLayout') || '{}') || {}; } catch {}
 function applyLayout() {
@@ -4092,6 +4120,7 @@ renderAll();
 setInterval(() => { renderHeader(); if (UI.selDay === todayStr()) renderDay(false); }, 60000);
 
 /* ---------- boot ---------- */
+applyOrder(document.querySelector('.tools'), 'tools');
 loadLocal();
 gCacheLoad();
 renderAll();
