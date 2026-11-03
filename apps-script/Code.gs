@@ -12,12 +12,15 @@
  *
  * 코드를 바꾼 뒤에는 [배포] → [배포 관리] → 수정(연필) → 버전: 새 버전 → 배포
  * 이 스크립트는 내 계정의 캘린더만 다루며, KEY가 맞는 요청에만 답합니다.
- * 할 수 있는 일: 캘린더 목록, 일정 읽기, 일정 만들기, 일정 고치기 (삭제는 없음)
+ * 할 수 있는 일: 캘린더 목록, 일정 읽기, 일정 만들기, 일정 고치기 (삭제는 없음),
+ *               내 드라이브의 dashboard-data.json 읽기·쓰기 (아이폰 등 폴더 저장이 안 되는 기기용)
+ * 버전 4부터 드라이브 권한이 추가되었습니다. 코드를 바꾼 뒤 authorize를 한 번 더 실행해 권한을 허용하세요.
  */
 const KEY = 'CHANGE_ME';
 
 function authorize() {
   CalendarApp.getDefaultCalendar().getName();
+  DriveApp.getRootFolder().getName();
   Logger.log('권한 확인 완료: ' + Session.getEffectiveUser().getEmail());
 }
 
@@ -27,7 +30,8 @@ function doGet(e) {
   if (p.key !== KEY) return out({ ok: false, error: 'key' });
   try {
     switch (p.action) {
-      case 'ping': return out({ ok: true, email: Session.getEffectiveUser().getEmail(), tz: Session.getScriptTimeZone(), version: 3 });
+      case 'ping': return out({ ok: true, email: Session.getEffectiveUser().getEmail(), tz: Session.getScriptTimeZone(), version: 4 });
+      case 'dataGet': return out(Object.assign({ ok: true }, dataGet(p)));
       case 'calendars': return out({ ok: true, calendars: listCalendars() });
       case 'events': return out({ ok: true, events: listEvents(p.cal, p.from, p.to) });
       case 'create': return out({ ok: true, event: createEvent(p) });
@@ -37,6 +41,58 @@ function doGet(e) {
   } catch (err) {
     return out({ ok: false, error: 'script', message: String((err && err.message) || err) });
   }
+}
+
+function doPost(e) {
+  let b = {};
+  try { b = JSON.parse((e && e.postData && e.postData.contents) || '{}'); } catch (err) { return out({ ok: false, error: 'body' }); }
+  if (!KEY || KEY === 'CHANGE_ME') return out({ ok: false, error: 'nokey' });
+  if (b.key !== KEY) return out({ ok: false, error: 'key' });
+  try {
+    if (b.action === 'dataPut') return out(Object.assign({ ok: true }, dataPut(b)));
+    return out({ ok: false, error: 'action' });
+  } catch (err) {
+    return out({ ok: false, error: 'script', message: String((err && err.message) || err) });
+  }
+}
+
+/* ---------- dashboard data file in My Drive (same file the PC folder uses) ---------- */
+const DATA_NAME = 'dashboard-data.json';
+const DATA_FOLDER = '학과장실 대시보드';
+function dataFile(create) {
+  const props = PropertiesService.getScriptProperties();
+  const id = props.getProperty('DATA_FILE_ID');
+  if (id) { try { const f = DriveApp.getFileById(id); if (!f.isTrashed()) return f; } catch (e) {} }
+  let best = null;
+  const it = DriveApp.getFilesByName(DATA_NAME);
+  while (it.hasNext()) { const f = it.next(); if (!f.isTrashed() && (!best || f.getLastUpdated() > best.getLastUpdated())) best = f; }
+  if (!best && create) {
+    const fit = DriveApp.getFoldersByName(DATA_FOLDER);
+    const folder = fit.hasNext() ? fit.next() : DriveApp.createFolder(DATA_FOLDER);
+    best = folder.createFile(DATA_NAME, '{}', 'application/json');
+  }
+  if (best) props.setProperty('DATA_FILE_ID', best.getId());
+  return best;
+}
+function whereOf(f) {
+  try { const p = f.getParents(); return (p.hasNext() ? p.next().getName() + '/' : '') + f.getName(); } catch (e) { return f.getName(); }
+}
+function dataGet(p) {
+  const f = dataFile(false);
+  if (!f) return { exists: false, modified: 0 };
+  const m = f.getLastUpdated().getTime();
+  if (p.since && Number(p.since) === m) return { exists: true, same: true, modified: m, where: whereOf(f) };
+  return { exists: true, modified: m, where: whereOf(f), data: f.getBlob().getDataAsString('UTF-8') };
+}
+function dataPut(b) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const f = dataFile(true);
+    f.setContent(String(b.data || '{}'));
+    const g = DriveApp.getFileById(f.getId());
+    return { modified: g.getLastUpdated().getTime(), where: whereOf(g) };
+  } finally { lock.releaseLock(); }
 }
 
 function out(o) {

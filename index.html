@@ -3,6 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#06080B">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="학과장실">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237FA2FF' stroke-width='2'%3E%3Crect x='3' y='5' width='18' height='16' rx='2'/%3E%3Cpath d='M3 10h18M8 3v4M16 3v4'/%3E%3C/svg%3E">
 <script src="config.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -504,6 +512,28 @@ body.resizing{user-select:none} body.rs-col,body.rs-col *{cursor:col-resize!impo
 .wcrow{display:grid;grid-template-columns:minmax(0,1fr) 2.6rem auto auto auto;gap:.45rem;align-items:center}
 .wcrow label.chk{flex-direction:row;font-size:.8rem;white-space:nowrap}
 .wc{border-radius:3px;padding:0 .05em}
+.phonebox{display:grid;grid-template-columns:9.5rem minmax(0,1fr);gap:.8rem;align-items:center}
+.qr{width:9.5rem;height:9.5rem;background:#fff;border-radius:8px;display:grid;place-items:center;font-size:.75rem;color:#333;padding:.3rem;text-align:center}
+.qr svg{width:100%;height:100%}
+.steps{margin:0;padding-left:1.1rem;display:flex;flex-direction:column;gap:.25rem}
+@media (max-width:700px){
+  .stats{display:grid!important;grid-template-columns:repeat(5,minmax(0,1fr));gap:.3rem;width:100%}
+  .stat{display:flex!important;flex-direction:column;align-items:center;text-align:center;padding:.35rem .2rem!important;gap:0!important;min-width:0}
+  .stat .ic{display:none}
+  .stat .n{font-size:1.15rem!important}
+  .stat .l{font-size:.62rem!important;line-height:1.2;white-space:normal}
+  .today{font-size:1.6rem!important}
+  .tools{gap:.3rem!important}
+  .tools .iconbtn,.tools .gchip{font-size:.8rem;padding:.3rem .5rem}
+  .calnav .legend{display:none}
+  .sheet{width:100%!important}
+  .gutter.sgrip{display:none}
+  .cell{display:flex!important;flex-direction:column;padding:.2rem!important}
+  .chead{flex-direction:row!important;align-items:center!important;justify-content:space-between!important}
+  .dn{flex-direction:row!important;gap:.15rem!important}
+  .chead .free{display:none}
+  .citems{display:flex!important;flex-wrap:wrap;justify-content:flex-start!important;gap:2px!important}
+}
 .cmdrow{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
 .cmdrow .ic{width:1.3rem;height:1.3rem}
 .ic.cu{color:var(--icc)}
@@ -1836,9 +1866,9 @@ function idb() { return new Promise((res, rej) => { const r = indexedDB.open('de
 async function kvGet(k) { try { const d = await idb(); return await new Promise(res => { const q = d.transaction('kv').objectStore('kv').get(k); q.onsuccess = () => res(q.result || null); q.onerror = () => res(null); }); } catch { return null; } }
 async function kvSet(k, v) { try { const d = await idb(); await new Promise(res => { const t = d.transaction('kv', 'readwrite'); t.objectStore('kv').put(v, k); t.oncomplete = res; t.onerror = res; }); } catch {} }
 async function fsRestore() {
-  if (!fsOK) { FS.perm = 'unsupported'; renderSync(); return; }
+  if (!fsOK) { FS.perm = 'unsupported'; renderSync(); if (gasDataOn()) syncNow(); return; }
   const h = await kvGet('dir');
-  if (!h) { FS.perm = 'none'; renderSync(); return; }
+  if (!h) { FS.perm = 'none'; renderSync(); if (gasDataOn()) syncNow(); return; }
   FS.handle = h;
   try { FS.perm = await h.queryPermission({ mode: 'readwrite' }); } catch { FS.perm = 'prompt'; }
   renderSync();
@@ -1861,8 +1891,41 @@ async function fsAllow() {
   renderSync();
   if (FS.perm === 'granted') syncNow();
 }
+const gasDataOn = () => gasOn() && !fsReady();
+async function gasPost(body) {
+  let r;
+  try { r = await fetch(S.settings.gasUrl, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ ...body, key: S.settings.gasKey }) }); }
+  catch { throw { code: 'net', message: '스크립트에 연결하지 못했습니다.' }; }
+  let j; try { j = await r.json(); } catch { throw { code: 'badjson', message: '스크립트 응답을 읽지 못했습니다.' }; }
+  if (!j || !j.ok) throw { code: (j && j.error) || 'gas', message: (j && j.message) || '' };
+  return j;
+}
+// same merge rules as the folder: read the file, merge, write back only if this device has something newer
+async function gasSync() {
+  if (DRIVE.saving) { DRIVE.again = true; return; }
+  DRIVE.saving = true; DRIVE.state = 'saving'; DRIVE.via = 'gas'; renderSync();
+  try {
+    const j = await gas({ action: 'dataGet', since: DRIVE.remoteMod || 0 });
+    if (j.exists && !j.same && j.data) {
+      let remote = null; try { remote = JSON.parse(j.data); } catch {}
+      if (remote && typeof remote === 'object') {
+        const before = dataOnly(remote);
+        if (mergeIn(remote)) renderAll();
+        if (dataOnly(snapshot()) !== before || (G.changedAt || 0) > ((remote.gcache && remote.gcache.changedAt) || 0)) DRIVE.dirty = true;
+        cacheLocal();
+      }
+    } else if (!j.exists) DRIVE.dirty = true;
+    DRIVE.remoteMod = j.modified; DRIVE.where = j.where || DRIVE.where;
+    if (DRIVE.dirty) { DRIVE.dirty = false; const w = await gasPost({ action: 'dataPut', data: JSON.stringify(snapshot()) }); DRIVE.remoteMod = w.modified; DRIVE.where = w.where || DRIVE.where; }
+    DRIVE.state = 'ok'; DRIVE.last = Date.now();
+  } catch (e) {
+    DRIVE.state = e && (e.code === 'action' || /오래된 버전/.test(e.message || '')) ? 'gasold' : 'error'; DRIVE.dirty = true;
+  }
+  DRIVE.saving = false; renderSync();
+  if (DRIVE.again) { DRIVE.again = false; syncNow(); }
+}
 async function syncNow() {
-  if (!fsReady()) { renderSync(); return; }
+  if (!fsReady()) { if (gasDataOn()) return gasSync(); renderSync(); return; }
   if (DRIVE.saving) { DRIVE.again = true; return; }
   DRIVE.saving = true; DRIVE.state = 'saving'; renderSync();
   try {
@@ -1912,8 +1975,12 @@ async function dailyBackup() {
 function renderSync() {
   const el = $('syncchip'); if (!el) return;
   const t = DRIVE.last ? new Date(DRIVE.last) : null;
-  const st = !fsOK ? 'unsupported' : !FS.handle ? 'none' : FS.perm !== 'granted' ? 'prompt' : DRIVE.state;
+  const viaGas = !fsReady() && gasOn();
+  const st = viaGas ? 'g' + DRIVE.state : !fsOK ? 'unsupported' : !FS.handle ? 'none' : FS.perm !== 'granted' ? 'prompt' : DRIVE.state;
   const M = {
+    glocal: ['', '드라이브와 맞추는 중'], gsaving: ['', '드라이브에 저장 중'],
+    gok: ['ok', `드라이브에 저장됨${t ? ' ' + pad(t.getHours()) + ':' + pad(t.getMinutes()) : ''}`],
+    gerror: ['warn', '드라이브 저장 실패 · 다시 시도'], ggasold: ['warn', '스크립트 업데이트 필요'],
     unsupported: ['warn', '이 브라우저에만 저장됨 (크롬·엣지에서 폴더 저장)'],
     none: ['ask', '저장 폴더 고르기'],
     prompt: ['ask', '저장 폴더 다시 허용'],
@@ -2250,7 +2317,7 @@ const UNDO_LABEL = {
   delRule: '아이콘 규칙 삭제', skipOcc: '반복 일정 한 번 빼기', edSave: '일정 편집', bdSave: '불가 시간 설정', saveSettings: '설정 변경', imSave: '아이콘 색·이름',
   pushG: '구글에 추가', fEvent: '일정 추가', fBlock: '불가 시간 추가', taskForm: '할 일 추가', importData: '파일 가져오기'
 };
-const UNDO_SKIP = new Set(['setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
+const UNDO_SKIP = new Set(['copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
 function undoSnap() {
   const o = { settings: JSON.parse(JSON.stringify(S.settings)) };
   for (const c of COLS) o[c] = JSON.parse(JSON.stringify(S[c]));
@@ -2462,7 +2529,8 @@ const LIBS = {
   mammoth: 'https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js',
   pdf: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js',
   pdfWorker: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js',
-  jszip: 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js'
+  jszip: 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js',
+  qr: 'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js'
 };
 const _libs = {};
 function loadLib(k) {
@@ -2937,6 +3005,38 @@ function wcReadForm() {
 }
 function wcLive() { UI.wcDraft = wcReadForm(); const pv = document.querySelector('.wcoffhold'); if (pv) pv.textContent = UI.wcDraft.map(r => r.w).slice(0, 6).join(' · ') || '단어를 넣으면 여기서 색이 보입니다'; paintWords(); }
 
+/* ---------- phone (iPhone) connection: same data through the Apps Script ---------- */
+function connectLink() {
+  const b = btoa(unescape(encodeURIComponent(JSON.stringify({ u: S.settings.gasUrl, k: S.settings.gasKey })))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return location.origin + location.pathname + '#connect=' + b;
+}
+function phoneSettingsHtml() {
+  if (!gasOn()) return `<div class="bsec"><b>${ic('phone')} 휴대폰에서 쓰기</b><span class="count">아이폰에서도 같은 데이터를 보려면 먼저 아래 "구글 캘린더 → Apps Script로 연결"을 마쳐 주세요. 그러면 여기에 휴대폰 연결용 QR 코드가 나타납니다.</span></div>`;
+  setTimeout(drawPhoneQR, 0);
+  return `<div class="bsec"><b>${ic('phone')} 휴대폰에서 쓰기</b>
+    <div class="phonebox"><div id="phoneQR" class="qr">QR 만드는 중…</div>
+    <ol class="count steps"><li>아이폰 카메라로 이 QR을 찍어 사파리로 엽니다.</li><li>사파리 아래 <b>공유</b> 버튼 → <b>홈 화면에 추가</b>를 누르면 앱처럼 열립니다.</li><li>휴대폰은 Apps Script를 통해 드라이브의 같은 데이터 파일을 읽고 씁니다${DRIVE.where ? ` (<b>${esc(DRIVE.where)}</b>)` : ''}.</li></ol></div>
+    <div class="row"><button class="btn small" type="button" data-act="copyConnect">${ic('copy')}연결 링크 복사</button><span class="count warnline">이 QR·링크에는 비밀 키가 들어 있으니 다른 사람에게 보내지 마세요.</span></div>
+    <span class="count">스크립트가 버전 4 이상이어야 합니다. 이전 버전이면 새 Code.gs로 바꾸고 authorize 실행 → 배포 관리 → 새 버전으로 배포하세요.</span></div>`;
+}
+async function drawPhoneQR() {
+  const box = $('phoneQR'); if (!box) return;
+  try { await loadLib('qr'); const q = qrcode(0, 'M'); q.addData(connectLink()); q.make(); box.innerHTML = q.createSvgTag({ cellSize: 4, margin: 2, scalable: true }); }
+  catch { box.textContent = 'QR을 만들지 못했습니다. "연결 링크 복사"로 휴대폰에 보내 주세요.'; }
+}
+// opened from the QR: take the script address and key, then load everything from Drive
+function takeConnectLink() {
+  const m = location.hash.match(/connect=([\w-]+)/); if (!m) return false;
+  try {
+    const j = JSON.parse(decodeURIComponent(escape(atob(m[1].replace(/-/g, '+').replace(/_/g, '/')))));
+    if (/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(j.u || '') && j.k) {
+      S.settings = { ...S.settings, gasUrl: j.u, gasKey: j.k }; // settingsU is left as is, so the PC's full settings win on the first merge
+      cacheLocal(); history.replaceState(null, '', location.pathname); toast('PC와 연결했습니다. 드라이브에서 데이터를 불러옵니다.'); return true;
+    }
+  } catch {}
+  history.replaceState(null, '', location.pathname); toast('연결 링크가 올바르지 않습니다. PC 설정에서 QR을 다시 찍어 주세요.'); return false;
+}
+
 /* ---------- calendar (main) ---------- */
 const repDays = e => e.repeat && Array.isArray(e.repeat.days) && e.repeat.days.length ? e.repeat.days : null;
 // repeat: { days:[요일], freq:'weekly'|'monthly', interval:N (N주마다), nth:[1..5,-1] (매월 몇째 주, -1=마지막), skipIfWeekHas:{day, nth} (그 요일이 있는 주는 건너뜀), until }
@@ -3042,6 +3142,7 @@ function renderCal() {
 
 // size icons so a 3 x 3 grid fits inside one day cell
 function fitIcons(g) {
+  if (window.innerWidth <= 700) { g.style.setProperty('--cis', '15px'); return; }
   if (S.settings.cellMode === 'titles') { g.style.removeProperty('--cis'); return; }
   const c = g.querySelector('.cell'), h = c && c.querySelector('.chead'); if (!c || !h) return;
   const cs = getComputedStyle(c), gap = window.innerWidth <= 700 ? 1 : window.innerWidth >= 1100 ? 4 : 3;
@@ -3819,7 +3920,8 @@ document.addEventListener('click', async ev0 => {
         return;
       }
       case 'sync':
-        if (!fsOK) return toast('이 브라우저는 폴더 저장을 지원하지 않습니다. 크롬이나 엣지에서 열면 구글 드라이브 폴더에 저장됩니다.');
+        if (gasDataOn()) { if (DRIVE.state === 'gasold') toast('Apps Script를 새 코드(버전 4)로 다시 배포해야 드라이브에 저장됩니다.'); return syncNow(); }
+        if (!fsOK) { UI.setTab = 'link'; UI.dlg = 'settings'; openSettings(); return toast('이 기기에서는 Apps Script 연결로 드라이브에 저장합니다. PC 설정의 "휴대폰에서 쓰기" QR로 연결하세요.'); }
         if (!FS.handle) return fsPick();
         if (FS.perm !== 'granted') return fsAllow();
         return syncNow();
@@ -3850,6 +3952,7 @@ document.addEventListener('click', async ev0 => {
       case 'evAbsent': UI.edits['ev-a-' + el.dataset.i] = el.checked ? '1' : ''; return renderSheet(true);
       case 'absentT': { const e = S.events.find(x => x.id === id); if (e) await patch('events', id, { absent: !e.absent }); return; }
       case 'absentG': { const k = el.dataset.k; const g = G.events.find(x => gKey(x) === k); if (g) setMark(k, { absent: !absentOfG(g) }); return; }
+      case 'copyConnect': { const l = connectLink(); try { await navigator.clipboard.writeText(l); toast('연결 링크를 복사했습니다. 휴대폰으로 보내 사파리에서 여세요.'); } catch { prompt('이 링크를 휴대폰에서 여세요', l); } return; }
       case 'setTab': UI.setTab = el.dataset.t; document.querySelectorAll('.stab').forEach(x => x.hidden = x.dataset.tab !== el.dataset.t); document.querySelectorAll('.settabs [data-act="setTab"]').forEach(x => x.setAttribute('aria-selected', String(x.dataset.t === el.dataset.t))); return;
       case 'wcAdd': { UI.wcDraft = [...wcReadForm(), { w: '', color: '#ff6b6b', bold: false }]; const box = document.querySelector('.wclist'); if (box) { const t = document.createElement('div'); t.innerHTML = wordSettingsHtml(); box.replaceWith(t.querySelector('.wclist')); const ins = document.querySelectorAll('.wcrow [data-wc="w"]'); ins.length && ins[ins.length - 1].focus(); } return; }
       case 'wcDel': { el.closest('.wcrow').remove(); return wcLive(); }
@@ -4153,6 +4256,7 @@ function openSettings() {
     ${impSettingsHtml(s)}
     ${wordSettingsHtml()}
     </div><div class="stab" data-tab="link" ${tab === 'link' ? '' : 'hidden'}>
+    ${phoneSettingsHtml()}
     <div class="bsec"><b>${ic('drive')} 저장 폴더</b>
       <span class="count">PC에 <b>Google Drive 데스크톱 앱</b>을 설치하면 내 드라이브가 일반 폴더(예: G:\\내 드라이브)로 보입니다. 그 안에 "학과장실 대시보드" 폴더를 만들어 고르면 데이터가 그 폴더의 ${FILE_NAME}에 저장되고, 드라이브가 다른 PC로 동기화합니다. 다른 PC에서도 같은 폴더를 한 번 고르면 됩니다.</span>
       ${!fsOK ? `<span class="count" style="color:var(--amber)">이 브라우저는 폴더 저장을 지원하지 않습니다. 크롬이나 엣지에서 열어 주세요.</span>` : `<div class="row"><span>${FS.handle ? `현재 폴더: <b>${esc(FS.handle.name)}</b>` : '아직 고른 폴더가 없습니다.'}</span><button class="btn small ${FS.handle ? '' : 'primary'}" type="button" data-act="fsPick">${ic('drive')}${FS.handle ? '폴더 바꾸기' : '폴더 고르기'}</button></div>`}
@@ -4196,6 +4300,7 @@ setInterval(() => { renderHeader(); if (UI.selDay === todayStr()) renderDay(fals
 /* ---------- boot ---------- */
 applyOrder(document.querySelector('.tools'), 'tools');
 loadLocal();
+takeConnectLink();
 gCacheLoad();
 renderAll();
 document.body.insertAdjacentHTML('beforeend', '<input type="file" id="importFile" accept="application/json,.json" hidden>');
