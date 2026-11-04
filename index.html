@@ -572,6 +572,29 @@ body.resizing{user-select:none} body.rs-col,body.rs-col *{cursor:col-resize!impo
 .mthumb .x{position:absolute;top:-.4rem;right:-.4rem;background:var(--surface);border-radius:50%;opacity:1}
 .memobtn.on{color:var(--accent);opacity:1}
 .memodot .ic{width:.8rem;height:.8rem;color:var(--accent);vertical-align:-1px}
+@media (min-width:701px){
+  header.top{align-items:center;justify-content:flex-start;gap:.45rem .9rem}
+  header.top .eyebrow{display:none}
+  header.top .today{font-size:1.4rem;line-height:1.1}
+  header.top .term{font-size:.78rem;margin-top:.1rem;gap:.4rem}
+  .stats{gap:.3rem}
+  .stat{display:inline-flex!important;align-items:center;gap:.3rem!important;padding:.22rem .6rem!important;min-width:0!important;border-radius:999px!important;cursor:pointer;font:inherit;color:var(--ink)}
+  .stat>.ic{width:.95rem;height:.95rem}
+  .stat .n{font-size:.98rem!important;line-height:1.2}
+  .stat .l{font-size:.74rem}
+  .stat.zero{opacity:.5}
+  .stat:hover{border-color:var(--muted)}
+  .tools{gap:.3rem}
+  .tools .iconbtn,.tools .gchip{padding:.22rem .6rem;font-size:.8rem}
+  .focusbar{display:flex!important;flex-wrap:wrap;gap:.3rem}
+  .focusbar .fcard{display:inline-flex!important;align-items:center;gap:.4rem;padding:.22rem .6rem .22rem .3rem!important;border-radius:999px;max-width:24rem}
+  .focusbar .fcard .fi{width:1.35rem;height:1.35rem;border-radius:50%}
+  .focusbar .fcard .fi .ic{width:.85rem;height:.85rem}
+  .focusbar .fcard>span:last-child{display:flex;align-items:baseline;gap:.4rem;min-width:0}
+  .focusbar .fcard .why{font-size:.7rem;white-space:nowrap}
+  .focusbar .fcard .ft{font-size:.82rem!important;-webkit-line-clamp:1;white-space:nowrap;text-overflow:ellipsis;display:block;overflow:hidden}
+}
+.stat{font:inherit;color:var(--ink);text-align:left}
 .cmdrow{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
 .cmdrow .ic{width:1.3rem;height:1.3rem}
 .ic.cu{color:var(--icc)}
@@ -1316,7 +1339,7 @@ function renderHeader() {
     [deleg, '조교 전달 대기', deleg ? 'warn' : '', 'hand'],
     [open, '처리 중 메일', '', 'mail'],
     [weekN, '7일 내 일정', '', 'cal']
-  ].map(([n, l, c, i]) => `<div class="stat ${c}" data-ok="${i}" draggable="true" title="끌어서 순서 바꾸기">${ic(i)}<div class="n">${n}</div><div class="l">${l}</div></div>`).join('');
+  ].map(([n, l, c, i]) => { const go = { alert: 'data-act="rail" data-r="tasks"', reply: 'data-act="gotoMf" data-mf="reply"', hand: 'data-act="gotoMf" data-mf="open"', mail: 'data-act="gotoMf" data-mf="open"', cal: 'data-act="thisMonth"' }[i] || ''; return `<button type="button" class="stat ${c} ${n ? '' : 'zero'}" ${go} data-ok="${i}" draggable="true" title="${l} ${n} · 끌어서 순서 바꾸기">${ic(i)}<span class="n">${n}</span><span class="l">${l}</span></button>`; }).join('');
   applyOrder($('stats'), 'stats');
   renderFocus();
 }
