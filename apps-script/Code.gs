@@ -13,7 +13,7 @@
  * 코드를 바꾼 뒤에는 [배포] → [배포 관리] → 수정(연필) → 버전: 새 버전 → 배포
  * 이 스크립트는 내 계정의 캘린더만 다루며, KEY가 맞는 요청에만 답합니다.
  * 할 수 있는 일: 캘린더 목록, 일정 읽기, 일정 만들기, 일정 고치기 (삭제는 없음),
- *               내 드라이브의 dashboard-data.json 읽기·쓰기 (아이폰 등 폴더 저장이 안 되는 기기용)
+ *               일정 설명(메모) 읽기·쓰기, 내 드라이브의 dashboard-data.json 읽기·쓰기 (아이폰 등 폴더 저장이 안 되는 기기용)
  * 버전 4부터 드라이브 권한이 추가되었습니다. 코드를 바꾼 뒤 authorize를 한 번 더 실행해 권한을 허용하세요.
  */
 const KEY = 'CHANGE_ME';
@@ -30,7 +30,7 @@ function doGet(e) {
   if (p.key !== KEY) return out({ ok: false, error: 'key' });
   try {
     switch (p.action) {
-      case 'ping': return out({ ok: true, email: Session.getEffectiveUser().getEmail(), tz: Session.getScriptTimeZone(), version: 4 });
+      case 'ping': return out({ ok: true, email: Session.getEffectiveUser().getEmail(), tz: Session.getScriptTimeZone(), version: 5 });
       case 'dataGet': return out(Object.assign({ ok: true }, dataGet(p)));
       case 'calendars': return out({ ok: true, calendars: listCalendars() });
       case 'events': return out({ ok: true, events: listEvents(p.cal, p.from, p.to) });
@@ -141,7 +141,7 @@ function weeklyRule(daysText, until) {
 function listEvents(cal, from, to) {
   const c = calById(cal);
   return c.getEvents(toDate(from), toDate(to)).slice(0, 600).map(function (ev) {
-    const o = { id: ev.getId(), summary: ev.getTitle(), location: ev.getLocation() };
+    const o = { id: ev.getId(), summary: ev.getTitle(), location: ev.getLocation(), description: ev.getDescription() || '', updated: ev.getLastUpdated().getTime() };
     if (ev.isAllDayEvent()) {
       o.start = { date: fmt(ev.getAllDayStartDate(), 'yyyy-MM-dd') };
       o.end = { date: fmt(ev.getAllDayEndDate(), 'yyyy-MM-dd') };
@@ -184,9 +184,11 @@ function createEvent(p) {
 
 function updateEvent(p) {
   const c = calById(p.cal);
-  if (p.days) {
+  if (p.days || p.series) {
     const s = c.getEventSeriesById(p.id);
     if (!s) throw new Error('반복 일정을 찾을 수 없습니다.');
+    if (p.description !== undefined) s.setDescription(String(p.description));
+    if (p.descOnly) return { id: s.getId() };
     if (p.title) s.setTitle(p.title);
     s.setLocation(p.location || '');
     const rule = weeklyRule(p.days, p.until);
@@ -196,6 +198,8 @@ function updateEvent(p) {
   }
   const ev = c.getEventById(p.id);
   if (!ev) throw new Error('구글 캘린더에서 일정을 찾을 수 없습니다.');
+  if (p.description !== undefined) ev.setDescription(String(p.description));
+  if (p.descOnly) return { id: ev.getId() };
   if (p.title) ev.setTitle(p.title);
   ev.setLocation(p.location || '');
   if (p.titleOnly) return { id: ev.getId() };
