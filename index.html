@@ -2411,7 +2411,7 @@ const UNDO_LABEL = {
   delRule: '아이콘 규칙 삭제', skipOcc: '반복 일정 한 번 빼기', edSave: '일정 편집', bdSave: '불가 시간 설정', saveSettings: '설정 변경', imSave: '아이콘 색·이름',
   pushG: '구글에 추가', fEvent: '일정 추가', fBlock: '불가 시간 추가', taskForm: '할 일 추가', importData: '파일 가져오기'
 };
-const UNDO_SKIP = new Set(['fltImp', 'fltIcons', 'fltTog', 'fltClear', 'fltClose', 'cmdPick', 'cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
+const UNDO_SKIP = new Set(['fltImp', 'fltIcons', 'fltTog', 'fltClear', 'fltClose', 'cmdToAI', 'cmdPick', 'cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
 function undoSnap() {
   const o = { settings: JSON.parse(JSON.stringify(S.settings)) };
   for (const c of COLS) o[c] = JSON.parse(JSON.stringify(S[c]));
@@ -3330,15 +3330,33 @@ function fuzzyIn(word, title) {
   for (let L = Math.max(1, w.length - 1); L <= w.length + 1; L++) for (let i = 0; i + L <= t.length; i++) best = Math.max(best, hsim(w, t.slice(i, i + L)));
   return best;
 }
-const CMD_VOCAB = ['바꿔', '바꿔줘', '옮겨', '옮겨줘', '미뤄', '당겨', '늦춰', '취소', '취소해', '삭제', '지워', '지워줘', '추가', '추가해', '등록', '변경', '연기', '일정', '회의', '오늘', '내일', '모레', '오전', '오후', '다음주', '이번주', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일', '일요일', '중요', '불참', '반복', '매주', '매월', '마지막', '불가', '할일'];
+const CMD_VOCAB = ['땡겨', '앞당겨', '수정', '수정해', '바꿔', '바꿔줘', '옮겨', '옮겨줘', '미뤄', '당겨', '늦춰', '취소', '취소해', '삭제', '지워', '지워줘', '추가', '추가해', '등록', '변경', '연기', '일정', '회의', '오늘', '내일', '모레', '오전', '오후', '다음주', '이번주', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일', '일요일', '중요', '불참', '반복', '매주', '매월', '마지막', '불가', '할일'];
 const KNUM = { 한: 1, 두: 2, 세: 3, 네: 4, 다섯: 5, 여섯: 6, 일곱: 7, 여덟: 8, 아홉: 9, 열: 10, 열한: 11, 열두: 12 };
+// words in the user's own event titles, so they are never 'corrected' into command words
+let _tw = { at: 0, set: new Set() };
+function titleWords() {
+  if (Date.now() - _tw.at < 5000) return _tw.set;
+  const set = new Set(), addT = t => String(t || '').split(/[\s·,()\[\]\/]+/).forEach(w => { w = w.replace(/(을|를|은|는|이|가|도|의)$/, ''); if (w.length >= 2 && !CMD_VOCAB.includes(w)) set.add(w); });
+  S.events.forEach(e => addT(e.title)); S.tasks.forEach(x => addT(x.title));
+  try { (G.events || []).forEach(g => addT(g.title)); } catch {}
+  _tw = { at: Date.now(), set }; return set;
+}
 function normalizeCmd(raw) {
   let t = String(raw || '').replace(/\s+/g, ' ').trim();
-  t = t.replace(/(열한|열두|다섯|여섯|일곱|여덟|아홉|한|두|세|네|열)\s*시/g, (m0, k) => KNUM[k] + '시');
+  t = t.replace(/(^|\s)낼(?=\s|$)/g, '$1내일').replace(/(^|\s)(낼모레|내일모레)(?=\s|$)/g, '$1모레').replace(/(^|\s)(담주|다음 주)(?=\s)/g, '$1다음주');
+  t = t.replace(/(열한|열두|다섯|여섯|일곱|여덟|아홉|한|두|세|네|열)\s*시간/g, (m0, k) => KNUM[k] + '시간');
+  t = t.replace(/반\s*시간/g, '30분').replace(/(\d+)\s*시간\s*반/g, (m0, h) => (+h * 60 + 30) + '분');
+  t = t.replace(/(열한|열두|다섯|여섯|일곱|여덟|아홉|한|두|세|네|열)\s*시(?!간)/g, (m0, k) => KNUM[k] + '시');
+  t = t.replace(/(\d{1,2})\s*[:;.]\s*(\d{2})\s*분/g, '$1:$2').replace(/(\d{1,2})\s*;\s*(\d{2})/g, '$1:$2');
+  t = t.replace(/(\d{1,2})\s*시\s*(\d{1,2})(?!\s*분|\d|\s*일|\s*월)/g, '$1시 $2분');
+  // "구글 캘린더도 수정해", "구글에도 반영" — Google is updated anyway
+  t = t.replace(/[.,]?\s*(구글\s*(캘린더|캘|달력)?\s*(에도|도|에|까지)?\s*(같이|함께)?\s*(수정|반영|바꿔|변경|업데이트|적용)\S*)\s*[.!]?\s*$/, '').trim();
   t = t.replace(/(\d)\s*시\s*삼십\s*분/g, '$1시 30분').replace(/(\d)\s*시\s*십오\s*분/g, '$1시 15분');
-  t = t.replace(/(오늘|내일|모레|\d\s*시)\s*(꺼|거|것)\b/g, '$1 일정');
+  t = t.replace(/(오늘|내일|모레|\d\s*시(?:\s*\d+\s*분|\s*반)?)\s*(꺼|거|것|껀|건)(?=\s|$|을|를|은|는|이|도)/g, '$1 일정');
+  const known = titleWords();
   const out = t.split(' ').map(tok => {
     if (tok.length < 2 || /\d/.test(tok)) return tok;
+    if ([...known].some(w => w.length >= 2 && (tok.startsWith(w) || w.startsWith(tok.replace(/(을|를|은|는|이|가|도|의|로|으로)$/, ''))))) return tok;
     let best = null;
     for (const w of CMD_VOCAB) {
       if (tok.startsWith(w)) { best = null; break; }
@@ -3354,12 +3372,12 @@ function normalizeCmd(raw) {
 }
 
 /* ---------- plain edit commands handled here, without AI: "오늘 3시 일정을 4시로 바꿔", "내일 교수회의 취소해" ---------- */
-const EDIT_VERB = /(바꿔|바꾸|변경|옮겨|옮기|이동|미뤄|미루|당겨|당기|늦춰|연기|취소|삭제|지워|지우|없애|빼\s*줘|빼|중요|일반으로|불참|참석\s*안|안\s*가)/;
+const EDIT_VERB = /(땡겨|땡기|수정|바꿔|바꾸|변경|옮겨|옮기|이동|미뤄|미루|당겨|당기|늦춰|연기|취소|삭제|지워|지우|없애|빼\s*줘|빼|중요|일반으로|불참|참석\s*안|안\s*가)/;
 function pickDT(text) {
   // date/time/keyword of a phrase, using the same rules as new commands
   const r = parseCommand(text || '');
   const hasDate = !r.notes.some(n => /날짜를 찾지 못해/.test(n));
-  const kw = String(r.title || '').replace(/(일정|약속|스케줄|이벤트|그거|그것|것|거|건|시간|날)\b/g, ' ').replace(/(을|를|은|는|이|가|의)$/, '').replace(/\s+/g, ' ').trim();
+  const kw = String(r.title || '').replace(/(수정|바꿔|바꾸|변경|옮겨|옮기|이동|미뤄|미루|당겨|당기|땡겨|땡기|늦춰|연기|취소|삭제|지워)\S*/g, ' ').replace(/(^|\s)(일정|약속|스케줄|이벤트|그거|그것|것|거|건|시간|날)(?=\s|$)/g, ' ').replace(/(을|를|은|는|이|가)$/, '').replace(/\s+/g, ' ').trim();
   return { date: hasDate ? (r.date || r.due) : '', time: r.time && !/^(09:00|13:00)$/.test(r.time) || /시|:/.test(text || '') ? r.time : '', kw: kw === '일정' || kw === '할 일' ? '' : kw };
 }
 function editCandidates(src) {
@@ -3373,9 +3391,14 @@ function editCandidates(src) {
     for (const g of [...gOn(d), ...gAllDayOn(d).filter(g => g.date === d)]) out.push({ kind: 'g', o: g, date: d, s: g.allDay ? null : g.s, title: g.title });
     if (out.length > 400) break;
   }
+  const byKw = list => { const r = list.map(x => ({ ...x, sc: Math.max(fuzzyIn(kw, x.title), kw.includes(norm(x.title)) ? 1 : 0) })).filter(x => x.sc >= 0.7).sort((p, q) => q.sc - p.sc); return r.length > 1 && r[0].sc - r[1].sc >= 0.12 ? [r[0]] : r; };
+  const byTime = list => { const t = toMin(src.time); const exact = list.filter(x => x.s === t); return exact.length ? exact : list.filter(x => x.kind === 'e' ? (x.s != null && x.s <= t && t < evEnd(x.o)) : (x.s != null && x.s <= t && t < x.o.e)); };
   let c = out;
-  if (kw) { c = c.map(x => ({ ...x, sc: Math.max(fuzzyIn(kw, x.title), kw.includes(norm(x.title)) ? 1 : 0) })).filter(x => x.sc >= 0.7).sort((a, b) => b.sc - a.sc); if (c.length > 1 && c[0].sc - c[1].sc >= 0.12) c = [c[0]]; }
-  if (src.time) { const t = toMin(src.time); const exact = c.filter(x => x.s === t); c = exact.length ? exact : c.filter(x => x.kind === 'e' ? (x.s != null && x.s <= t && t < evEnd(x.o)) : (x.s != null && x.s <= t && t < x.o.e)); }
+  if (src.time) {
+    // the time decides; the word only narrows it down (it may be loose: "미팅" for "연구 회의")
+    const t = byTime(out); c = kw ? (byKw(t).length ? byKw(t) : t) : t;
+    if (!c.length && kw) c = byKw(out);
+  } else if (kw) c = byKw(out);
   if (!src.date && !kw && !src.time) return [];
   if (!src.date && c.length > 1) { const sameDay = c.filter(x => x.date === base); if (sameDay.length) c = sameDay; }
   if (!src.date) c = c.slice(0, 8);
@@ -3409,16 +3432,20 @@ function editActionsFor(cand, op) {
 }
 function parseEdit(raw) {
   const t = String(raw || '').replace(/\s+/g, ' ').trim();
-  if (!EDIT_VERB.test(t) || /추가|등록|넣어|잡아|만들어/.test(t)) return null;
+  if (!(EDIT_VERB.test(t) || /\S\s+\S*(\d|오늘|내일|모레|요일)\S*\s*(으로|로)\s*(해\s*줘|해|줘|요)?\s*[.!]?$/.test(t)) || /추가|등록|넣어|잡아|만들어/.test(t)) return null;
   let op = null, src = t;
-  let m = t.match(/^(.*?)(?:을|를)?\s*(\d+)\s*(시간|분)\s*(?:만큼\s*)?(뒤로|늦게|미뤄|미루|연기|앞으로|일찍|당겨|당기)/);
-  if (m) { const d = (+m[2]) * (m[3] === '시간' ? 60 : 1) * (/앞으로|일찍|당겨|당기/.test(m[4]) ? -1 : 1); op = { type: 'move', delta: d }; src = m[1]; }
+  let m = t.match(/^(.*?)(?:을|를)?\s*(\d+)\s*(시간|분)\s*(?:만큼\s*)?(뒤로|늦게|미뤄|미루|연기|앞으로|일찍|당겨|당기|땡겨|땡기|앞당겨)/);
+  if (m) { const d = (+m[2]) * (m[3] === '시간' ? 60 : 1) * (/앞으로|일찍|당겨|당기|땡겨|땡기/.test(m[4]) ? -1 : 1); op = { type: 'move', delta: d }; src = m[1]; }
   if (!op && (m = t.match(/^(.*?)(?:을|를)?\s*(취소|삭제|지워|지우|없애|빼)/))) { op = { type: 'delete' }; src = m[1]; }
   if (!op && (m = t.match(/^(.*?)(?:을|를)?\s*(중요|일반)\s*(?:으로|로)?\s*(?:표시|바꿔|변경|해)?/)) && /표시|바꿔|변경|해|로/.test(t)) { op = { type: 'imp', value: m[2] === '중요' }; src = m[1]; }
   if (!op && (m = t.match(/^(.*?)(?:은|는|을|를|에)?\s*(불참|참석\s*안|안\s*가)/))) { op = { type: 'absent', value: true }; src = m[1]; }
-  if (!op && (m = t.match(/^(.*?)(?:을|를)\s*(.+?)\s*(?:으로|로)\s*(?:바꿔|바꾸|변경|옮겨|옮기|이동|미뤄|미루|당겨|당기|늦춰|연기)/) || (m = t.match(/^(.*?)\s+((?:\S+\s+)?\S+?)\s*(?:으로|로)\s*(?:바꿔|바꾸|변경|옮겨|옮기|이동|미뤄|미루|당겨|당기|늦춰|연기)/)))) {
-    const dst = pickDT(m[2]); if (!dst.date && !dst.time) return null;
-    op = { type: 'move', date: dst.date, time: dst.time }; src = m[1];
+  if (!op && (m = t.match(/^(.*?)(?:을|를)\s*(.+?)\s*(?:으로|로)\s*(?:수정|바꿔|바꾸|변경|옮겨|옮기|이동|미뤄|미루|당겨|당기|늦춰|연기)/) || (m = t.match(/^(.*?)\s+((?:\S+\s+)?\S+?)\s*(?:으로|로)\s*(?:수정|바꿔|바꾸|변경|옮겨|옮기|이동|미뤄|미루|당겨|당기|늦춰|연기)/)) || (m = t.match(/^(.*?)\s+((?:\S+\s+)?\S*?\d\S*?|오늘|내일|모레|\S+요일)\s*(?:으로|로)\s*(?:해\s*줘|해|줘|요)?\s*[.!]?$/)))) {
+    let to = m[2].trim(), from = m[1];
+    // "교수회의 모레로": the first word belongs to the item, only the last says where it goes
+    const parts = to.split(' ');
+    if (parts.length > 1) { const p0 = pickDT(parts[0]); if (!p0.date && !p0.time) { from = from + ' ' + parts[0]; to = parts.slice(1).join(' '); } }
+    const dst = pickDT(to); if (!dst.date && !dst.time) return null;
+    op = { type: 'move', date: dst.date, time: dst.time }; src = from;
   }
   if (!op) return null;
   const s = pickDT(src);
@@ -3431,6 +3458,17 @@ function parseEdit(raw) {
 function editDescribe(c) { return `${fmtShort(c.date)} ${c.s != null ? fromMin(c.s) : '종일'} ${c.title}${c.kind === 'g' ? ' (구글)' : c.o.occ ? ' (반복)' : ''}`; }
 function runEdit(text, ed) {
   const st = $('pasteStatus');
+  if (!ed.cands.length && ed.src.date) {
+    const day = editCandidates({ date: ed.src.date, time: '', kw: '' }).sort((a, b) => (a.s ?? -1) - (b.s ?? -1));
+    if (!day.length) { st.className = 'status err'; st.innerHTML = `${esc(fmtShort(ed.src.date))}에는 바꿀 일정이 없습니다. <button class="linkish" type="button" data-act="cmdToAI">AI에게 맡기기</button>`; UI.cmdAI = text; return true; }
+    ed = { ...ed, cands: day.slice(0, 10) };
+    UI.cmdCands = { text, ed };
+    st.className = 'status';
+    st.innerHTML = `<div class="cmdbox"><div class="cmdhead">${ic('search')}<b>${esc(fmtShort(ed.src.date))}에 딱 맞는 일정이 없습니다. 어느 것인가요?</b></div>
+      <div class="optrow">${ed.cands.map((c, i) => `<button class="optchip" type="button" data-act="cmdPick" data-i="${i}"><b>${colorTimes(esc(editDescribe(c)))}</b></button>`).join('')}</div>
+      <div class="row"><button class="btn small" type="button" data-act="cmdCancel">취소</button><button class="btn small" type="button" data-act="cmdToAI">AI에게 맡기기</button></div></div>`;
+    return true;
+  }
   if (!ed.cands.length) return false;
   if (ed.cands.length > 1) {
     UI.cmdCands = { text, ed };
@@ -4367,6 +4405,7 @@ document.addEventListener('click', async ev0 => {
       case 'fltTog': { const k = el.dataset.k; FLT.icons = FLT.icons.includes(k) ? FLT.icons.filter(x => x !== k) : [...FLT.icons, k]; saveFlt(); UI.cap = 9; renderCal(); $('fltPop').hidden = true; return openFltPop(); }
       case 'fltClear': FLT.icons = []; FLT.imp = false; saveFlt(); UI.cap = 9; renderCal(); if (!$('fltPop').hidden) { $('fltPop').hidden = true; openFltPop(); } return;
       case 'fltClose': { const pop = $('fltPop'); if (pop) pop.hidden = true; return; }
+      case 'cmdToAI': { const t = UI.cmdAI || (UI.cmdCands && UI.cmdCands.text) || $('rawMail').value; UI.cmdCands = null; UI.cmdAI = ''; return runCommandAI(t); }
       case 'cmdPick': { const c = UI.cmdCands; if (!c) return; const r = editActionsFor(c.ed.cands[+el.dataset.i], c.ed.op); UI.cmdCands = null; if (r.msg) { const st = $('pasteStatus'); st.className = 'status err'; st.textContent = r.msg; return; } return renderCmdPreview(r.actions, c.text, false); }
       case 'qaCancel': UI.qa = null; return renderDay(true);
       case 'qaSave': return qaSave();
@@ -4778,7 +4817,7 @@ setTimeout(() => { if (gasOn()) signIn(); }, 400);
 setInterval(() => { syncNow(); if (gasOn() && !G.cals.length && G.state !== 'loading') signIn(); else if (gReady()) gLoad(false); else renderAll(); }, 60000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { syncNow(); if (gReady()) gLoad(false); } });
 window.addEventListener('beforeunload', e => { if (DRIVE.dirty && fsReady()) { syncNow(); e.preventDefault(); e.returnValue = ''; } });
-if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__dd = { S, add, UNDO, snapshot, mergeIn, renderAll, FS, G };
+if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__dd = { S, add, UNDO, snapshot, mergeIn, renderAll, FS, G, parseEdit, normalizeCmd, pickDT, parseCommand };
 })();
 </script>
 </body>
