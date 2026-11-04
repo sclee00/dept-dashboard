@@ -595,6 +595,15 @@ body.resizing{user-select:none} body.rs-col,body.rs-col *{cursor:col-resize!impo
   .focusbar .fcard .ft{font-size:.82rem!important;-webkit-line-clamp:1;white-space:nowrap;text-overflow:ellipsis;display:block;overflow:hidden}
 }
 .stat{font:inherit;color:var(--ink);text-align:left}
+.fltbar{position:relative;display:inline-flex;gap:.3rem}
+.fbtn{display:inline-flex;align-items:center;gap:.25rem;background:none;border:1px solid var(--line);border-radius:8px;padding:.25rem .6rem;color:var(--muted);font:inherit;font-size:.82rem;cursor:pointer}
+.fbtn .ic{width:.95rem;height:.95rem}
+.fbtn[aria-pressed="true"]{background:var(--amber-soft);border-color:var(--amber);color:var(--amber)}
+#fIcBtn[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.fbtn .x{padding:0 .2rem;opacity:.8}
+.fltpop{position:absolute;top:calc(100% + .35rem);left:0;z-index:15;width:min(26rem,80vw);background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:.6rem;box-shadow:0 8px 30px rgba(0,0,0,.5);display:flex;flex-direction:column;gap:.5rem}
+.fltgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(6.5rem,1fr));gap:.3rem;max-height:18rem;overflow:auto}
+#cal.filtered{box-shadow:inset 0 0 0 1px var(--accent-soft)}
 .cmdrow{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
 .cmdrow .ic{width:1.3rem;height:1.3rem}
 .ic.cu{color:var(--icc)}
@@ -733,6 +742,7 @@ label.inl{display:inline-flex;align-items:center;gap:.3rem;font-size:.85rem} lab
         <button class="iconbtn" data-act="thisMonth" type="button">오늘</button>
         <span class="vtog" role="group" aria-label="보기"><button type="button" data-act="view" data-v="weeks" id="v-weeks">5주</button><button type="button" data-act="view" data-v="month" id="v-month">월</button></span>
         <span class="vtog" role="group" aria-label="달력 칸 표시"><button type="button" data-act="cellMode" data-v="icons" id="cm-icons" title="달력 칸에 아이콘만">아이콘</button><button type="button" data-act="cellMode" data-v="titles" id="cm-titles" title="달력 칸에 아이콘과 제목">제목</button></span>
+        <span class="fltbar"><button type="button" class="fbtn" id="fImpBtn" data-act="fltImp" title="중요 일정만 보기">★ 중요만</button><button type="button" class="fbtn" id="fIcBtn" data-act="fltIcons" title="아이콘 종류별로 골라 보기">아이콘 필터</button><div class="fltpop" id="fltPop" hidden></div></span>
         <span class="grow"></span>
         <div class="legend" id="legend"></div>
       </div>
@@ -2235,7 +2245,7 @@ function renderCmdPreview(actions, sourceText, fromAI, note) {
   const st = $('pasteStatus');
   st.className = 'status';
   st.innerHTML = `<div class="cmdbox">
-    <div class="cmdhead">${ic('spark')}<b>${fromAI ? 'AI가 해석한 내용 · 확인 후 실행하세요' : '이렇게 처리할까요?'}</b></div>
+    <div class="cmdhead">${ic('spark')}<b>${fromAI ? 'AI가 해석한 내용 · 확인 후 실행하세요' : '이렇게 처리할까요?'}</b>${!fromAI && UI.cmdFixed ? `<span class="count">"${esc(UI.cmdFixed)}"(으)로 알아들었습니다</span>` : ''}</div>
     ${note ? `<div class="cmdnote">${ic('chat')}<span>${esc(note)}</span></div>` : ''}
     ${actions.map((a, i) => { const d = describeAction(a); const k = a.type === 'update' ? 'pen' : a.type === 'done' ? 'check' : a.type === 'skip' ? 'dash' : a.type === 'delete' ? 'ban' : a.type === 'block' ? 'lock' : a.type === 'task' ? iconFor(a.title, '할일') : iconFor(a.title, a.kind || '회의');
       return `<div class="cmdrow">${ic(k, ICON_GROUP[k] || '')}<span class="pill ${a.type === 'delete' ? 'del' : 'pend'}">${d.typeKo}</span><b>${esc(d.title)}</b><span class="count">${colorTimes(esc(d.when))}</span>${a.repeat ? `<span class="count nextocc">다음: ${nextOccurrences({ date: a.date, repeat: a.repeat }, 4, todayStr()).map(fmtShort).join(', ')}</span>` : ''}${a.type === 'event' && a.imp === 'high' ? '<span class="impbtn on">중요</span>' : ''}${(a.notes || []).map(n => `<span class="warnline">${esc(n)}</span>`).join('')}</div>`; }).join('')}
@@ -2264,6 +2274,7 @@ async function applyActions(actions) {
   const gs = { ok: 0, fail: 0, left: 0 };
   UI.lastApplyG = gs;
   for (const a of actions) {
+    if (a.ref && a.ref.startsWith('e:')) UI.lastEv = a.ref.slice(2);
     if (['update', 'delete', 'done', 'skip'].includes(a.type)) { const r = await applyRefAction(a); n += r.n; if (r.date) first = first || r.date; if (r.g === 'ok') gs.ok++; else if (r.g === 'fail' || r.g === 'none' || r.g === 'unknown') gs.fail++; gs.left += r.gLeft || 0; continue; }
     if (a.type === 'task') { await add('tasks', { title: a.title, due: a.due || '', priority: a.imp === 'high' ? 'high' : 'mid', done: false, source: 'command', createdAt: nowISO() }); n++; if (a.due) first = first || a.due; continue; }
     if (a.type === 'block') {
@@ -2385,7 +2396,7 @@ const UNDO_LABEL = {
   delRule: '아이콘 규칙 삭제', skipOcc: '반복 일정 한 번 빼기', edSave: '일정 편집', bdSave: '불가 시간 설정', saveSettings: '설정 변경', imSave: '아이콘 색·이름',
   pushG: '구글에 추가', fEvent: '일정 추가', fBlock: '불가 시간 추가', taskForm: '할 일 추가', importData: '파일 가져오기'
 };
-const UNDO_SKIP = new Set(['cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
+const UNDO_SKIP = new Set(['fltImp', 'fltIcons', 'fltTog', 'fltClear', 'fltClose', 'cmdPick', 'cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
 function undoSnap() {
   const o = { settings: JSON.parse(JSON.stringify(S.settings)) };
   for (const c of COLS) o[c] = JSON.parse(JSON.stringify(S[c]));
@@ -2530,6 +2541,7 @@ function cleanChange(a) {
   if (isDate(a.due)) ch.due = a.due;
   if (typeof a.important === 'boolean') ch.imp = a.important ? 'high' : 'normal';
   if (['회의', '행사', '마감', '학사'].includes(a.kind)) ch.kind = a.kind;
+  if (typeof a.absent === 'boolean') ch.absent = a.absent;
   return ch;
 }
 function cleanRefAction(a) {
@@ -2558,6 +2570,7 @@ function describeRef(a) {
   if (c.due) parts.push(`기한 → ${fmtShort(c.due)}`);
   if (c.imp) parts.push(c.imp === 'high' ? '중요로' : '일반으로');
   if (c.kind) parts.push(`종류 → ${c.kind}`);
+  if (typeof c.absent === 'boolean') parts.push(c.absent ? '불참으로' : '참여로');
   if (c.repeat) parts.push(c.repeat === 'none' ? '반복 없앰' : '반복 → ' + repText({ repeat: c.repeat }));
   return { typeKo: '변경', when: parts.join(' · '), title: it ? it.title : a.title };
 }
@@ -2571,7 +2584,7 @@ async function applyRefAction(a) {
   if (it.kind === 't') { const upd = {}; if (c.title) upd.title = c.title; if (c.due) upd.due = c.due; if (c.imp) upd.priority = c.imp === 'high' ? 'high' : 'mid'; await patch('tasks', id, upd); return { n: 1, date: c.due }; }
   if (it.kind === 'e') {
     const e = it.o, upd = {};
-    if (c.title) upd.title = c.title; if (c.kind) upd.kind = c.kind; if (c.imp) upd.imp = c.imp;
+    if (c.title) upd.title = c.title; if (c.kind) upd.kind = c.kind; if (c.imp) upd.imp = c.imp; if (typeof c.absent === 'boolean') upd.absent = c.absent;
     if (c.date) { const len = isDate(e.endDate) && e.endDate > e.date ? Math.round((parse(e.endDate) - parse(e.date)) / 86400000) : 0; upd.date = c.date; upd.endDate = len ? addDays(c.date, len) : (e.endDate || ''); }
     if (c.allDay) { upd.time = ''; upd.endTime = ''; } else if (c.time) { upd.time = c.time; upd.endTime = c.endTime || fromMin(Math.min(toMin(c.time) + 60, 1439)); }
     if (c.repeat) { await patch('events', id, { repeat: null }); if (c.repeat !== 'none') { upd.repeat = c.repeat; if (!repMatch({ date: upd.date || e.date, repeat: c.repeat }, upd.date || e.date)) upd.date = nextOccurrences({ date: upd.date || e.date, repeat: c.repeat }, 1)[0] || upd.date || e.date; } }
@@ -2581,6 +2594,7 @@ async function applyRefAction(a) {
   }
   const g = it.o;
   if (c.imp) setMark(a.ref, { imp: c.imp });
+  if (typeof c.absent === 'boolean') setMark(a.ref, { absent: c.absent });
   if (!(c.title || c.date || c.time || c.allDay)) return { n: 1 };
   const nd = c.date || g.date, len = g.allDay && g.endDate > g.date ? Math.round((parse(g.endDate) - parse(g.date)) / 86400000) : 0;
   const doc = g.recurring ? { title: c.title || g.title, location: g.loc || '', titleOnly: true }
@@ -3282,6 +3296,165 @@ document.addEventListener('change', e => { const t = e.target; if (t.classList &
 document.addEventListener('dragover', e => { const m = e.target.closest && e.target.closest('.memo'); if (m && e.dataTransfer && [...(e.dataTransfer.types || [])].includes('Files')) { e.preventDefault(); m.classList.add('dropfile'); } }, true);
 document.addEventListener('drop', e => { const m = e.target.closest && e.target.closest('.memo'); if (m && e.dataTransfer && e.dataTransfer.files.length) { e.preventDefault(); e.stopPropagation(); m.classList.remove('dropfile'); memoAddFiles(m.dataset.memo, e.dataTransfer.files); } }, true);
 
+/* ---------- forgiving input: typos and loose wording (Hangul compared letter by letter) ---------- */
+const H_CHO = 'ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ', H_JUNG = 'ㅏㅐㅑㅒㅓㅔㅕㅖㅗㅘㅙㅚㅛㅜㅝㅞㅟㅠㅡㅢㅣ', H_JONG = ' ㄱㄲㄳㄴㄵㄶㄷㄹㄺㄻㄼㄽㄾㄿㅀㅁㅂㅄㅅㅆㅇㅈㅊㅋㅌㅍㅎ';
+function jamo(s) { let o = ''; for (const ch of String(s)) { const c = ch.charCodeAt(0) - 0xAC00; if (c >= 0 && c < 11172) o += H_CHO[Math.floor(c / 588)] + H_JUNG[Math.floor((c % 588) / 28)] + (c % 28 ? H_JONG[c % 28] : ''); else o += ch.toLowerCase(); } return o; }
+function lev(a, b) { const m = a.length, n = b.length; if (!m) return n; if (!n) return m; let p = Array.from({ length: n + 1 }, (_, j) => j); for (let i = 1; i <= m; i++) { const c = [i]; for (let j = 1; j <= n; j++) c[j] = Math.min(p[j] + 1, c[j - 1] + 1, p[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); p = c; } return p[n]; }
+const hsim = (a, b) => { const A = jamo(a), B = jamo(b); return 1 - lev(A, B) / Math.max(A.length, B.length, 1); };
+// best match of a short word anywhere inside a longer title
+function fuzzyIn(word, title) {
+  const w = String(word).replace(/\s+/g, ''), t = String(title).replace(/\s+/g, ''); if (!w || !t) return 0;
+  if (t.toLowerCase().includes(w.toLowerCase())) return 1;
+  let best = hsim(w, t);
+  for (let L = Math.max(1, w.length - 1); L <= w.length + 1; L++) for (let i = 0; i + L <= t.length; i++) best = Math.max(best, hsim(w, t.slice(i, i + L)));
+  return best;
+}
+const CMD_VOCAB = ['바꿔', '바꿔줘', '옮겨', '옮겨줘', '미뤄', '당겨', '늦춰', '취소', '취소해', '삭제', '지워', '지워줘', '추가', '추가해', '등록', '변경', '연기', '일정', '회의', '오늘', '내일', '모레', '오전', '오후', '다음주', '이번주', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일', '일요일', '중요', '불참', '반복', '매주', '매월', '마지막', '불가', '할일'];
+const KNUM = { 한: 1, 두: 2, 세: 3, 네: 4, 다섯: 5, 여섯: 6, 일곱: 7, 여덟: 8, 아홉: 9, 열: 10, 열한: 11, 열두: 12 };
+function normalizeCmd(raw) {
+  let t = String(raw || '').replace(/\s+/g, ' ').trim();
+  t = t.replace(/(열한|열두|다섯|여섯|일곱|여덟|아홉|한|두|세|네|열)\s*시/g, (m0, k) => KNUM[k] + '시');
+  t = t.replace(/(\d)\s*시\s*삼십\s*분/g, '$1시 30분').replace(/(\d)\s*시\s*십오\s*분/g, '$1시 15분');
+  t = t.replace(/(오늘|내일|모레|\d\s*시)\s*(꺼|거|것)\b/g, '$1 일정');
+  const out = t.split(' ').map(tok => {
+    if (tok.length < 2 || /\d/.test(tok)) return tok;
+    let best = null;
+    for (const w of CMD_VOCAB) {
+      if (tok.startsWith(w)) { best = null; break; }
+      for (const L of [w.length - 1, w.length, w.length + 1]) {
+        if (L < 2 || L > tok.length) continue;
+        const pre = tok.slice(0, L), sc = hsim(pre, w);
+        if (sc >= 0.75 && (!best || sc > best.sc)) best = { w, L, sc };
+      }
+    }
+    return best ? best.w + tok.slice(best.L) : tok;
+  });
+  return out.join(' ');
+}
+
+/* ---------- plain edit commands handled here, without AI: "오늘 3시 일정을 4시로 바꿔", "내일 교수회의 취소해" ---------- */
+const EDIT_VERB = /(바꿔|바꾸|변경|옮겨|옮기|이동|미뤄|미루|당겨|당기|늦춰|연기|취소|삭제|지워|지우|없애|빼\s*줘|빼|중요|일반으로|불참|참석\s*안|안\s*가)/;
+function pickDT(text) {
+  // date/time/keyword of a phrase, using the same rules as new commands
+  const r = parseCommand(text || '');
+  const hasDate = !r.notes.some(n => /날짜를 찾지 못해/.test(n));
+  const kw = String(r.title || '').replace(/(일정|약속|스케줄|이벤트|그거|그것|것|거|건|시간|날)\b/g, ' ').replace(/(을|를|은|는|이|가|의)$/, '').replace(/\s+/g, ' ').trim();
+  return { date: hasDate ? (r.date || r.due) : '', time: r.time && !/^(09:00|13:00)$/.test(r.time) || /시|:/.test(text || '') ? r.time : '', kw: kw === '일정' || kw === '할 일' ? '' : kw };
+}
+function editCandidates(src) {
+  const norm = s => String(s || '').replace(/\s+/g, '').toLowerCase(), kw = norm(src.kw);
+  // no date given: the day being looked at comes first, then the next 60 days
+  const base = UI.selDay && UI.selDay >= addDays(todayStr(), -30) ? UI.selDay : todayStr();
+  const days = src.date ? [src.date] : [...new Set([base, ...Array.from({ length: 60 }, (_, i) => addDays(todayStr(), i))])];
+  const out = [];
+  for (const d of days) {
+    for (const e of expandEvents().filter(e => e.date === d)) out.push({ kind: 'e', o: e, date: d, s: toMin(e.time), title: e.title });
+    for (const g of [...gOn(d), ...gAllDayOn(d).filter(g => g.date === d)]) out.push({ kind: 'g', o: g, date: d, s: g.allDay ? null : g.s, title: g.title });
+    if (out.length > 400) break;
+  }
+  let c = out;
+  if (kw) { c = c.map(x => ({ ...x, sc: Math.max(fuzzyIn(kw, x.title), kw.includes(norm(x.title)) ? 1 : 0) })).filter(x => x.sc >= 0.7).sort((a, b) => b.sc - a.sc); if (c.length > 1 && c[0].sc - c[1].sc >= 0.12) c = [c[0]]; }
+  if (src.time) { const t = toMin(src.time); const exact = c.filter(x => x.s === t); c = exact.length ? exact : c.filter(x => x.kind === 'e' ? (x.s != null && x.s <= t && t < evEnd(x.o)) : (x.s != null && x.s <= t && t < x.o.e)); }
+  if (!src.date && !kw && !src.time) return [];
+  if (!src.date && c.length > 1) { const sameDay = c.filter(x => x.date === base); if (sameDay.length) c = sameDay; }
+  if (!src.date) c = c.slice(0, 8);
+  return c;
+}
+function editActionsFor(cand, op) {
+  const ref = cand.kind === 'e' ? 'e:' + cand.o.id : gKey(cand.o), notes = [];
+  const len = cand.kind === 'e' ? (cand.o.time ? evEnd(cand.o) - toMin(cand.o.time) : 60) : (cand.o.allDay ? 60 : cand.o.e - cand.o.s);
+  if (op.type === 'delete') {
+    if (cand.kind === 'g') return { msg: `"${cand.title}"은 구글 캘린더 일정이라 여기서 지울 수 없습니다. 구글 캘린더에서 지워 주세요.` };
+    if (cand.o.occ) return { actions: [cleanRefAction({ type: 'skip', ref, date: cand.date })].filter(Boolean) };
+    return { actions: [cleanRefAction({ type: 'delete', ref })].filter(Boolean) };
+  }
+  if (op.type === 'imp' || op.type === 'absent') {
+    const a = cleanRefAction({ type: 'update', ref, ...(op.type === 'imp' ? { important: op.value } : { absent: op.value }) });
+    return { actions: a ? [a] : [] };
+  }
+  // move / change time
+  const st = cand.s == null ? null : cand.s;
+  let nd = op.date || cand.date, nt = op.time || (op.delta && st != null ? fromMin(Math.max(0, Math.min(1439, st + op.delta))) : (st != null ? fromMin(st) : ''));
+  const ne = nt ? fromMin(Math.min(toMin(nt) + (len > 0 ? len : 60), 1439)) : '';
+  if (nd === cand.date && nt === (st != null ? fromMin(st) : '')) return { msg: '바뀌는 날짜나 시각을 찾지 못했습니다. 예: "오늘 3시 회의를 4시로 바꿔"' };
+  if (cand.kind === 'e' && cand.o.occ) {
+    const e = cand.o, copy = cleanNewActions([{ type: 'event', title: e.title, date: nd, time: nt, endTime: ne, kind: e.kind, important: impOfEvent(e) === 'high' }])[0];
+    copy.notes = ['반복 일정에서 이 날만 옮깁니다'];
+    return { actions: [cleanRefAction({ type: 'skip', ref, date: cand.date }), copy].filter(Boolean) };
+  }
+  if (cand.kind === 'g' && cand.o.recurring) return { msg: `"${cand.title}"은 구글의 반복 일정이라 여기서 옮길 수 없습니다. 구글 캘린더에서 바꿔 주세요.` };
+  const a = cleanRefAction({ type: 'update', ref, ...(nd !== cand.date ? { date: nd } : {}), ...(nt ? { time: nt, endTime: ne } : {}) });
+  return { actions: a ? [a] : [], notes };
+}
+function parseEdit(raw) {
+  const t = String(raw || '').replace(/\s+/g, ' ').trim();
+  if (!EDIT_VERB.test(t) || /추가|등록|넣어|잡아|만들어/.test(t)) return null;
+  let op = null, src = t;
+  let m = t.match(/^(.*?)(?:을|를)?\s*(\d+)\s*(시간|분)\s*(?:만큼\s*)?(뒤로|늦게|미뤄|미루|연기|앞으로|일찍|당겨|당기)/);
+  if (m) { const d = (+m[2]) * (m[3] === '시간' ? 60 : 1) * (/앞으로|일찍|당겨|당기/.test(m[4]) ? -1 : 1); op = { type: 'move', delta: d }; src = m[1]; }
+  if (!op && (m = t.match(/^(.*?)(?:을|를)?\s*(취소|삭제|지워|지우|없애|빼)/))) { op = { type: 'delete' }; src = m[1]; }
+  if (!op && (m = t.match(/^(.*?)(?:을|를)?\s*(중요|일반)\s*(?:으로|로)?\s*(?:표시|바꿔|변경|해)?/)) && /표시|바꿔|변경|해|로/.test(t)) { op = { type: 'imp', value: m[2] === '중요' }; src = m[1]; }
+  if (!op && (m = t.match(/^(.*?)(?:은|는|을|를|에)?\s*(불참|참석\s*안|안\s*가)/))) { op = { type: 'absent', value: true }; src = m[1]; }
+  if (!op && (m = t.match(/^(.*?)(?:을|를)\s*(.+?)\s*(?:으로|로)\s*(?:바꿔|바꾸|변경|옮겨|옮기|이동|미뤄|미루|당겨|당기|늦춰|연기)/) || (m = t.match(/^(.*?)\s+((?:\S+\s+)?\S+?)\s*(?:으로|로)\s*(?:바꿔|바꾸|변경|옮겨|옮기|이동|미뤄|미루|당겨|당기|늦춰|연기)/)))) {
+    const dst = pickDT(m[2]); if (!dst.date && !dst.time) return null;
+    op = { type: 'move', date: dst.date, time: dst.time }; src = m[1];
+  }
+  if (!op) return null;
+  const s = pickDT(src);
+  if (/^(그|그거|그것|방금|아까|이)\s*(일정|거|것|회의)?$/.test(src.trim()) && UI.lastEv) {
+    const e = S.events.find(x => x.id === UI.lastEv); if (e) return { op, src: s, cands: [{ kind: 'e', o: e, date: e.date, s: toMin(e.time), title: e.title }] };
+  }
+  if (!s.date && !s.time && !s.kw) return null;
+  return { op, src: s, cands: editCandidates(s) };
+}
+function editDescribe(c) { return `${fmtShort(c.date)} ${c.s != null ? fromMin(c.s) : '종일'} ${c.title}${c.kind === 'g' ? ' (구글)' : c.o.occ ? ' (반복)' : ''}`; }
+function runEdit(text, ed) {
+  const st = $('pasteStatus');
+  if (!ed.cands.length) return false;
+  if (ed.cands.length > 1) {
+    UI.cmdCands = { text, ed };
+    st.className = 'status';
+    st.innerHTML = `<div class="cmdbox"><div class="cmdhead">${ic('search')}<b>어느 일정인가요?</b></div>
+      <div class="optrow">${ed.cands.map((c, i) => `<button class="optchip" type="button" data-act="cmdPick" data-i="${i}"><b>${colorTimes(esc(editDescribe(c)))}</b></button>`).join('')}</div>
+      <div class="row"><button class="btn small" type="button" data-act="cmdCancel">취소</button></div></div>`;
+    return true;
+  }
+  const r = editActionsFor(ed.cands[0], ed.op);
+  if (r.msg) { st.className = 'status err'; st.textContent = r.msg; return true; }
+  if (!r.actions.length) return false;
+  renderCmdPreview(r.actions, text, false);
+  return true;
+}
+
+/* ---------- calendar filters: important only, chosen icon types ---------- */
+let FLT = { imp: false, icons: [] }; try { FLT = { ...FLT, ...JSON.parse(localStorage.getItem('calFilter') || '{}') }; } catch {}
+const saveFlt = () => { try { localStorage.setItem('calFilter', JSON.stringify(FLT)); } catch {} };
+function filtItems(items) {
+  let out = items;
+  if (FLT.imp) out = out.filter(x => /^\[중요\]/.test(x.tx || '') || /\b(imp|hot)\b/.test(x.cls || ''));
+  if (FLT.icons.length) out = out.filter(x => FLT.icons.includes(x.ic));
+  return out;
+}
+function renderFltButtons() {
+  const a = $('fImpBtn'), b = $('fIcBtn'); if (!a) return;
+  a.setAttribute('aria-pressed', String(FLT.imp)); b.setAttribute('aria-pressed', String(FLT.icons.length > 0));
+  b.innerHTML = FLT.icons.length ? `아이콘 ${FLT.icons.slice(0, 4).map(k => ic(k, iconKc(k))).join('')}${FLT.icons.length > 4 ? '+' + (FLT.icons.length - 4) : ''} <span class="x" data-act="fltClear" title="필터 해제">✕</span>` : '아이콘 필터';
+  $('cal').classList.toggle('filtered', FLT.imp || FLT.icons.length > 0);
+}
+function openFltPop() {
+  const pop = $('fltPop'); if (!pop) return;
+  if (!pop.hidden) { pop.hidden = true; return; }
+  // icon types that appear in the dates on screen, with counts
+  const [a, b] = gridRange(), cnt = {};
+  for (let d = a; d < b; d = addDays(d, 1)) for (const x of cellItems(d)) cnt[x.ic] = (cnt[x.ic] || 0) + 1;
+  const keys = Object.keys(cnt).sort((p, q) => cnt[q] - cnt[p]);
+  pop.innerHTML = `<div class="count">보여 줄 아이콘을 고르세요 (여러 개 가능)</div>
+    <div class="fltgrid">${keys.map(k => `<button type="button" class="ipcell ${FLT.icons.includes(k) ? 'on' : ''}" data-act="fltTog" data-k="${k}" aria-pressed="${FLT.icons.includes(k)}">${ic(k, iconKc(k))}<span>${esc(iconLabel(k))} ${cnt[k]}</span></button>`).join('') || '<span class="count">이 기간에 표시된 일정이 없습니다.</span>'}</div>
+    <div class="row" style="justify-content:space-between"><button class="btn small" type="button" data-act="fltClear">모두 보기</button><button class="btn small primary" type="button" data-act="fltClose">닫기</button></div>`;
+  pop.hidden = false;
+}
+document.addEventListener('click', e => { const pop = $('fltPop'); if (pop && !pop.hidden && !e.target.closest('.fltbar')) pop.hidden = true; });
+
 /* ---------- calendar (main) ---------- */
 const repDays = e => e.repeat && Array.isArray(e.repeat.days) && e.repeat.days.length ? e.repeat.days : null;
 // repeat: { days:[요일], freq:'weekly'|'monthly', interval:N (N주마다), nth:[1..5,-1] (매월 몇째 주, -1=마지막), skipIfWeekHas:{day, nth} (그 요일이 있는 주는 건너뜀), until }
@@ -3362,11 +3535,12 @@ function renderCal() {
   if (wk) { const e = parse(addDays(gridStart(), rows * 7 - 1)); $('monthLabel').textContent = `${start.getMonth() + 1}월 ${start.getDate()}일 – ${e.getMonth() + 1}월 ${e.getDate()}일`; }
   else $('monthLabel').textContent = `${m.getFullYear()}년 ${m.getMonth() + 1}월`;
   $('v-weeks').setAttribute('aria-pressed', String(wk)); $('v-month').setAttribute('aria-pressed', String(!wk));
+  renderFltButtons();
   $('cm-icons').setAttribute('aria-pressed', String(!titles)); $('cm-titles').setAttribute('aria-pressed', String(titles));
   let html = [...WD].map((w, i) => `<div class="wd ${i === 0 ? 'sun' : i === 6 ? 'sat' : ''}">${w}</div>`).join('');
   for (let i = 0; i < rows * 7; i++) {
     const d = new Date(start); d.setDate(start.getDate() + i);
-    const s = ymd(d), items = cellItems(s);
+    const s = ymd(d), items = filtItems(cellItems(s));
     const shown = items.length > UI.cap ? items.slice(0, Math.max(1, UI.cap - 1)) : items;
     const more = items.length - shown.length;
     const cls = ['cell', !wk && d.getMonth() !== m.getMonth() ? 'out' : '', d.getDay() === 0 ? 'sun' : '', d.getDay() === 6 ? 'sat' : '',
@@ -3857,7 +4031,10 @@ async function analyzeNew() {
   const st = $('pasteStatus');
   if (!text && !UI.att.length) { st.className = 'status err'; st.textContent = '메일을 붙여넣거나 명령을 적어 주세요.'; return; }
   if (!UI.att.length && looksLikeCommand(text) && !$('threadOf').value) {
-    const r = parseCommand(text);
+    const fixed = normalizeCmd(text); UI.cmdFixed = fixed !== text.replace(/\s+/g, ' ').trim() ? fixed : '';
+    const ed = parseEdit(fixed);
+    if (ed && runEdit(fixed, ed)) return;
+    const r = parseCommand(fixed);
     if (r.sure) renderCmdPreview([r], text, false);
     else runCommandAI(text);
     return;
@@ -4165,6 +4342,12 @@ document.addEventListener('click', async ev0 => {
       case 'memoDelF': { const k = el.dataset.k, t = memoTarget(k); if (!t) return; const fs = [...(t.memo.files || [])]; fs.splice(+el.dataset.i, 1); undoArm('메모 첨부 빼기'); await memoSetFiles(k, fs); renderDay(true); return; }
       case 'memoOpenF': return memoOpenFile(el.dataset.k, +el.dataset.i);
       case 'cellMode': { const v = el.dataset.v === 'titles' ? 'titles' : 'icons'; if ((S.settings.cellMode || 'icons') !== v) { await saveSettings({ ...S.settings, cellMode: v }); UI.cap = 9; renderCal(); } return; }
+      case 'fltImp': FLT.imp = !FLT.imp; saveFlt(); UI.cap = 9; return renderCal();
+      case 'fltIcons': return openFltPop();
+      case 'fltTog': { const k = el.dataset.k; FLT.icons = FLT.icons.includes(k) ? FLT.icons.filter(x => x !== k) : [...FLT.icons, k]; saveFlt(); UI.cap = 9; renderCal(); const pop = $('fltPop'); pop.hidden = true; return openFltPop(); }
+      case 'fltClear': FLT.icons = []; FLT.imp = false; saveFlt(); UI.cap = 9; { const pop = $('fltPop'); if (pop) pop.hidden = true; } return renderCal();
+      case 'fltClose': { const pop = $('fltPop'); if (pop) pop.hidden = true; return; }
+      case 'cmdPick': { const c = UI.cmdCands; if (!c) return; const r = editActionsFor(c.ed.cands[+el.dataset.i], c.ed.op); UI.cmdCands = null; if (r.msg) { const st = $('pasteStatus'); st.className = 'status err'; st.textContent = r.msg; return; } return renderCmdPreview(r.actions, c.text, false); }
       case 'qaCancel': UI.qa = null; return renderDay(true);
       case 'qaSave': return qaSave();
       case 'gchip':
