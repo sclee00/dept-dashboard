@@ -573,7 +573,16 @@ body.resizing{user-select:none} body.rs-col,body.rs-col *{cursor:col-resize!impo
 .memobtn.on{color:var(--accent);opacity:1}
 .memodot .ic{width:.8rem;height:.8rem;color:var(--accent);vertical-align:-1px}
 @media (min-width:701px){
-  header.top{align-items:center;justify-content:flex-start;gap:.45rem .9rem}
+  /* one line: date · status pills | drag bar | buttons; each side scrolls sideways if it gets narrow */
+  header.top{align-items:center;justify-content:flex-start;gap:.45rem .5rem;flex-wrap:nowrap}
+  header.top>div:first-child{flex:none;white-space:nowrap}
+  header.top .stats,header.top .tools{flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;min-width:0;padding:2px 0}
+  header.top .stats::-webkit-scrollbar,header.top .tools::-webkit-scrollbar{display:none}
+  header.top .stats{flex:0 1 auto}
+  header.top.sized .stats{flex:0 0 var(--hw)}
+  header.top .tools{flex:1 1 auto;display:flex}
+  header.top .stats>*,header.top .tools>*{flex:none;white-space:nowrap}
+  header.top .gutter.hg{display:block;width:12px;flex:none;align-self:stretch;min-height:1.6rem}
   header.top .eyebrow{display:none}
   header.top .today{font-size:1.4rem;line-height:1.1}
   header.top .term{font-size:.78rem;margin-top:.1rem;gap:.4rem}
@@ -724,6 +733,7 @@ label.inl{display:inline-flex;align-items:center;gap:.3rem;font-size:.85rem} lab
       <div class="term"><b id="termLabel">—</b><span id="weekLabel"></span><span>·</span><span class="clock" id="clock">--:--</span></div>
     </div>
     <div class="stats" id="stats"></div>
+    <div class="gutter v hg" data-split="head" role="separator" aria-orientation="vertical" tabindex="0" title="끌어서 왼쪽(현황)·오른쪽(버튼) 너비 조절 · 두 번 누르면 원래대로"></div>
     <div class="tools">
       <button class="gchip" id="syncchip" type="button" data-act="sync" data-ok="sync" draggable="true"><span data-ic="drive"></span><span>저장 위치 확인 중</span></button>
       <button class="gchip" id="gchip" type="button" data-act="gchip" data-ok="gchip" draggable="true"><span data-ic="gcal"></span><span>구글 로그인</span></button>
@@ -3001,6 +3011,8 @@ function applyLayout() {
   for (const [k, a, b] of [['board', '--c1', '--c2'], ['rail', '--r1', '--r2']]) { if (LAY[k]) { r.setProperty(a, LAY[k][0] + 'fr'); r.setProperty(b, LAY[k][1] + 'fr'); } else { r.removeProperty(a); r.removeProperty(b); } }
   if (LAY.qh && matchMedia('(min-width:1100px)').matches) { r.setProperty('--qh', Math.max(LAY.qh, quickMin()) + 'px'); q && q.classList.add('sized'); } else { r.removeProperty('--qh'); q && q.classList.remove('sized'); }
   if (LAY.sheetw) r.setProperty('--sheetw', LAY.sheetw + 'px'); else r.removeProperty('--sheetw');
+  const hd = document.querySelector('header.top');
+  if (LAY.head && hd) { r.setProperty('--hw', LAY.head + 'px'); hd.classList.add('sized'); } else { r.removeProperty('--hw'); hd && hd.classList.remove('sized'); }
 }
 // the auto-processing box never gets smaller than its title row + buttons, so nothing spills over its border
 function quickMin() {
@@ -3015,11 +3027,13 @@ function splitSizes(kind) {
   if (kind === 'rail') return [w([$('pane-day'), $('pane-tasks')].find(x => x && !x.hidden)), w($('pane-mail'))];
   if (kind === 'quick') return [document.querySelector('.quick').getBoundingClientRect().height];
   if (kind === 'sheet') return [w(document.querySelector('.sheet'))];
+  if (kind === 'head') return [w($('stats')), w(document.querySelector('header.top .tools'))];
   return [0];
 }
 function setSplit(kind, [a, b], dx, dy) {
   if (kind === 'board' || kind === 'rail') { const min = kind === 'board' ? 320 : 240, x = Math.max(min, Math.min(a + b - min, a + dx)); LAY[kind] = [Math.round(x), Math.round(a + b - x)]; }
   if (kind === 'quick') LAY.qh = Math.round(Math.max(quickMin(), Math.min(window.innerHeight * 0.6, a - dy)));
+  if (kind === 'head') { const x = Math.max(60, Math.min(a + b - 60, a + dx)); LAY.head = Math.round(x); }
   if (kind === 'sheet') LAY.sheetw = Math.round(Math.max(380, Math.min(window.innerWidth - 40, a - dx)));
   applyLayout(); const g = $('cal'); if (g) fitIcons(g);
 }
@@ -3041,6 +3055,8 @@ document.addEventListener('keydown', e => {
   e.preventDefault(); setSplit(k, splitSizes(k), d[0], d[1]); splitDone();
 });
 window.addEventListener('resize', () => applyLayout());
+// the header's two halves scroll sideways with the normal mouse wheel when they are made narrow
+document.addEventListener('wheel', e => { const el = e.target.closest && e.target.closest('header.top .stats, header.top .tools'); if (!el || el.scrollWidth <= el.clientWidth || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return; el.scrollLeft += e.deltaY; e.preventDefault(); }, { passive: false });
 
 /* ---------- word colors: chosen words always show in a chosen color ---------- */
 const wcRules = () => (UI.wcDraft || (S.settings && S.settings.wordColors) || []).filter(r => r && r.w && String(r.w).trim() && /^#[0-9a-f]{6}$/i.test(r.color || ''));
