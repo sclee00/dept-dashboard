@@ -207,6 +207,9 @@ textarea.field{resize:vertical;width:100%;line-height:1.55}
 .btn.primary:hover{filter:brightness(1.08)}
 .btn.small{padding:.2rem .6rem;font-size:.85rem}
 .btn.danger{color:var(--red)}
+.glw{display:inline-flex;align-items:center;vertical-align:-.14em;margin:0 .08em}
+.glw svg{width:.95em;height:.95em;flex:none}
+.glw .gltx{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .btn.dangerbtn{background:var(--red);border-color:var(--red);color:#fff}
 .askbox{width:min(32rem,100%)}
 .askbox .btn:disabled{opacity:.35;cursor:not-allowed}
@@ -4959,6 +4962,30 @@ setTimeout(() => { if (gasOn()) signIn(); }, 400);
 setInterval(() => { syncNow(); if (gasOn() && !G.cals.length && G.state !== 'loading') signIn(); else if (gReady()) gLoad(false); else renderAll(); }, 60000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { syncNow(); if (gReady()) gLoad(false); } });
 window.addEventListener('beforeunload', e => { if (DRIVE.dirty && fsReady()) { syncNow(); e.preventDefault(); e.returnValue = ''; } });
+/* ---------- the word "구글" on screen is shown as the Google logo (the word stays for copy and screen readers) ---------- */
+const G_LOGO = '<svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>';
+const GL_SKIP = 'pre,textarea,input,select,option,script,style,.raw,.glw,[data-nogl],[contenteditable]';
+function glWalk(root) {
+  if (!root || !root.nodeType) return;
+  if (root.nodeType === 3) { root = root.parentNode; if (!root) return; }
+  if (root.nodeType !== 1 && root.nodeType !== 11) return;
+  if (root.nodeType === 1 && root.closest(GL_SKIP)) return;
+  const tw = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, { acceptNode: n => n.nodeValue.includes('구글') && n.parentElement && !n.parentElement.closest(GL_SKIP) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT });
+  const list = []; while (tw.nextNode()) list.push(tw.currentNode);
+  for (const n of list) {
+    const frag = document.createDocumentFragment();
+    n.nodeValue.split('구글').forEach((part, i) => {
+      if (i) { const sp = document.createElement('span'); sp.className = 'glw'; sp.innerHTML = G_LOGO + '<span class="gltx">구글</span>'; frag.appendChild(sp); }
+      if (part) frag.appendChild(document.createTextNode(part));
+    });
+    n.replaceWith(frag);
+  }
+}
+try {
+  new MutationObserver(ms => { for (const m of ms) { if (m.type === 'characterData') glWalk(m.target); else m.addedNodes.forEach(glWalk); } })
+    .observe(document.body, { childList: true, subtree: true, characterData: true });
+  glWalk(document.body);
+} catch {}
 if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__dd = { S, add, UNDO, snapshot, mergeIn, renderAll, FS, G, parseEdit, normalizeCmd, pickDT, parseCommand };
 })();
 </script>
