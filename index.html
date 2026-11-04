@@ -207,6 +207,13 @@ textarea.field{resize:vertical;width:100%;line-height:1.55}
 .btn.primary:hover{filter:brightness(1.08)}
 .btn.small{padding:.2rem .6rem;font-size:.85rem}
 .btn.danger{color:var(--red)}
+.btn.dangerbtn{background:var(--red);border-color:var(--red);color:#fff}
+.askbox{width:min(32rem,100%)}
+.askbox .btn:disabled{opacity:.35;cursor:not-allowed}
+.asktbl{border-collapse:collapse;font-size:.9rem;width:100%}
+.asktbl th{color:var(--muted);font-weight:500;text-align:left;padding:.25rem .8rem .25rem 0;white-space:nowrap;vertical-align:top}
+.asktbl td{padding:.25rem 0}
+.asktbl s{color:var(--muted)}
 .btn:disabled{opacity:.5;cursor:default}
 .row{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center}
 .row>.grow{flex:1 1 10rem}
@@ -1130,20 +1137,25 @@ function googleBody(doc) {
   if (rrule(doc)) body.recurrence = [rrule(doc)];
   return body;
 }
+const gScopeP = d => d && (d.scope === 'one' || d.scope === 'all') ? { scope: d.scope, od: d.od || '', ost: d.ost || '' } : {};
 // returns 'ok' | 'none' (no live connection) | 'unknown' (pushed without id) | 'fail'
 async function gUpdate(cal, gid, doc) {
   if (!gid) return 'none';
   if (gid === 'pushed') return 'unknown';
   try {
     if (doc.descOnly) {
-      if (gasOn()) { await gas({ action: 'update', cal: cal || 'primary', id: gid, description: doc.description || '', descOnly: '1', series: doc.series ? '1' : '' }); return 'ok'; }
+      if (gasOn()) { await gas({ action: 'update', cal: cal || 'primary', id: gid, description: doc.description || '', descOnly: '1', series: doc.series ? '1' : '', ...gScopeP(doc) }); return 'ok'; }
       if (oauthReady()) { await gapi(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(cal || 'primary')}/events/${encodeURIComponent(gid)}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ description: doc.description || '' }) }); return 'ok'; }
       return 'none';
     }
-    if (gasOn() && doc.titleOnly) { await gas({ action: 'update', cal: cal || 'primary', id: gid, title: doc.title, location: doc.location || '', titleOnly: '1' }); return 'ok'; }
+    if (gasOn() && doc.titleOnly) { await gas({ action: 'update', cal: cal || 'primary', id: gid, title: doc.title, location: doc.location || '', titleOnly: '1', ...gScopeP(doc) }); return 'ok'; }
+    if (oauthReady() && doc.scope === 'all') {
+      if (!(doc.titleOnly || doc.timeSame)) throw { message: '반복 일정 전체의 시간 변경은 Apps Script 연결에서만 됩니다.' };
+      await gapi(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(cal || 'primary')}/events/${encodeURIComponent(doc.rid || gid)}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ summary: doc.title, location: doc.location || '' }) }); return 'ok';
+    }
     if (oauthReady() && doc.titleOnly) { await gapi(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(cal || 'primary')}/events/${encodeURIComponent(gid)}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ summary: doc.title, location: doc.location || '' }) }); return 'ok'; }
     if (gasOn()) {
-      await gas({ action: 'update', cal: cal || 'primary', id: gid, ...(doc.memo && typeof doc.memo.text === 'string' ? { description: doc.memo.text } : {}), title: doc.title, date: doc.date, time: toMin(doc.time) != null ? doc.time : '', endTime: toMin(doc.time) != null ? fromMin(Math.min(evEnd(doc), 1439)) : '', endDate: doc.endDate || '', location: doc.location || '', days: repDays(doc) ? repDays(doc).join(',') : '', until: repDays(doc) && isDate(doc.repeat.until) ? doc.repeat.until : '' });
+      await gas({ action: 'update', cal: cal || 'primary', id: gid, ...gScopeP(doc), ...(doc.memo && typeof doc.memo.text === 'string' ? { description: doc.memo.text } : {}), title: doc.title, date: doc.date, time: toMin(doc.time) != null ? doc.time : '', endTime: toMin(doc.time) != null ? fromMin(Math.min(evEnd(doc), 1439)) : '', endDate: doc.endDate || '', location: doc.location || '', days: repDays(doc) ? repDays(doc).join(',') : '', until: repDays(doc) && isDate(doc.repeat.until) ? doc.repeat.until : '' });
       return 'ok';
     }
     if (oauthReady()) {
@@ -1153,6 +1165,83 @@ async function gUpdate(cal, gid, doc) {
     return 'none';
   } catch (e) { UI.gErrMsg = e && e.message; return 'fail'; }
 }
+/* ---------- every change to a Google event is confirmed first ---------- */
+// gAsk({ title, rows: [[label, before, after]], note, choices: [{ v, label, primary, danger, off, why }] }) → chosen v or null
+function gAsk(o) {
+  return new Promise(res => {
+    let root = document.getElementById('askRoot');
+    if (!root) { root = document.createElement('div'); root.id = 'askRoot'; document.body.appendChild(root); }
+    const rows = (o.rows || []).filter(Boolean).map(([k, a, b]) => `<tr><th>${esc(k)}</th><td>${b === undefined ? colorTimes(esc(a)) : `<s>${colorTimes(esc(a || '—'))}</s> → <b>${colorTimes(esc(b || '—'))}</b>`}</td></tr>`).join('');
+    root.innerHTML = `<div class="scrim" data-ask="__no" style="z-index:60"></div><div class="dlg" style="z-index:61"><div class="dlgbox askbox" role="alertdialog" aria-modal="true" aria-labelledby="askT">
+      <h3 id="askT">${ic(o.icon || 'gcal', 'kc-g')}${esc(o.title)}</h3>
+      ${rows ? `<table class="asktbl">${rows}</table>` : ''}
+      ${o.note ? `<div class="count">${o.note}</div>` : ''}
+      <div class="row" style="justify-content:flex-end;flex-wrap:wrap"><button class="btn" type="button" data-ask="__no">취소</button>${o.choices.map(c => `<button class="btn ${c.primary ? 'primary' : ''} ${c.danger ? 'dangerbtn' : ''}" type="button" data-ask="${esc(c.v)}" ${c.off ? `disabled title="${esc(c.why || '')}"` : ''}>${esc(c.label)}</button>`).join('')}</div>
+    </div></div>`;
+    const done = v => { root.innerHTML = ''; document.removeEventListener('keydown', key, true); res(v); };
+    const key = e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); done(null); } };
+    document.addEventListener('keydown', key, true);
+    root.onclick = e => { const b = e.target.closest('[data-ask]'); if (!b || b.disabled) return; e.stopPropagation(); done(b.dataset.ask === '__no' ? null : b.dataset.ask); };
+    const first = root.querySelector('.btn.primary:not([disabled])') || root.querySelector('[data-ask]:not(.scrim)'); if (first) first.focus();
+  });
+}
+const gWhen = g => `${fmtShort(g.date)}${g.allDay ? ' 종일' : ' ' + g.time + '–' + (g.endTime === '24:00' ? '24:00' : g.endTime)}`;
+const docWhen = d => `${fmtShort(d.date)}${d.time ? ' ' + d.time + '–' + (d.endTime || '') : ' 종일'}`;
+// rows that changed, for the confirmation
+function gDiffRows(g, d) {
+  const r = [];
+  if (d.title && d.title !== g.title) r.push(['제목', g.title, d.title]);
+  if (!d.titleOnly && (d.date || d.time)) { const a = gWhen(g), b = docWhen({ date: d.date || g.date, time: d.time, endTime: d.endTime }); if (a !== b) r.push(['언제', a, b]); }
+  if (d.location !== undefined && (d.location || '') !== (g.loc || '')) r.push(['장소', g.loc || '', d.location || '']);
+  return r;
+}
+// ask before changing one Google event; returns { ok, scope } — scope 'one' | 'all' for repeating events
+async function gConfirmChange(g, d, verb) {
+  const rows = gDiffRows(g, d);
+  if (!rows.length) return { ok: true, scope: g.recurring ? 'one' : '' };
+  const dateMoved = d.date && d.date !== g.date, kindSwitch = !d.titleOnly && (!!d.time) === !!g.allDay;
+  const head = [['일정', g.title + (g.calName ? ' · ' + g.calName : '')]];
+  const note = '구글 캘린더에 바로 반영됩니다. 구글 일정 변경은 "되돌리기"로 되돌릴 수 없습니다.';
+  if (!g.recurring) { const v = await gAsk({ title: `구글 캘린더 일정을 ${verb || '바꿀'}까요?`, rows: [...head, ...rows], note, choices: [{ v: 'ok', label: '바꾸기', primary: true }] }); return { ok: !!v, scope: '' }; }
+  const allOff = dateMoved || kindSwitch;
+  const v = await gAsk({ title: '반복 일정입니다. 어디까지 바꿀까요?', rows: [...head, ...rows], note: note + (allOff ? '<br>날짜(요일)나 종일 여부를 바꾸는 것은 이 날만 할 수 있습니다.' : ''),
+    choices: [{ v: 'one', label: '이 날만', primary: true }, { v: 'all', label: '모든 반복 일정', off: allOff, why: '날짜·종일 변경은 이 날만 됩니다' }] });
+  return { ok: !!v, scope: v || '' };
+}
+async function gConfirmDelete(g) {
+  const head = [['일정', g.title + (g.calName ? ' · ' + g.calName : '')], ['언제', gWhen(g)]];
+  const note = '구글 캘린더에서 지웁니다. 지운 일정은 "되돌리기"로 살릴 수 없습니다 (구글 캘린더 휴지통에서 복원할 수 있습니다).';
+  if (!g.recurring) return await gAsk({ title: '구글 캘린더에서 이 일정을 지울까요?', icon: 'ban', rows: head, note, choices: [{ v: 'plain', label: '지우기', primary: true, danger: true }] });
+  return await gAsk({ title: '반복 일정입니다. 어디까지 지울까요?', icon: 'ban', rows: head, note, choices: [{ v: 'one', label: '이 날만 지우기', primary: true, danger: true }, { v: 'all', label: '모든 반복 지우기', danger: true }] });
+}
+// delete in Google: 'ok' | 'none' | 'fail'
+async function gDelete(cal, gid, opt) {
+  if (!gid || gid === 'pushed') return 'unknown';
+  opt = opt || {};
+  try {
+    if (gasOn()) { await gas({ action: 'delete', cal: cal || 'primary', id: gid, ...(opt.scope ? { scope: opt.scope, od: opt.od || '', ost: opt.ost || '' } : {}), ...(opt.series ? { series: '1' } : {}) }); return 'ok'; }
+    if (oauthReady()) {
+      const id = opt.scope === 'all' && opt.rid ? opt.rid : gid;
+      await gapi(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(cal || 'primary')}/events/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      return 'ok';
+    }
+    return 'none';
+  } catch (e) { UI.gErrMsg = e && e.message; return 'fail'; }
+}
+const gScopeOpt = (g, scope) => scope ? { scope, od: g.date, ost: g.allDay ? '' : g.time, rid: g.rid || '' } : {};
+function gDropLocal(g, scope) {
+  G.events = G.events.filter(x => !(x.id === g.id && (scope === 'all' || x.date === g.date)));
+  renderAll();
+}
+async function deleteGoogleEvent(key) {
+  const g = G.events.find(x => gKey(x) === key); if (!g) return;
+  if (!gasOn() && !oauthReady()) { toast('구글 일정을 지우려면 Apps Script 연결이 필요합니다. (설정 → 저장·구글)'); return; }
+  const scope = await gConfirmDelete(g); if (!scope) return;
+  const r = await gDelete(g.cal, g.id, gScopeOpt(g, scope === 'plain' ? '' : scope));
+  if (r === 'ok') { gDropLocal(g, scope); if (UI.dlg === 'edit') { $('dlgRoot').innerHTML = ''; UI.dlg = null; UI.edit = null; } toast(`"${g.title}"을 구글 캘린더에서 ${scope === 'all' ? '모든 반복까지 ' : ''}지웠습니다.`); gLoad(true); }
+  else toast('구글 캘린더에서 지우지 못했습니다. ' + (UI.gErrMsg || ''));
+}
+
 function gResultToast(r, base) {
   if (r === 'ok') { toast(base + ' 구글 캘린더에도 반영했습니다.'); gLoad(true); }
   else if (r === 'none') toast(base + ' 구글 캘린더는 연결이 없어 바뀌지 않았습니다. (설정 → 구글 캘린더 연결)');
@@ -1168,6 +1257,7 @@ async function moveItem(dk, newDate) {
     const e = S.events.find(x => x.id === id); if (!e || e.date === newDate) return;
     const len = isDate(e.endDate) && e.endDate > e.date ? Math.round((parse(e.endDate) - parse(e.date)) / 86400000) : 0;
     const upd = { date: newDate, endDate: len ? addDays(newDate, len) : (e.endDate || '') };
+    if (e.googleId && e.googleId !== 'pushed' && !await gAsk({ title: '구글 캘린더에서도 옮길까요?', rows: [['일정', e.title], ['언제', docWhen({ date: e.date, time: e.time, endTime: e.time ? fromMin(Math.min(evEnd(e), 1439)) : '' }), docWhen({ date: newDate, time: e.time, endTime: e.time ? fromMin(Math.min(evEnd(e), 1439)) : '' })]], note: '대시보드와 구글 캘린더 모두에서 옮깁니다.', choices: [{ v: 'ok', label: '옮기기', primary: true }] })) return;
     await patch('events', id, upd);
     const r = e.googleId ? await gUpdate(e.googleCal, e.googleId, { ...e, ...upd }) : e.googleSent ? 'unknown' : '';
     gResultToast(r, `"${e.title}"을 ${fmtShort(newDate)}로 옮겼습니다.`);
@@ -1175,8 +1265,11 @@ async function moveItem(dk, newDate) {
   }
   if (kind === 'g') {
     const g = G.events.find(x => gKey(x) === id); if (!g || g.date === newDate) return;
-    if (g.recurring) { toast('구글의 반복 일정은 구글 캘린더에서 옮겨 주세요.'); return; }
-    const doc = g.allDay ? { title: g.title, date: newDate, endDate: g.endDate > g.date ? addDays(newDate, Math.round((parse(g.endDate) - parse(g.date)) / 86400000)) : '', location: g.loc || '' } : { title: g.title, date: newDate, time: g.time, endTime: g.endTime === '24:00' ? '23:59' : g.endTime, location: g.loc || '' };
+    const doc0 = g.allDay ? { title: g.title, date: newDate, endDate: g.endDate > g.date ? addDays(newDate, Math.round((parse(g.endDate) - parse(g.date)) / 86400000)) : '', location: g.loc || '' } : { title: g.title, date: newDate, time: g.time, endTime: g.endTime === '24:00' ? '23:59' : g.endTime, location: g.loc || '' };
+    const doc = doc0;
+    if (!gasOn() && !oauthReady()) { toast('구글 일정을 옮기려면 Apps Script 연결이 필요합니다.'); return; }
+    const cf = await gConfirmChange(g, doc, '옮길'); if (!cf.ok) return;
+    Object.assign(doc, gScopeOpt(g, cf.scope));
     const r = await gUpdate(g.cal, g.id, doc);
     if (r === 'ok') { const old = g.date; g.date = newDate; if (g.allDay) g.endDate = doc.endDate || newDate; const m = S.marks.find(x => x.id === `g:${g.id}:${old}`); if (m) setMark(`g:${g.id}:${newDate}`, { imp: m.imp, icon: m.icon }); UI.selDay = newDate; renderAll(); }
     gResultToast(r === 'none' ? 'nolink' : r, r === 'ok' ? `"${g.title}"을 ${fmtShort(newDate)}로 옮겼습니다.` : r === 'none' ? '구글 일정을 옮기려면 Apps Script 연결이 필요합니다.' : '');
@@ -1212,14 +1305,14 @@ function renderEdit() {
   const tog = [1, 2, 3, 4, 5, 6, 0].map(n => `<button type="button" class="dtog ${d.days && d.days.includes(n) ? 'on' : ''}" data-act="edDay" data-d="${n}">${'일월화수목금토'[n]}</button>`).join('');
   $('dlgRoot').innerHTML = `<div class="scrim" data-act="closeDlg"></div><div class="dlg"><div class="dlgbox wide" role="dialog" aria-modal="true" aria-labelledby="dlgT">
     <h3 id="dlgT">${ic('pen')}일정 편집${d.kind === 'g' ? ` <span class="count">구글 · ${esc(d.calName)}</span>` : ''}</h3>
-    ${d.recurring ? '<div class="warnline">구글의 반복 일정입니다. 여기서는 이 일정의 제목만 바꿀 수 있고, 날짜·시간은 구글 캘린더에서 바꿔 주세요.</div>' : ''}
+    ${d.recurring ? '<div class="warnline">구글의 반복 일정입니다. 저장할 때 이 날만 바꿀지, 모든 반복 일정에 적용할지 묻습니다.</div>' : ''}
     <div class="miniform" style="background:none;border:0;padding:0">
       <label class="full">제목<input class="field" id="edTitle" value="${esc(d.title)}" autocomplete="off"></label>
-      <label>${d.days ? '시작일' : '날짜'}<input class="field" type="date" id="edDate" value="${esc(d.date)}" ${d.recurring ? 'disabled' : ''}></label>
-      <label class="chk" style="align-self:end"><input type="checkbox" id="edAll" ${d.allDay ? 'checked' : ''} ${d.recurring ? 'disabled' : ''}>종일</label>
-      <label>시작<input class="field" type="time" id="edStart" value="${esc(d.time)}" ${d.allDay || d.recurring ? 'disabled' : ''}></label>
-      <label>끝<input class="field" type="time" id="edEnd" value="${esc(d.endTime)}" ${d.allDay || d.recurring ? 'disabled' : ''}></label>
-      ${!d.days ? `<label>여러 날이면 마지막 날<input class="field" type="date" id="edEndDate" value="${esc(d.endDate)}" ${d.recurring ? 'disabled' : ''}></label>` : ''}
+      <label>${d.days ? '시작일' : '날짜'}<input class="field" type="date" id="edDate" value="${esc(d.date)}"></label>
+      <label class="chk" style="align-self:end"><input type="checkbox" id="edAll" ${d.allDay ? 'checked' : ''}>종일</label>
+      <label>시작<input class="field" type="time" id="edStart" value="${esc(d.time)}" ${d.allDay ? 'disabled' : ''}></label>
+      <label>끝<input class="field" type="time" id="edEnd" value="${esc(d.endTime)}" ${d.allDay ? 'disabled' : ''}></label>
+      ${!d.days ? `<label>여러 날이면 마지막 날<input class="field" type="date" id="edEndDate" value="${esc(d.endDate)}"></label>` : ''}
       ${d.kind === 'e' ? `<label>종류<select class="field" id="edKind">${['회의', '행사', '학사', '마감'].map(k => `<option ${k === d.ekind ? 'selected' : ''}>${k}</option>`).join('')}</select></label>` : ''}
       <label class="full">장소<input class="field" id="edLoc" value="${esc(d.location)}" autocomplete="off"></label>
       ${d.days ? `<div class="full"><span class="count">반복 요일</span><div class="row" style="margin-top:.3rem">${tog}</div></div>
@@ -1228,7 +1321,7 @@ function renderEdit() {
     </div>
     ${d.kind === 'e' && d.g ? `<div class="count">${ic('gcal', 'kc-g')} 구글 캘린더에 있는 일정이라 저장하면 구글에도 반영합니다.</div>` : ''}
     <div class="status err" id="edErr"></div>
-    <div class="row" style="justify-content:flex-end"><button class="btn" type="button" data-act="closeDlg">취소</button><button class="btn primary" type="button" data-act="edSave">${ic('check')}저장</button></div>
+    <div class="row" style="justify-content:flex-end">${d.kind === 'g' ? `<button class="btn danger" type="button" data-act="gDel" data-k="${esc(d.id)}" style="margin-right:auto">${ic('ban')}구글에서 삭제</button>` : ''}<button class="btn" type="button" data-act="closeDlg">취소</button><button class="btn primary" type="button" data-act="edSave">${ic('check')}저장</button></div>
   </div></div>`;
 }
 async function saveEdit(btn) {
@@ -1248,6 +1341,11 @@ async function saveEdit(btn) {
     const e = S.events.find(x => x.id === d.id); if (!e) return;
     const upd = { ...doc, kind: $('edKind').value, imp: $('edImp').value };
     if (d.days) upd.repeat = { days: d.days, ...(isDate($('edUntil').value) ? { until: $('edUntil').value } : {}) };
+    if (e.googleId && e.googleId !== 'pushed') {
+      const before = { title: e.title, date: e.date, time: e.time || '', endTime: e.time ? fromMin(Math.min(evEnd(e), 1439)) : '', loc: e.location || '', allDay: !e.time };
+      const rows = gDiffRows({ ...before, time: before.time, endTime: before.endTime }, doc).map(r => r[0] === '언제' ? ['언제', docWhen(before), docWhen(doc)] : r);
+      if (rows.length) { btn.disabled = false; if (!await gAsk({ title: '구글 캘린더에도 반영할까요?', rows: [['일정', e.title], ...rows], note: '대시보드와 구글 캘린더 모두 바뀝니다.', choices: [{ v: 'ok', label: '저장하고 반영', primary: true }] })) return; btn.disabled = true; }
+    }
     await patch('events', d.id, upd);
     $('dlgRoot').innerHTML = ''; UI.dlg = null; UI.edit = null;
     const r = e.googleId ? await gUpdate(e.googleCal, e.googleId, { ...e, ...upd }) : e.googleSent ? 'unknown' : '';
@@ -1256,11 +1354,22 @@ async function saveEdit(btn) {
   }
   const g = G.events.find(x => gKey(x) === d.id); if (!g) return;
   setMark(d.id, { imp: $('edImp').value });
-  const r = await gUpdate(g.cal, g.id, d.recurring ? { title, date: g.date, time: g.allDay ? '' : g.time, endTime: g.allDay ? '' : g.endTime, endDate: g.allDay && g.endDate > g.date ? g.endDate : '', location: doc.location, titleOnly: true } : doc);
+  let r = '';
+  if (gDiffRows(g, doc).length) {
+    if (!gasOn() && !oauthReady()) r = 'none';
+    else {
+      btn.disabled = false;
+      const cf = await gConfirmChange(g, doc, '바꿀'); if (!cf.ok) return;
+      btn.disabled = true;
+      Object.assign(doc, gScopeOpt(g, cf.scope));
+      if (cf.scope === 'all' && doc.time === g.time && doc.endTime === g.endTime) doc.timeSame = true;
+      r = await gUpdate(g.cal, g.id, doc);
+    }
+  }
   $('dlgRoot').innerHTML = ''; UI.dlg = null; UI.edit = null;
   if (r === 'none') toast('구글 일정을 고치려면 Apps Script 연결이 필요합니다. 중요도만 저장했습니다.');
-  else gResultToast(r, '일정을 고쳤습니다.');
-  if (r === 'ok') UI.selDay = d.recurring ? g.date : date;
+  else gResultToast(r, r ? '일정을 고쳤습니다.' : '저장했습니다.');
+  if (r === 'ok') UI.selDay = doc.scope === 'all' ? g.date : date;
   renderAll();
 }
 
@@ -1736,12 +1845,12 @@ function parseG(payload) {
       const day = ymd(a), s = a.getHours() * 60 + a.getMinutes();
       let e = !isNaN(b) && ymd(b) === day ? b.getHours() * 60 + b.getMinutes() : 1440;
       if (e <= s) e = Math.min(s + 30, 1440);
-      out.push({ id: String(x.id || ''), title, date: day, allDay: false, s, e, time: fromMin(s), endTime: e >= 1440 ? '24:00' : fromMin(e), free, link, loc: String(x.location || ''), recurring: !!(x.recurring || x.recurringEventId), desc: typeof x.description === 'string' ? x.description : '', updated: typeof x.updated === 'number' ? x.updated : (Date.parse(x.updated || '') || 0) });
+      out.push({ id: String(x.id || ''), title, date: day, allDay: false, s, e, time: fromMin(s), endTime: e >= 1440 ? '24:00' : fromMin(e), free, link, loc: String(x.location || ''), recurring: !!(x.recurring || x.recurringEventId), rid: String(x.recurringEventId || ''), desc: typeof x.description === 'string' ? x.description : '', updated: typeof x.updated === 'number' ? x.updated : (Date.parse(x.updated || '') || 0) });
     } else if (st.date) {
       const a = String(st.date).slice(0, 10), b = String(en.date || st.date).slice(0, 10);
       if (!isDate(a)) continue;
       const endD = isDate(b) && b > a ? addDays(b, -1) : a;
-      out.push({ id: String(x.id || ''), title, date: a, endDate: endD, allDay: true, free, link, recurring: !!(x.recurring || x.recurringEventId), desc: typeof x.description === 'string' ? x.description : '', updated: typeof x.updated === 'number' ? x.updated : (Date.parse(x.updated || '') || 0) });
+      out.push({ id: String(x.id || ''), title, date: a, endDate: endD, allDay: true, free, link, recurring: !!(x.recurring || x.recurringEventId), rid: String(x.recurringEventId || ''), desc: typeof x.description === 'string' ? x.description : '', updated: typeof x.updated === 'number' ? x.updated : (Date.parse(x.updated || '') || 0) });
     }
   }
   return out;
@@ -2411,7 +2520,7 @@ const UNDO_LABEL = {
   delRule: '아이콘 규칙 삭제', skipOcc: '반복 일정 한 번 빼기', edSave: '일정 편집', bdSave: '불가 시간 설정', saveSettings: '설정 변경', imSave: '아이콘 색·이름',
   pushG: '구글에 추가', fEvent: '일정 추가', fBlock: '불가 시간 추가', taskForm: '할 일 추가', importData: '파일 가져오기'
 };
-const UNDO_SKIP = new Set(['fltImp', 'fltIcons', 'fltTog', 'fltClear', 'fltClose', 'cmdToAI', 'cmdPick', 'cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
+const UNDO_SKIP = new Set(['gDel', 'fltImp', 'fltIcons', 'fltTog', 'fltClear', 'fltClose', 'cmdToAI', 'cmdPick', 'cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
 function undoSnap() {
   const o = { settings: JSON.parse(JSON.stringify(S.settings)) };
   for (const c of COLS) o[c] = JSON.parse(JSON.stringify(S[c]));
@@ -2512,7 +2621,7 @@ ${cmdContext()}
 1) 새로 만들기: {"type": "event | task | block", "title": "짧은 제목", "date": "YYYY-MM-DD 또는 null (반복이면 첫 날짜, 모르면 null)", "time": "HH:MM 또는 null", "endTime": "HH:MM 또는 null", "allDay": true/false, "repeat": 반복 또는 null, "due": "할 일 기한 YYYY-MM-DD 또는 null", "kind": "회의 | 행사 | 마감 | 학사", "important": true/false}
    event는 일정, task는 할 일, block은 학과장이 안 되는 시간(불가 시간).
 2) 기존 항목 고치기: {"type": "update", "ref": "위 목록의 번호 (예: e:abc, t:xyz, g:...)", 바뀌는 필드만: "title", "date", "time", "endTime", "allDay", "due", "important", "repeat"}
-3) 지우기: {"type": "delete", "ref": "e:… 또는 t:…"} — 구글 캘린더 일정(g:)은 지울 수 없으니 note로 알려 주세요.
+3) 지우기: {"type": "delete", "ref": "e:… 또는 t:… 또는 g:…"} — 구글 캘린더 일정(g:)도 지울 수 있습니다 (실행 전에 사용자에게 확인합니다).
 4) 반복 일정에서 하루만 빼기: {"type": "skip", "ref": "e:…", "date": "YYYY-MM-DD"}
 5) 할 일 완료: {"type": "done", "ref": "t:…"}
 
@@ -2564,11 +2673,16 @@ function cleanRefAction(a) {
   const x = { type: a.type, ref: String(a.ref), title: it.title, notes: [] };
   if (a.type === 'done') return it.kind === 't' ? x : null;
   if (a.type === 'skip') { if (it.kind !== 'e' || !repDays(it.o) || !isDate(a.date)) return null; x.date = a.date; return x; }
-  if (a.type === 'delete') { if (it.kind === 'g') return null; if (it.kind === 'e' && (it.o.googleId || it.o.googleSent)) x.notes.push('구글 캘린더에 있는 것은 구글에서 따로 지워야 합니다'); return x; }
+  if (a.type === 'delete') {
+    if (it.kind === 'g') { if (!gasOn() && !oauthReady()) return null; x.notes.push(it.o.recurring ? '구글 반복 일정 — 실행하면 이 날만/전체 중 묻습니다' : '구글 캘린더에서 지웁니다'); return x; }
+    if (it.kind === 'e' && it.o.googleId && it.o.googleId !== 'pushed') x.notes.push('구글 캘린더에서도 지웁니다');
+    else if (it.kind === 'e' && it.o.googleSent) x.notes.push('구글 캘린더 화면으로 보냈던 것은 구글에서 따로 지워야 합니다');
+    return x;
+  }
   x.ch = cleanChange(a);
   if (it.kind === 'e' && a.repeat !== undefined) { const rp = cleanRepeat(a.repeat); x.ch.repeat = rp || 'none'; }
   if (it.kind === 't') x.ch = Object.fromEntries(Object.entries(x.ch).filter(([k]) => ['title', 'due', 'imp'].includes(k)));
-  if (it.kind === 'g' && it.o.recurring) { x.ch = x.ch.title ? { title: x.ch.title } : {}; x.notes.push('구글 반복 일정은 제목만 바꿉니다'); }
+  if (it.kind === 'g' && it.o.recurring) x.notes.push('구글 반복 일정 — 실행하면 이 날만/전체 중 묻습니다');
   if (it.kind === 'g' && !gasOn()) x.notes.push('구글 일정을 고치려면 Apps Script 연결이 필요합니다');
   if (x.ch.time && !x.ch.endTime && it.kind !== 't') { const o = it.o, len = it.kind === 'g' ? (o.allDay ? 60 : toMin(o.endTime) - toMin(o.time)) : (o.time ? evEnd(o) - toMin(o.time) : 60); x.ch.endTime = fromMin(Math.min(toMin(x.ch.time) + (len > 0 ? len : 60), 1439)); }
   return Object.keys(x.ch).length ? x : null;
@@ -2594,7 +2708,18 @@ async function applyRefAction(a) {
   const id = it.kind === 'g' ? a.ref : it.o.id;
   if (a.type === 'done') { await patch('tasks', id, { done: true, doneAt: nowISO() }); return { n: 1 }; }
   if (a.type === 'skip') { await patch('events', id, { skip: [...new Set([...(it.o.skip || []), a.date])] }); return { n: 1, date: a.date }; }
-  if (a.type === 'delete') { await del(it.kind === 'e' ? 'events' : 'tasks', id); return { n: 1, gLeft: it.kind === 'e' && (it.o.googleId || it.o.googleSent) ? 1 : 0 }; }
+  if (a.type === 'delete' && it.kind === 'g') {
+    const g = it.o; let scope = '';
+    if (g.recurring) { scope = await gConfirmDelete(g); if (!scope) return { n: 0 }; }
+    const r = await gDelete(g.cal, g.id, gScopeOpt(g, scope));
+    if (r === 'ok') gDropLocal(g, scope);
+    return { n: r === 'ok' ? 1 : 0, g: r };
+  }
+  if (a.type === 'delete') {
+    const o = it.o; await del(it.kind === 'e' ? 'events' : 'tasks', id);
+    if (it.kind === 'e' && o.googleId && o.googleId !== 'pushed') { const r = await gDelete(o.googleCal, o.googleId, { series: !!repDays(o) }); return { n: 1, g: r }; }
+    return { n: 1, gLeft: it.kind === 'e' && o.googleSent ? 1 : 0 };
+  }
   const c = a.ch || {};
   if (it.kind === 't') { const upd = {}; if (c.title) upd.title = c.title; if (c.due) upd.due = c.due; if (c.imp) upd.priority = c.imp === 'high' ? 'high' : 'mid'; await patch('tasks', id, upd); return { n: 1, date: c.due }; }
   if (it.kind === 'e') {
@@ -2612,9 +2737,13 @@ async function applyRefAction(a) {
   if (typeof c.absent === 'boolean') setMark(a.ref, { absent: c.absent });
   if (!(c.title || c.date || c.time || c.allDay)) return { n: 1 };
   const nd = c.date || g.date, len = g.allDay && g.endDate > g.date ? Math.round((parse(g.endDate) - parse(g.date)) / 86400000) : 0;
-  const doc = g.recurring ? { title: c.title || g.title, location: g.loc || '', titleOnly: true }
-    : (c.allDay || (g.allDay && !c.time)) ? { title: c.title || g.title, date: nd, endDate: len ? addDays(nd, len) : '', location: g.loc || '' }
+  const doc = (c.allDay || (g.allDay && !c.time)) ? { title: c.title || g.title, date: nd, endDate: len ? addDays(nd, len) : '', location: g.loc || '' }
     : { title: c.title || g.title, date: nd, time: c.time || g.time, endTime: c.time ? c.endTime : (g.endTime === '24:00' ? '23:59' : g.endTime), location: g.loc || '' };
+  if (g.recurring) {
+    const cf = await gConfirmChange(g, doc, '바꿀'); if (!cf.ok) return { n: 0 };
+    Object.assign(doc, gScopeOpt(g, cf.scope));
+    if (cf.scope === 'all' && doc.time === g.time) doc.timeSame = true;
+  }
   const r = await gUpdate(g.cal, g.id, doc);
   if (r === 'ok' && c.date && c.date !== g.date) { const m = S.marks.find(x => x.id === a.ref); if (m) setMark(`g:${g.id}:${c.date}`, { imp: m.imp, icon: m.icon }); }
   return { n: r === 'ok' ? 1 : 0, date: nd, g: r || 'none' };
@@ -3408,7 +3537,8 @@ function editActionsFor(cand, op) {
   const ref = cand.kind === 'e' ? 'e:' + cand.o.id : gKey(cand.o), notes = [];
   const len = cand.kind === 'e' ? (cand.o.time ? evEnd(cand.o) - toMin(cand.o.time) : 60) : (cand.o.allDay ? 60 : cand.o.e - cand.o.s);
   if (op.type === 'delete') {
-    if (cand.kind === 'g') return { msg: `"${cand.title}"은 구글 캘린더 일정이라 여기서 지울 수 없습니다. 구글 캘린더에서 지워 주세요.` };
+    if (cand.kind === 'g' && !gasOn() && !oauthReady()) return { msg: `"${cand.title}"은 구글 캘린더 일정입니다. 지우려면 Apps Script 연결이 필요합니다.` };
+    if (cand.kind === 'g') return { actions: [cleanRefAction({ type: 'delete', ref })].filter(Boolean) };
     if (cand.o.occ) return { actions: [cleanRefAction({ type: 'skip', ref, date: cand.date })].filter(Boolean) };
     return { actions: [cleanRefAction({ type: 'delete', ref })].filter(Boolean) };
   }
@@ -3426,7 +3556,6 @@ function editActionsFor(cand, op) {
     copy.notes = ['반복 일정에서 이 날만 옮깁니다'];
     return { actions: [cleanRefAction({ type: 'skip', ref, date: cand.date }), copy].filter(Boolean) };
   }
-  if (cand.kind === 'g' && cand.o.recurring) return { msg: `"${cand.title}"은 구글의 반복 일정이라 여기서 옮길 수 없습니다. 구글 캘린더에서 바꿔 주세요.` };
   const a = cleanRefAction({ type: 'update', ref, ...(nd !== cand.date ? { date: nd } : {}), ...(nt ? { time: nt, endTime: ne } : {}) });
   return { actions: a ? [a] : [], notes };
 }
@@ -3570,8 +3699,8 @@ function cellItems(day) {
   }
   for (const m of S.emails.filter(m => needsReplyNow(m) && m.replyDeadline === day))
     items.push({ o: 2, ic: 'reply', nm: '답장 · ' + (m.subject || ''), tx: '답장 기한 · ' + (m.subject || ''), cls: 'warn' });
-  for (const g of gAllDayOn(day)) { const k = iconOfG(g); items.push({ o: 9, ic: k, kc: grp(k, 'kc-g'), nm: g.title, tx: `${impOfG(g) === 'high' ? '[중요] ' : ''}${g.title} (구글 · ${g.calName || ''})`, cls: 'g' + (g.free ? ' dim' : '') + (absentOfG(g) ? ' absent' : impOfG(g) === 'high' ? ' imp' : ''), gc: g.color, dk: g.recurring ? '' : 'g:' + gKey(g), tr: itemTraits({ kind: 'google', absent: absentOfG(g), timed: false, days: g.endDate && g.endDate > g.date ? Math.round((parse(g.endDate) - parse(g.date)) / 86400000) + 1 : 1, recur: g.recurring }) }); }
-  for (const g of gOn(day)) { const k = iconOfG(g); items.push({ o: 20 + g.s / 1440, ic: k, kc: grp(k, 'kc-g'), tm: g.time, nm: g.title, tx: `${impOfG(g) === 'high' ? '[중요] ' : ''}${g.title} (구글 · ${g.calName || ''})`, cls: 'g' + (g.free ? ' dim' : '') + (absentOfG(g) ? ' absent' : impOfG(g) === 'high' ? ' imp' : ''), gc: g.color, dk: g.recurring ? '' : 'g:' + gKey(g), tr: itemTraits({ kind: 'google', absent: absentOfG(g), timed: true, s: g.s, e: g.e, recur: g.recurring }) }); }
+  for (const g of gAllDayOn(day)) { const k = iconOfG(g); items.push({ o: 9, ic: k, kc: grp(k, 'kc-g'), nm: g.title, tx: `${impOfG(g) === 'high' ? '[중요] ' : ''}${g.title} (구글 · ${g.calName || ''})`, cls: 'g' + (g.free ? ' dim' : '') + (absentOfG(g) ? ' absent' : impOfG(g) === 'high' ? ' imp' : ''), gc: g.color, dk: 'g:' + gKey(g), tr: itemTraits({ kind: 'google', absent: absentOfG(g), timed: false, days: g.endDate && g.endDate > g.date ? Math.round((parse(g.endDate) - parse(g.date)) / 86400000) + 1 : 1, recur: g.recurring }) }); }
+  for (const g of gOn(day)) { const k = iconOfG(g); items.push({ o: 20 + g.s / 1440, ic: k, kc: grp(k, 'kc-g'), tm: g.time, nm: g.title, tx: `${impOfG(g) === 'high' ? '[중요] ' : ''}${g.title} (구글 · ${g.calName || ''})`, cls: 'g' + (g.free ? ' dim' : '') + (absentOfG(g) ? ' absent' : impOfG(g) === 'high' ? ' imp' : ''), gc: g.color, dk: 'g:' + gKey(g), tr: itemTraits({ kind: 'google', absent: absentOfG(g), timed: true, s: g.s, e: g.e, recur: g.recurring }) }); }
   if (day >= todayStr()) for (const b of [...blocksOn(day), ...weeklyOn(day)]) {
     const k = iconOfBlock(b);
     items.push({ o: 40 + b.s / 1440, ic: k, tm: b.allDay ? '종일' : fromMin(b.s) + '–' + fromMin(b.e), nm: b.label, tx: '불가 · ' + b.label, cls: 'busy', tr: itemTraits({ kind: 'busy' }) });
@@ -3638,7 +3767,7 @@ function srow({ t, icon, kc, title, sub, cls, acts, tag, fixed, iconAct, memoKey
   return `<div class="srow ${cls || ''}"><span class="t">${colorTimes(t || '')}</span>${icHtml}<span class="tt">${gs || ''}${esc(title)}${tag || ''}${sub ? `<span class="sub3">${sub}</span>` : ''}</span><span class="acts">${acts || ''}</span></div>` + (memoKey ? memoPanel(memoKey) : '');
 }
 function gSyncIcon(e) {
-  return e.googleId ? `<span class="gst on" title="구글 캘린더와 연결됨 (여기서 지워도 구글에서는 지워지지 않습니다)">${ic('gcal')}<i>✓</i></span>`
+  return e.googleId ? `<span class="gst on" title="구글 캘린더와 연결됨">${ic('gcal')}<i>✓</i></span>`
     : gReady() && !repComplex(e) ? `<button class="gst add" type="button" data-act="pushG1" data-id="${e.id}" title="구글 캘린더에 없습니다 · 누르면 추가">${ic('gcal')}<i>+</i></button>`
     : `<a class="gst ${e.googleSent ? 'sent' : 'add'}" href="${esc(gTemplateUrl(e))}" target="_blank" rel="noopener" data-act="gTpl" data-id="${e.id}" title="${e.googleSent ? '구글 캘린더 화면으로 보냈습니다 (저장했는지 확인하세요) · 누르면 다시 열기' : '구글 캘린더에 없습니다 · 누르면 구글 일정 만들기 화면이 열립니다'}">${ic('gcal')}<i>${e.googleSent ? '?' : '+'}</i></a>`;
 }
@@ -3687,7 +3816,7 @@ function renderDay(force) {
   for (const m of S.emails.filter(m => needsReplyNow(m) && m.replyDeadline === day))
     ad.push(srow({ t: '답장 기한', icon: 'reply', kc: 'kc-reply', title: m.subject, cls: 'warn', acts: `<button class="btn small" type="button" data-act="openMail" data-id="${m.id}">열기</button>` }));
   for (const g of gAllDayOn(day))
-    ad.push(srow({ t: '종일', icon: iconOfG(g), kc: iconKc(iconOfG(g), 'kc-g'), fixed: true, iconAct: `data-act="ipOpen" data-kind="g" data-id="${esc(gKey(g))}"`, memoKey: gKey(g), gs: `<span class="gst on" title="구글 캘린더 일정">${ic('gcal')}<i>✓</i></span>`, title: g.title, sub: '구글 캘린더' + (g.calName ? ' · ' + esc(g.calName) : '') + (g.free ? ' · 바쁨 아님' : ''), cls: absentOfG(g) ? 'absent' : impOfG(g) === 'high' ? 'improw' : '', acts: `<button class="x" type="button" data-act="edOpen" data-kind="g" data-id="${esc(gKey(g))}" title="편집" aria-label="편집">${ic('pen')}</button>` + impBtn(impOfG(g) === 'high', 'impG', `data-k="${esc(gKey(g))}"`) + absentBtn(absentOfG(g), 'absentG', `data-k="${esc(gKey(g))}"`) + (g.link ? `<a class="ext" href="${esc(g.link)}" target="_blank" rel="noopener">${ic('ext')}</a>` : '') }));
+    ad.push(srow({ t: '종일', icon: iconOfG(g), kc: iconKc(iconOfG(g), 'kc-g'), fixed: true, iconAct: `data-act="ipOpen" data-kind="g" data-id="${esc(gKey(g))}"`, memoKey: gKey(g), gs: `<span class="gst on" title="구글 캘린더 일정">${ic('gcal')}<i>✓</i></span>`, title: g.title, sub: '구글 캘린더' + (g.calName ? ' · ' + esc(g.calName) : '') + (g.free ? ' · 바쁨 아님' : ''), cls: absentOfG(g) ? 'absent' : impOfG(g) === 'high' ? 'improw' : '', acts: `<button class="x" type="button" data-act="edOpen" data-kind="g" data-id="${esc(gKey(g))}" title="편집" aria-label="편집">${ic('pen')}</button>` + impBtn(impOfG(g) === 'high', 'impG', `data-k="${esc(gKey(g))}"`) + absentBtn(absentOfG(g), 'absentG', `data-k="${esc(gKey(g))}"`) + `<button class="x" type="button" data-act="gDel" data-k="${esc(gKey(g))}" title="구글 캘린더에서 삭제 (확인 후)" aria-label="구글 캘린더에서 삭제">✕</button>` + (g.link ? `<a class="ext" href="${esc(g.link)}" target="_blank" rel="noopener">${ic('ext')}</a>` : '') }));
   for (const b of blocksOn(day).filter(b => b.allDay))
     ad.push(srow({ t: '종일', icon: iconOfBlock(b), fixed: true, iconAct: `data-act="ipOpen" data-kind="b" data-id="${b.id}"`, title: b.label, sub: '불가 시간', cls: 'busy', acts: `<button class="x" type="button" data-act="delBlock" data-id="${b.id}" aria-label="삭제">✕</button>` }));
 
@@ -3695,7 +3824,7 @@ function renderDay(force) {
   for (const b of weeklyOn(day)) timed.push({ s: b.s, h: srow({ t: `${fromMin(b.s)}–${fromMin(b.e)}`, icon: iconOfBlock(b), fixed: true, iconAct: b.id ? `data-act="ipOpen" data-kind="w" data-id="${esc(b.id)}"` : '', title: b.label, sub: '매주 반복 불가 시간', cls: 'busy', acts: `<button class="btn small" type="button" data-act="openBusy">편집</button>`, tag: b.example ? ' <span class="tag ex">예시</span>' : '' }) });
   for (const b of blocksOn(day).filter(b => !b.allDay)) timed.push({ s: b.s, h: srow({ t: `${fromMin(b.s)}–${fromMin(b.e)}`, icon: iconOfBlock(b), fixed: true, iconAct: `data-act="ipOpen" data-kind="b" data-id="${b.id}"`, title: b.label, sub: '불가 시간', cls: 'busy', acts: `<button class="x" type="button" data-act="delBlock" data-id="${b.id}" aria-label="삭제">✕</button>`, tag: b.example ? ' <span class="tag ex">예시</span>' : '' }) });
   for (const x of localTimedOn(day)) { const e = x.ev; timed.push({ s: x.s, h: srow({ t: `${fromMin(x.s)}–${fromMin(x.e)}`, icon: iconOfEvent(e), kc: iconKc(iconOfEvent(e), 'kc-' + (e.kind || '회의')), fixed: true, iconAct: `data-act="ipOpen" data-kind="e" data-id="${e.id}"`, memoKey: 'e:' + e.id, gs: gSyncIcon(e), title: e.title, sub: esc([repText(e), e.location, e.emailId ? '메일에서 추가' : ''].filter(Boolean).join(' · ')), cls: (e.kind === '마감' ? 'hot' : '') + (e.absent ? ' absent' : impOfEvent(e) === 'high' ? ' improw' : ''), acts: eventActs(e), tag: e.example ? ' <span class="tag ex">예시</span>' : '' }) }); }
-  for (const g of gOn(day)) timed.push({ s: g.s, h: srow({ t: `${g.time}–${g.endTime}`, icon: iconOfG(g), kc: iconKc(iconOfG(g), 'kc-g'), fixed: true, iconAct: `data-act="ipOpen" data-kind="g" data-id="${esc(gKey(g))}"`, memoKey: gKey(g), gs: `<span class="gst on" title="구글 캘린더 일정">${ic('gcal')}<i>✓</i></span>`, title: g.title, sub: '구글 캘린더' + (g.calName ? ' · ' + esc(g.calName) : '') + (g.free ? ' · 바쁨 아님' : '') + (g.loc ? ' · ' + esc(g.loc) : ''), cls: absentOfG(g) ? 'absent' : impOfG(g) === 'high' ? 'improw' : '', acts: `<button class="x" type="button" data-act="edOpen" data-kind="g" data-id="${esc(gKey(g))}" title="편집" aria-label="편집">${ic('pen')}</button>` + impBtn(impOfG(g) === 'high', 'impG', `data-k="${esc(gKey(g))}"`) + absentBtn(absentOfG(g), 'absentG', `data-k="${esc(gKey(g))}"`) + (g.link ? `<a class="ext" href="${esc(g.link)}" target="_blank" rel="noopener" title="구글 캘린더에서 열기">${ic('ext')}</a>` : '') }) });
+  for (const g of gOn(day)) timed.push({ s: g.s, h: srow({ t: `${g.time}–${g.endTime}`, icon: iconOfG(g), kc: iconKc(iconOfG(g), 'kc-g'), fixed: true, iconAct: `data-act="ipOpen" data-kind="g" data-id="${esc(gKey(g))}"`, memoKey: gKey(g), gs: `<span class="gst on" title="구글 캘린더 일정">${ic('gcal')}<i>✓</i></span>`, title: g.title, sub: '구글 캘린더' + (g.calName ? ' · ' + esc(g.calName) : '') + (g.free ? ' · 바쁨 아님' : '') + (g.loc ? ' · ' + esc(g.loc) : ''), cls: absentOfG(g) ? 'absent' : impOfG(g) === 'high' ? 'improw' : '', acts: `<button class="x" type="button" data-act="edOpen" data-kind="g" data-id="${esc(gKey(g))}" title="편집" aria-label="편집">${ic('pen')}</button>` + impBtn(impOfG(g) === 'high', 'impG', `data-k="${esc(gKey(g))}"`) + absentBtn(absentOfG(g), 'absentG', `data-k="${esc(gKey(g))}"`) + `<button class="x" type="button" data-act="gDel" data-k="${esc(gKey(g))}" title="구글 캘린더에서 삭제 (확인 후)" aria-label="구글 캘린더에서 삭제">✕</button>` + (g.link ? `<a class="ext" href="${esc(g.link)}" target="_blank" rel="noopener" title="구글 캘린더에서 열기">${ic('ext')}</a>` : '') }) });
   for (const [s, e] of freeSlots(day, 30)) timed.push({ s: s + 0.5, h: `<button type="button" class="srow freeslot" data-act="slotAdd" data-s="${s}" data-e="${e}"><span class="t">${colorTimes(fromMin(s) + '–' + fromMin(e))}</span>${ic('free')}<span class="tt">빈 시간 · ${durKo(e - s)}<span class="sub3">눌러서 이 시간에 일정 넣기</span></span><span class="acts"></span></button>` });
   timed.sort((a, b) => a.s - b.s);
 
@@ -4356,7 +4485,20 @@ document.addEventListener('click', async ev0 => {
       case 'cancelAnalyze': UI.analyzeCtl && UI.analyzeCtl.abort(); return;
       case 'toggleTask': { const t = S.tasks.find(x => x.id === id); if (t) await patch('tasks', id, { done: !t.done, doneAt: !t.done ? nowISO() : '' }); return; }
       case 'delTask': return del('tasks', id);
-      case 'delEvent': { const e = S.events.find(x => x.id === id); await del('events', id); if (e && (e.googleId || e.googleSent)) toast('대시보드에서 지웠습니다. 구글 캘린더의 일정은 여기서 지울 수 없으니 구글 캘린더에서 지워 주세요.'); return; }
+      case 'delEvent': {
+        const e = S.events.find(x => x.id === id); if (!e) return;
+        if (e.googleId && e.googleId !== 'pushed' && (gasOn() || oauthReady())) {
+          const v = await gAsk({ title: '구글 캘린더에서도 지울까요?', icon: 'ban', rows: [['일정', e.title], ['언제', repDays(e) ? repText(e) : docWhen({ date: e.date, time: e.time, endTime: e.time ? fromMin(Math.min(evEnd(e), 1439)) : '' })]], note: '구글에서 지운 일정은 "되돌리기"로 살릴 수 없습니다 (구글 캘린더 휴지통에서 복원할 수 있습니다).',
+            choices: [{ v: 'here', label: '대시보드에서만' }, { v: 'both', label: '구글에서도 지우기', primary: true, danger: true }] });
+          if (!v) return;
+          await del('events', id);
+          if (v === 'both') { const r = await gDelete(e.googleCal, e.googleId, { series: !!repDays(e) }); toast(r === 'ok' ? '대시보드와 구글 캘린더에서 지웠습니다.' : '대시보드에서는 지웠지만 구글에서는 지우지 못했습니다. ' + (UI.gErrMsg || '')); if (r === 'ok') gLoad(true); }
+          else toast('대시보드에서만 지웠습니다. 구글 캘린더에는 남아 있습니다.');
+          return;
+        }
+        await del('events', id); if (e.googleSent && !e.googleId) toast('대시보드에서 지웠습니다. 구글 캘린더 화면으로 보냈던 일정은 구글에서 지워 주세요.'); return;
+      }
+      case 'gDel': return deleteGoogleEvent(el.dataset.k);
       case 'openMail': if (S.emails.some(x => x.id === id)) openSheet(id); else toast('관련 메일이 삭제되었습니다.'); return;
       case 'closeSheet': return closeSheet();
       case 'prevMonth': case 'nextMonth': {

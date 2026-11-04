@@ -12,9 +12,10 @@
  *
  * 코드를 바꾼 뒤에는 [배포] → [배포 관리] → 수정(연필) → 버전: 새 버전 → 배포
  * 이 스크립트는 내 계정의 캘린더만 다루며, KEY가 맞는 요청에만 답합니다.
- * 할 수 있는 일: 캘린더 목록, 일정 읽기, 일정 만들기, 일정 고치기 (삭제는 없음),
+ * 할 수 있는 일: 캘린더 목록, 일정 읽기, 일정 만들기·고치기·지우기 (반복 일정은 이 날만 또는 전체),
  *               일정 설명(메모) 읽기·쓰기, 내 드라이브의 dashboard-data.json 읽기·쓰기 (아이폰 등 폴더 저장이 안 되는 기기용)
  * 버전 4부터 드라이브 권한이 추가되었습니다. 코드를 바꾼 뒤 authorize를 한 번 더 실행해 권한을 허용하세요.
+ * 버전 6: 반복 일정 전체의 시간을 바꾸려면 왼쪽 [서비스] + → Google Calendar API 추가 (apps-script/appsscript.json 참고)
  */
 const KEY = 'CHANGE_ME';
 
@@ -30,12 +31,13 @@ function doGet(e) {
   if (p.key !== KEY) return out({ ok: false, error: 'key' });
   try {
     switch (p.action) {
-      case 'ping': return out({ ok: true, email: Session.getEffectiveUser().getEmail(), tz: Session.getScriptTimeZone(), version: 5 });
+      case 'ping': return out({ ok: true, email: Session.getEffectiveUser().getEmail(), tz: Session.getScriptTimeZone(), version: 6, advanced: typeof Calendar !== 'undefined' });
       case 'dataGet': return out(Object.assign({ ok: true }, dataGet(p)));
       case 'calendars': return out({ ok: true, calendars: listCalendars() });
       case 'events': return out({ ok: true, events: listEvents(p.cal, p.from, p.to) });
       case 'create': return out({ ok: true, event: createEvent(p) });
       case 'update': return out({ ok: true, event: updateEvent(p) });
+      case 'delete': return out({ ok: true, deleted: deleteEvent(p) });
       default: return out({ ok: false, error: 'action', message: '스크립트가 오래된 버전입니다. 새 코드로 다시 배포해 주세요.' });
     }
   } catch (err) {
@@ -182,8 +184,75 @@ function createEvent(p) {
   return { id: ev.getId() };
 }
 
+// one occurrence of a repeating event: same id on every day, so find it by its original day and start time
+function findInstance(c, p) {
+  if (!p.od) return null;
+  const a = toDate(p.od), b = new Date(a.getTime() + 86400000);
+  const list = c.getEvents(a, b).filter(function (ev) { return ev.getId() === p.id; });
+  if (!list.length) return null;
+  if (p.ost) { const m = list.filter(function (ev) { return !ev.isAllDayEvent() && fmt(ev.getStartTime(), 'HH:mm') === p.ost; }); if (m.length) return m[0]; }
+  return list[0];
+}
+
+function setOne(ev, p) {
+  if (p.description !== undefined) ev.setDescription(String(p.description));
+  if (p.descOnly) return;
+  if (p.title) ev.setTitle(p.title);
+  if (p.location !== undefined) ev.setLocation(p.location || '');
+  if (p.titleOnly) return;
+  if (p.time) { const r = timeRange(p); ev.setTime(r[0], r[1]); }
+  else if (p.endDate && p.endDate > p.date) {
+    const end = toDate(p.endDate); end.setDate(end.getDate() + 1);
+    ev.setAllDayDates(toDate(p.date), end);
+  } else if (p.date) ev.setAllDayDate(toDate(p.date));
+}
+
+// every occurrence: title/place/memo through the series; a new time through the Calendar advanced service
+function setAll(c, ev, p) {
+  const s = ev.getEventSeries();
+  if (p.description !== undefined) s.setDescription(String(p.description));
+  if (p.descOnly) return;
+  if (p.title) s.setTitle(p.title);
+  if (p.location !== undefined) s.setLocation(p.location || '');
+  if (p.titleOnly) return;
+  if (p.date && p.od && p.date !== p.od) throw new Error('반복 일정 전체의 날짜(요일)는 구글 캘린더에서 바꿔 주세요. "이 날만" 옮기는 것은 됩니다.');
+  const wasAll = ev.isAllDayEvent();
+  if (wasAll !== !p.time) throw new Error('반복 일정 전체를 종일 ↔ 시간 일정으로 바꾸는 것은 구글 캘린더에서 해 주세요.');
+  if (wasAll) return;
+  if (fmt(ev.getStartTime(), 'HH:mm') === p.time && fmt(ev.getEndTime(), 'HH:mm') === (p.endTime || '')) return;
+  if (typeof Calendar === 'undefined') throw new Error('반복 일정 전체의 시간을 바꾸려면 스크립트에 Calendar 고급 서비스가 켜져 있어야 합니다.');
+  const calId = c.getId();
+  const found = Calendar.Events.list(calId, { iCalUID: ev.getId(), maxResults: 5 }).items || [];
+  const m = found.filter(function (x) { return !x.recurringEventId; })[0] || found[0];
+  if (!m || !m.start || !m.start.dateTime) throw new Error('반복 일정의 원본을 찾지 못했습니다.');
+  const tz = m.start.timeZone || Session.getScriptTimeZone();
+  const day = Utilities.formatDate(new Date(m.start.dateTime), tz, 'yyyy-MM-dd');
+  let en = p.endTime; if (!en || en <= p.time) { const t = p.time.split(':').map(Number); const e = Math.min(t[0] * 60 + t[1] + 60, 1439); en = ('0' + Math.floor(e / 60)).slice(-2) + ':' + ('0' + e % 60).slice(-2); }
+  Calendar.Events.patch({ start: { dateTime: day + 'T' + p.time + ':00', timeZone: tz }, end: { dateTime: day + 'T' + en + ':00', timeZone: tz } }, calId, m.id);
+}
+
+function deleteEvent(p) {
+  const c = calById(p.cal);
+  if (p.scope === 'one' || p.scope === 'all') {
+    const ev = findInstance(c, p);
+    if (!ev) throw new Error('구글 캘린더에서 일정을 찾을 수 없습니다. 이미 지워졌을 수 있습니다.');
+    if (p.scope === 'all') { ev.getEventSeries().deleteEventSeries(); return 'all'; }
+    ev.deleteEvent(); return 'one';
+  }
+  if (p.series) { const s = c.getEventSeriesById(p.id); if (!s) throw new Error('반복 일정을 찾을 수 없습니다.'); s.deleteEventSeries(); return 'all'; }
+  const ev = c.getEventById(p.id);
+  if (!ev) throw new Error('구글 캘린더에서 일정을 찾을 수 없습니다. 이미 지워졌을 수 있습니다.');
+  ev.deleteEvent(); return 'one';
+}
+
 function updateEvent(p) {
   const c = calById(p.cal);
+  if (p.scope === 'one' || p.scope === 'all') {
+    const ev = findInstance(c, p);
+    if (!ev) throw new Error('구글 캘린더에서 일정을 찾을 수 없습니다.');
+    if (p.scope === 'all') setAll(c, ev, p); else setOne(ev, p);
+    return { id: ev.getId() };
+  }
   if (p.days || p.series) {
     const s = c.getEventSeriesById(p.id);
     if (!s) throw new Error('반복 일정을 찾을 수 없습니다.');
