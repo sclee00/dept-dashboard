@@ -601,8 +601,12 @@ body.resizing{user-select:none} body.rs-col,body.rs-col *{cursor:col-resize!impo
 .fbtn[aria-pressed="true"]{background:var(--amber-soft);border-color:var(--amber);color:var(--amber)}
 #fIcBtn[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
 .fbtn .x{padding:0 .2rem;opacity:.8}
-.fltpop{position:absolute;top:calc(100% + .35rem);left:0;z-index:15;width:min(26rem,80vw);background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:.6rem;box-shadow:0 8px 30px rgba(0,0,0,.5);display:flex;flex-direction:column;gap:.5rem}
-.fltgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(6.5rem,1fr));gap:.3rem;max-height:18rem;overflow:auto}
+.fltstrip{display:flex;flex-wrap:wrap;align-items:center;gap:.25rem;padding:.3rem .2rem;margin-bottom:.3rem;border-bottom:1px solid var(--line);max-height:4.6rem;overflow:auto;flex:none}
+.fltstrip[hidden]{display:none}
+.fchip{display:inline-flex;align-items:center;gap:.25rem;padding:.15rem .45rem;border:1px solid var(--line);border-radius:999px;background:none;color:var(--muted);font:inherit;font-size:.76rem;cursor:pointer;line-height:1.3}
+.fchip .ic{width:.95rem;height:.95rem}
+.fchip .fn{opacity:.7;font-variant-numeric:tabular-nums}
+.fchip.on{border-color:var(--accent);background:var(--accent-soft);color:var(--text)}
 #cal.filtered{box-shadow:inset 0 0 0 1px var(--accent-soft)}
 .cmdrow{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
 .cmdrow .ic{width:1.3rem;height:1.3rem}
@@ -742,10 +746,11 @@ label.inl{display:inline-flex;align-items:center;gap:.3rem;font-size:.85rem} lab
         <button class="iconbtn" data-act="thisMonth" type="button">오늘</button>
         <span class="vtog" role="group" aria-label="보기"><button type="button" data-act="view" data-v="weeks" id="v-weeks">5주</button><button type="button" data-act="view" data-v="month" id="v-month">월</button></span>
         <span class="vtog" role="group" aria-label="달력 칸 표시"><button type="button" data-act="cellMode" data-v="icons" id="cm-icons" title="달력 칸에 아이콘만">아이콘</button><button type="button" data-act="cellMode" data-v="titles" id="cm-titles" title="달력 칸에 아이콘과 제목">제목</button></span>
-        <span class="fltbar"><button type="button" class="fbtn" id="fImpBtn" data-act="fltImp" title="중요 일정만 보기">★ 중요만</button><button type="button" class="fbtn" id="fIcBtn" data-act="fltIcons" title="아이콘 종류별로 골라 보기">아이콘 필터</button><div class="fltpop" id="fltPop" hidden></div></span>
+        <span class="fltbar"><button type="button" class="fbtn" id="fImpBtn" data-act="fltImp" title="중요 일정만 보기">★ 중요만</button><button type="button" class="fbtn" id="fIcBtn" data-act="fltIcons" title="아이콘 종류별로 골라 보기">아이콘 필터</button></span>
         <span class="grow"></span>
         <div class="legend" id="legend"></div>
       </div>
+      <div class="fltstrip" id="fltPop" hidden></div>
       <div class="mgrid" id="cal"></div>
     </section>
     <div class="gutter v" data-split="board" role="separator" aria-orientation="vertical" tabindex="0" title="끌어서 너비 조절 · 두 번 누르면 원래대로"></div>
@@ -3448,12 +3453,11 @@ function openFltPop() {
   const [a, b] = gridRange(), cnt = {};
   for (let d = a; d < b; d = addDays(d, 1)) for (const x of cellItems(d)) cnt[x.ic] = (cnt[x.ic] || 0) + 1;
   const keys = Object.keys(cnt).sort((p, q) => cnt[q] - cnt[p]);
-  pop.innerHTML = `<div class="count">보여 줄 아이콘을 고르세요 (여러 개 가능)</div>
-    <div class="fltgrid">${keys.map(k => `<button type="button" class="ipcell ${FLT.icons.includes(k) ? 'on' : ''}" data-act="fltTog" data-k="${k}" aria-pressed="${FLT.icons.includes(k)}">${ic(k, iconKc(k))}<span>${esc(iconLabel(k))} ${cnt[k]}</span></button>`).join('') || '<span class="count">이 기간에 표시된 일정이 없습니다.</span>'}</div>
-    <div class="row" style="justify-content:space-between"><button class="btn small" type="button" data-act="fltClear">모두 보기</button><button class="btn small primary" type="button" data-act="fltClose">닫기</button></div>`;
+  // a slim strip above the calendar (not a popup), so the calendar stays visible while choosing
+  pop.innerHTML = `${keys.map(k => `<button type="button" class="fchip ${FLT.icons.includes(k) ? 'on' : ''}" data-act="fltTog" data-k="${k}" aria-pressed="${FLT.icons.includes(k)}" title="${esc(iconLabel(k))} ${cnt[k]}건">${ic(k, iconKc(k))}<span class="fl">${esc(iconLabel(k))}</span><span class="fn">${cnt[k]}</span></button>`).join('') || '<span class="count">이 기간에 표시된 일정이 없습니다.</span>'}
+    <span class="grow"></span><button class="fchip" type="button" data-act="fltClear" title="필터 모두 해제">모두</button><button class="fchip" type="button" data-act="fltClose" title="고르기 닫기 (필터는 유지)">닫기</button>`;
   pop.hidden = false;
 }
-document.addEventListener('click', e => { const pop = $('fltPop'); if (pop && !pop.hidden && !e.target.closest('.fltbar')) pop.hidden = true; });
 
 /* ---------- calendar (main) ---------- */
 const repDays = e => e.repeat && Array.isArray(e.repeat.days) && e.repeat.days.length ? e.repeat.days : null;
@@ -4344,8 +4348,8 @@ document.addEventListener('click', async ev0 => {
       case 'cellMode': { const v = el.dataset.v === 'titles' ? 'titles' : 'icons'; if ((S.settings.cellMode || 'icons') !== v) { await saveSettings({ ...S.settings, cellMode: v }); UI.cap = 9; renderCal(); } return; }
       case 'fltImp': FLT.imp = !FLT.imp; saveFlt(); UI.cap = 9; return renderCal();
       case 'fltIcons': return openFltPop();
-      case 'fltTog': { const k = el.dataset.k; FLT.icons = FLT.icons.includes(k) ? FLT.icons.filter(x => x !== k) : [...FLT.icons, k]; saveFlt(); UI.cap = 9; renderCal(); const pop = $('fltPop'); pop.hidden = true; return openFltPop(); }
-      case 'fltClear': FLT.icons = []; FLT.imp = false; saveFlt(); UI.cap = 9; { const pop = $('fltPop'); if (pop) pop.hidden = true; } return renderCal();
+      case 'fltTog': { const k = el.dataset.k; FLT.icons = FLT.icons.includes(k) ? FLT.icons.filter(x => x !== k) : [...FLT.icons, k]; saveFlt(); UI.cap = 9; renderCal(); $('fltPop').hidden = true; return openFltPop(); }
+      case 'fltClear': FLT.icons = []; FLT.imp = false; saveFlt(); UI.cap = 9; renderCal(); if (!$('fltPop').hidden) { $('fltPop').hidden = true; openFltPop(); } return;
       case 'fltClose': { const pop = $('fltPop'); if (pop) pop.hidden = true; return; }
       case 'cmdPick': { const c = UI.cmdCands; if (!c) return; const r = editActionsFor(c.ed.cands[+el.dataset.i], c.ed.op); UI.cmdCands = null; if (r.msg) { const st = $('pasteStatus'); st.className = 'status err'; st.textContent = r.msg; return; } return renderCmdPreview(r.actions, c.text, false); }
       case 'qaCancel': UI.qa = null; return renderDay(true);
