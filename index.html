@@ -3655,7 +3655,8 @@ function phoneSettingsHtml() {
     <div class="phonebox"><div id="phoneQR" class="qr">QR 만드는 중…</div>
     <ol class="count steps"><li>아이폰 카메라로 이 QR을 찍어 사파리로 엽니다.</li><li>사파리 아래 <b>공유</b> 버튼 → <b>홈 화면에 추가</b>를 누르면 앱처럼 열립니다. 아이콘 앱이 "연결 안 됨"이면 그 앱에서 붙여넣기로 연결합니다.</li><li>휴대폰은 Apps Script를 통해 드라이브의 같은 데이터 파일을 읽고 씁니다${DRIVE.where ? ` (<b>${esc(DRIVE.where)}</b>)` : ''}.</li></ol></div>
     ${phoneLinkHtml()}
-    <div class="count" style="margin-top:.4rem">${ic('inbox')} <b>아이폰 메일·다른 메일 앱에서 보내기</b>: 메일을 <b>전달</b> → 받는 사람 <code>${esc((localStorage.getItem('gasEmail') || 'sclee00@gmail.com').replace('@', '+dash@'))}</code> (연락처에 "대시보드"로 저장해 두면 편합니다). 몇 분 안에 이메일 처리 목록에 들어옵니다. 스크립트 버전 11이 필요합니다.</div>
+    <div class="count" style="margin-top:.4rem">${ic('inbox')} <b>아이폰 메일·다른 메일 앱에서 보내기</b>: 메일을 <b>전달</b> → 받는 사람 <code>${esc((localStorage.getItem('gasEmail') || 'sclee00@gmail.com').replace('@', '+dash@'))}</code> (연락처에 "대시보드"로 저장해 두면 편합니다). 몇 분 안에 이메일 처리 목록에 들어옵니다. 스크립트 버전 11이 필요합니다.
+      <div class="row" style="align-items:center;flex-wrap:wrap;margin-top:.3rem">들어온 뒤 지메일의 전달 메일은 <select class="field" id="fwdDel" style="width:auto">${[['perm', '영구 삭제'], ['trash', '휴지통으로 (30일 뒤 자동 삭제)'], ['keep', '그대로 두기']].map(([v, l]) => `<option value="${v}" ${(S.settings.fwdDelete || 'perm') === v ? 'selected' : ''}>${l}</option>`).join('')}</select><span class="count">원본 전체(본문·첨부)는 드라이브 학과장실 대시보드/inbox/done에 남습니다.</span></div></div>
     <div class="row"><button class="btn small" type="button" data-act="copyConnect">${ic('copy')}연결 링크 복사</button><span class="count warnline">이 QR·링크에는 비밀 키가 들어 있으니 다른 사람에게 보내지 마세요.</span></div>
     <span class="count">스크립트가 버전 4 이상이어야 합니다. 이전 버전이면 새 Code.gs로 바꾸고 authorize 실행 → 배포 관리 → 새 버전으로 배포하세요.</span></div>`;
 }
@@ -4772,7 +4773,7 @@ async function inboxImport() {
           needsReply: false, replyDeadline: null, analysis: null, reply: { draft: '' }, delegate: { draft: '' } });
       }
       if (atts.length) saveAttFiles(id, atts).then(() => { const mm = S.emails.find(x => x.id === id); if (!mm) return; const done = new Map(atts.filter(x => x.saved).map(x => [x.name, x.stored])); if (done.size) patch('emails', id, { attachments: (mm.attachments || []).map(x => done.has(x.name) ? { ...x, saved: true, stored: done.get(x.name) } : x) }); });
-      await gas({ action: 'inboxDone', id: it.id }).catch(() => {});
+      await gas({ action: 'inboxDone', id: it.id, ...(m.source === 'gmail' && S.settings.fwdDelete !== 'keep' ? { gdel: S.settings.fwdDelete || 'perm' } : {}) }).catch(() => {});
       got++; last = m.subject || '';
     }
   } finally { INBOX.busy = false; INBOX.items = []; renderInbox(); }
@@ -5348,6 +5349,7 @@ document.addEventListener('click', async ev0 => {
   } catch (e) { dbErr(e); }
 });
 document.addEventListener('input', e => { if (e.target.matches && e.target.matches('[data-wc]')) wcLive(); if (e.target.matches && e.target.matches('[data-fx-k], #fxShort, #fxLong')) fxLive(); if (e.target.matches && e.target.matches('input[name=fontBody], #fontHead, #fontSmall, #fontSize')) fontLive(); });
+document.addEventListener('change', e => { if (e.target.id === 'fwdDel') saveSettings({ ...S.settings, fwdDelete: e.target.value }).then(() => toast('전달 메일 처리: ' + e.target.selectedOptions[0].textContent)); });
 document.addEventListener('change', e => { if (e.target.id === 'aiModelSel') saveSettings({ ...S.settings, aiModel: e.target.value }).then(() => toast('모델: ' + e.target.value)); });
 document.addEventListener('change', e => { if (e.target.matches && e.target.matches('[data-wc]')) wcLive(); if (e.target.matches && e.target.matches('[data-fx-k], #fxShort, #fxLong')) fxLive(); if (e.target.matches && e.target.matches('input[name=fontBody], #fontHead, #fontSmall, #fontSize')) fontLive(); });
 document.addEventListener('input', e => { if (e.target.closest('#sheetRoot') && e.target.id) UI.edits[e.target.id] = e.target.value; });

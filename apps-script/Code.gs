@@ -15,6 +15,7 @@
  * 할 수 있는 일: 캘린더 목록, 일정 읽기, 일정 만들기·고치기·지우기 (반복 일정은 이 날만 또는 전체),
  *               일정 설명(메모) 읽기·쓰기, 내 드라이브의 dashboard-data.json 읽기·쓰기 (아이폰 등 폴더 저장이 안 되는 기기용)
  * 버전 4부터 드라이브 권한이 추가되었습니다. 코드를 바꾼 뒤 authorize를 한 번 더 실행해 권한을 허용하세요.
+ * 버전 11: 대시보드가 가져간 전달 메일은 지메일에서 지우기(gdel=trash 휴지통 / perm 영구삭제, 영구삭제는 서비스에 Gmail API 추가 필요)
  * 버전 11: 아무 메일 앱에서나 '내아이디+dash@gmail.com'으로 전달하면 대시보드로 (지메일 확인, 5분마다 + 대시보드가 열려 있으면 바로)
  * 버전 10: Gemini 자동 분석 (aiKey로 Gemini API 키를 스크립트 속성에 보관, ai로 질문) — 키는 대시보드·데이터 파일에 남지 않습니다
  * 버전 9: 브라우저가 못 읽는 첨부(doc·ppt·rtf 등)를 구글 드라이브로 PDF 변환해 같이 넣기 (서비스에 Drive API 추가 필요)
@@ -48,7 +49,7 @@ function doGet(e) {
       case 'dataUse': return out(Object.assign({ ok: true }, dataUse(p)));
       case 'inboxList': return out({ ok: true, items: inboxList() });
       case 'inboxGet': return out({ ok: true, mail: inboxGet(p.id) });
-      case 'inboxDone': return out({ ok: true, done: inboxDone(p.id) });
+      case 'inboxDone': return out({ ok: true, done: inboxDone(p.id, p.gdel) });
       case 'calendars': return out({ ok: true, calendars: listCalendars() });
       case 'events': return out({ ok: true, events: listEvents(p.cal, p.from, p.to) });
       case 'create': return out({ ok: true, event: createEvent(p) });
@@ -240,6 +241,7 @@ function gmailPoll() {
       });
       mailPut({
         source: 'gmail',
+        gmailId: msg.getId(),
         msgId: (msg.getHeader('Message-ID') || '') || ('gmail:' + msg.getId()),
         subject: (fw.subject || msg.getSubject() || '').replace(/^\s*((fwd?|fw|전달|re)\s*:\s*)+/i, ''),
         from: fw.from || msg.getFrom(),
@@ -260,9 +262,20 @@ function inboxGet(id) {
   const f = DriveApp.getFileById(id);
   return JSON.parse(f.getBlob().getDataAsString('UTF-8'));
 }
-function inboxDone(id) {
+function inboxDone(id, gdel) {
   const f = DriveApp.getFileById(id);
   f.moveTo(inboxFolder('done'));
+  // the full mail is kept in inbox/done, so the forwarded copy in Gmail can go
+  if (gdel === 'trash' || gdel === 'perm') {
+    let gid = ''; try { gid = JSON.parse(f.getBlob().getDataAsString('UTF-8')).gmailId || ''; } catch (e) {}
+    if (gid) {
+      try {
+        if (gdel === 'perm' && typeof Gmail !== 'undefined') Gmail.Users.Messages.remove('me', gid);
+        else GmailApp.getMessageById(gid).moveToTrash();
+        return gdel === 'perm' && typeof Gmail !== 'undefined' ? 'deleted' : 'trashed';
+      } catch (e) { return 'kept: ' + ((e && e.message) || e); }
+    }
+  }
   return true;
 }
 
