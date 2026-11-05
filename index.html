@@ -547,6 +547,14 @@ body.resizing{user-select:none} body.rs-col,body.rs-col *{cursor:col-resize!impo
 }
 .inboxchip{margin-left:auto;border-color:var(--accent);color:var(--ink)}
 .inboxchip .count{margin-left:.35rem}
+.tidylist{max-height:min(62vh,640px);overflow:auto;display:flex;flex-direction:column;gap:.7rem;margin-top:.6rem}
+.tidygrp{border:1px solid var(--line);border-radius:10px;padding:.55rem .7rem;display:flex;flex-direction:column;gap:.4rem}
+.tidyhead{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
+.tidyrow{display:grid;grid-template-columns:7.5rem minmax(0,1fr) auto;gap:.6rem;align-items:center;padding:.3rem 0;border-top:1px dashed var(--line)}
+.tidyrow .tidyt{display:flex;flex-direction:column;min-width:0}.tidyrow .tidyt b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tidyctl{display:flex;align-items:center;gap:.3rem;flex-wrap:wrap}.tidyctl input{width:7rem;padding:.2rem .35rem}
+.tidyn{display:inline-block;min-width:1.2em;padding:0 .3em;border-radius:999px;background:var(--red);color:#fff;font-size:.72em;text-align:center;margin-left:.2rem}
+@media (max-width:700px){.tidyrow{grid-template-columns:1fr}}
 .tgopen{margin-top:.6rem;width:100%;justify-content:center}
 .tgrid{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:10px;overflow:hidden;user-select:none;touch-action:none;background:var(--surface-2)}
 .tgrid .tr{display:grid;grid-template-columns:3.2rem minmax(0,1fr);min-height:1.15rem;cursor:pointer;border-top:1px solid transparent}
@@ -769,7 +777,7 @@ label.inl{display:inline-flex;align-items:center;gap:.3rem;font-size:.85rem} lab
         <button class="iconbtn" data-act="thisMonth" type="button">오늘</button>
         <span class="vtog" role="group" aria-label="보기"><button type="button" data-act="view" data-v="weeks" id="v-weeks">5주</button><button type="button" data-act="view" data-v="month" id="v-month">월</button></span>
         <span class="vtog" role="group" aria-label="달력 칸 표시"><button type="button" data-act="cellMode" data-v="icons" id="cm-icons" title="달력 칸에 아이콘만">아이콘</button><button type="button" data-act="cellMode" data-v="titles" id="cm-titles" title="달력 칸에 아이콘과 제목">제목</button></span>
-        <span class="fltbar"><button type="button" class="fbtn" id="fImpBtn" data-act="fltImp" title="중요 일정만 보기">★ 중요만</button><button type="button" class="fbtn" id="fIcBtn" data-act="fltIcons" title="아이콘 종류별로 골라 보기">아이콘 필터</button></span>
+        <span class="fltbar"><button type="button" class="fbtn" id="tidyBtn" data-act="tidyOpen" title="시간이 겹치는 일정 정리">일정 정리</button><button type="button" class="fbtn" id="fImpBtn" data-act="fltImp" title="중요 일정만 보기">★ 중요만</button><button type="button" class="fbtn" id="fIcBtn" data-act="fltIcons" title="아이콘 종류별로 골라 보기">아이콘 필터</button></span>
         <span class="grow"></span>
         <div class="legend" id="legend"></div>
       </div>
@@ -1295,6 +1303,108 @@ document.addEventListener('dragover', e => { if (!dragKey) return; const c = e.t
 document.addEventListener('drop', e => { const c = e.target.closest && e.target.closest('.cell[data-day]'); if (!c || !dragKey) return; e.preventDefault(); const k = dragKey; dragKey = null; c.classList.remove('dropok'); undoArm('날짜 옮기기'); moveItem(k, c.dataset.day); });
 
 /* ---------- edit dialog ---------- */
+/* ---------- 일정 정리: events whose times overlap, one decision at a time (always confirmed) ---------- */
+const TIDY_DAYS = 60;
+function tidyItems(day) {
+  const out = [];
+  for (const e of expandEvents().filter(x => x.date === day && x.time)) out.push({ kind: 'e', o: e, s: toMin(e.time), e: evEnd(e), title: e.title || '(제목 없음)', ref: 'e:' + e.id, occ: !!e.occ, src: e.occ ? '반복' : e.googleId && e.googleId !== 'pushed' ? '내 일정 · 구글' : '내 일정' });
+  for (const g of gOn(day)) out.push({ kind: 'g', o: g, s: g.s, e: g.e, title: g.title || '(제목 없음)', ref: gKey(g), occ: false, src: '구글' + (g.recurring ? ' · 반복' : '') + (g.calName ? ' · ' + g.calName : '') });
+  return out.sort((a, b) => a.s - b.s || b.e - a.e);
+}
+function tidyGroups() {
+  const keep = new Set(S.settings.tidyKeep || []), groups = [];
+  for (let i = 0; i < TIDY_DAYS; i++) {
+    const day = addDays(todayStr(), i);
+    let cur = null;
+    for (const it of tidyItems(day)) {
+      if (cur && it.s < cur.end) { cur.items.push(it); cur.end = Math.max(cur.end, it.e); }
+      else { if (cur && cur.items.length > 1) groups.push(cur); cur = { day, items: [it], end: it.e }; }
+    }
+    if (cur && cur.items.length > 1) groups.push(cur);
+  }
+  for (const g of groups) {
+    g.sig = g.day + '|' + g.items.map(x => x.ref).sort().join(',');
+    const t = new Set(g.items.map(x => String(x.title).replace(/\s+/g, '').toLowerCase()));
+    g.dup = t.size === 1 && new Set(g.items.map(x => x.s + '-' + x.e)).size === 1;
+  }
+  return groups.filter(g => !keep.has(g.sig));
+}
+const hmR = (s, e) => `${fromMin(s)}–${fromMin(Math.min(e, 1439))}`;
+function tidyHtml() {
+  const gs = tidyGroups();
+  UI.tidy = gs;
+  const body = gs.length ? gs.map((g, gi) => `<div class="tidygrp">
+      <div class="tidyhead"><b>${esc(fmtShort(g.day))}</b><span class="pill ${g.dup ? 'del' : 'pend'}">${g.dup ? '중복 같음' : '시간 겹침'} ${g.items.length}건</span>
+        <span class="grow"></span><button class="btn small" type="button" data-act="tidyMerge" data-g="${gi}">${ic('thread')}합치기</button><button class="btn small" type="button" data-act="tidyKeep" data-g="${gi}">그대로 두기</button></div>
+      ${g.items.map((it, ii) => `<div class="tidyrow">
+        <span class="tt">${colorTimes(esc(hmR(it.s, it.e)))}</span><span class="tidyt"><b>${esc(it.title)}</b><span class="count">${esc(it.src)}</span></span>
+        <span class="tidyctl"><input class="field" type="time" id="tdS${gi}_${ii}" value="${fromMin(it.s)}" aria-label="시작"><span class="count">–</span><input class="field" type="time" id="tdE${gi}_${ii}" value="${fromMin(Math.min(it.e, 1439))}" aria-label="끝">
+        <button class="btn small" type="button" data-act="tidyTime" data-g="${gi}" data-i="${ii}">바꾸기</button><button class="btn small danger" type="button" data-act="tidyDel" data-g="${gi}" data-i="${ii}">${ic('ban')}지우기</button></span>
+      </div>`).join('')}
+    </div>`).join('') : `<div class="empty">앞으로 ${TIDY_DAYS}일 동안 시간이 겹치는 일정이 없습니다.</div>`;
+  return `<div class="scrim" data-act="closeDlg"></div><div class="dlg"><div class="dlgbox wide" role="dialog" aria-modal="true" aria-labelledby="dlgT">
+    <h3 id="dlgT">${ic('cal')}일정 정리 <span class="count">앞으로 ${TIDY_DAYS}일 · 겹치는 묶음 ${gs.length}개</span></h3>
+    <div class="count">일정마다 시간을 바꾸거나 지우고, 묶음은 하나로 합치거나 그대로 둘 수 있습니다. 무엇을 하든 실행 전에 한 번 더 확인합니다.${(S.settings.tidyKeep || []).length ? ` <button class="linkish" type="button" data-act="tidyReset">그대로 두기로 한 ${S.settings.tidyKeep.length}개 다시 보기</button>` : ''}</div>
+    <div class="tidylist">${body}</div>
+    <div class="row" style="justify-content:flex-end"><button class="btn" type="button" data-act="closeDlg">닫기</button></div>
+  </div></div>`;
+}
+function openTidy() { UI.dlg = 'tidy'; $('dlgRoot').innerHTML = tidyHtml(); }
+function tidyRefresh() { if (UI.dlg === 'tidy') { const y = (document.querySelector('.tidylist') || {}).scrollTop || 0; $('dlgRoot').innerHTML = tidyHtml(); const l = document.querySelector('.tidylist'); if (l) l.scrollTop = y; } renderTidyBtn(); }
+function renderTidyBtn() { const b = $('tidyBtn'); if (!b) return; const n = tidyGroups().length; b.innerHTML = `${ic('cal')}일정 정리${n ? ` <span class="tidyn">${n}</span>` : ''}`; b.title = n ? `시간이 겹치는 일정 묶음 ${n}개 — 눌러서 정리` : '앞으로 60일 동안 겹치는 일정이 없습니다'; }
+// actions for one item: new time / delete (repeating copies of my events: only that day)
+function tidyMoveActs(it, s, e, title) {
+  const time = fromMin(s), endTime = fromMin(Math.min(e, 1439));
+  if (it.kind === 'e' && it.occ) {
+    const o = it.o, copy = cleanNewActions([{ type: 'event', title: title || o.title, date: o.date, time, endTime, kind: o.kind, important: impOfEvent(o) === 'high' }])[0];
+    return [cleanRefAction({ type: 'skip', ref: it.ref, date: o.date }), copy].filter(Boolean);
+  }
+  return [cleanRefAction({ type: 'update', ref: it.ref, ...(title ? { title } : {}), time, endTime })].filter(Boolean);
+}
+function tidyDelActs(it) {
+  if (it.kind === 'e' && it.occ) return [cleanRefAction({ type: 'skip', ref: it.ref, date: it.o.date })].filter(Boolean);
+  return [cleanRefAction({ type: 'delete', ref: it.ref })].filter(Boolean);
+}
+async function tidyRun(acts, label) {
+  if (!acts.length) { toast('이 일정은 여기서 바꿀 수 없습니다.'); return; }
+  undoArm(label);
+  const n = await applyActions(acts);
+  const g = UI.lastApplyG || {};
+  toast(`${label}: ${n}건 처리${g.ok ? ` · 구글 ${g.ok}건 반영` : ''}${g.fail ? ` · 구글 반영 못 함 ${g.fail}건` : ''}`);
+  if (g.ok) gLoad(true);
+  tidyRefresh();
+}
+const tidyNote = its => its.some(x => x.kind === 'g' || (x.kind === 'e' && x.o.googleId && x.o.googleId !== 'pushed')) ? '구글 캘린더에도 바로 반영됩니다. 구글 쪽 변경·삭제는 "되돌리기"로 되돌릴 수 없습니다.' : '잘못됐으면 "되돌리기"(Ctrl+Z)로 되돌릴 수 있습니다.';
+async function tidyAct(act, el) {
+  const g = (UI.tidy || [])[+el.dataset.g]; if (!g) return;
+  const it = g.items[+el.dataset.i];
+  if (act === 'tidyKeep') { await saveSettings({ ...S.settings, tidyKeep: [...(S.settings.tidyKeep || []), g.sig].slice(-200) }); toast('그대로 두었습니다. 다시 보려면 일정 정리 창 위쪽의 "다시 보기"를 누르세요.'); return tidyRefresh(); }
+  if (act === 'tidyDel') {
+    const v = await gAsk({ title: '이 일정을 지울까요?', icon: 'ban', rows: [['일정', it.title + ' · ' + it.src], ['언제', `${fmtShort(g.day)} ${hmR(it.s, it.e)}`]], note: (it.occ ? '반복 일정 중 이 날 것만 뺍니다. ' : '') + tidyNote([it]), choices: [{ v: 'ok', label: '지우기', primary: true, danger: true }] });
+    if (!v) return;
+    return tidyRun(tidyDelActs(it), '일정 정리 · 지우기');
+  }
+  if (act === 'tidyTime') {
+    const s = toMin($(`tdS${el.dataset.g}_${el.dataset.i}`).value), e = toMin($(`tdE${el.dataset.g}_${el.dataset.i}`).value);
+    if (s == null || e == null || e <= s) { toast('끝 시각이 시작보다 늦어야 합니다.'); return; }
+    if (s === it.s && e === it.e) { toast('시간이 그대로입니다. 위 칸에서 새 시각을 고른 뒤 누르세요.'); return; }
+    const v = await gAsk({ title: '시간을 바꿀까요?', icon: 'clock', rows: [['일정', it.title + ' · ' + it.src], ['언제', `${fmtShort(g.day)} ${hmR(it.s, it.e)}`, `${fmtShort(g.day)} ${hmR(s, e)}`]], note: (it.occ ? '반복 일정 중 이 날 것만 옮깁니다. ' : '') + tidyNote([it]), choices: [{ v: 'ok', label: '바꾸기', primary: true }] });
+    if (!v) return;
+    return tidyRun(tidyMoveActs(it, s, e), '일정 정리 · 시간 변경');
+  }
+  if (act === 'tidyMerge') {
+    // the earliest item stays and takes every title and the whole time span; the others go
+    const base = g.items[0], others = g.items.slice(1);
+    const titles = [...new Set(g.items.map(x => String(x.title).trim()))];
+    const title = titles.join(' · ').slice(0, 120), s = Math.min(...g.items.map(x => x.s)), e = Math.max(...g.items.map(x => x.e));
+    const v = await gAsk({ title: '하나로 합칠까요?', icon: 'thread', rows: [['합친 일정', `${title}`], ['언제', `${fmtShort(g.day)} ${hmR(s, e)}`], ['남길 것', base.title + ' · ' + base.src], ...others.map(x => ['지울 것', `${x.title} · ${x.src} (${hmR(x.s, x.e)})`])],
+      note: (g.items.some(x => x.occ) ? '반복 일정은 이 날 것만 바꾸거나 뺍니다. ' : '') + tidyNote(g.items), choices: [{ v: 'ok', label: '합치기', primary: true }] });
+    if (!v) return;
+    const acts = [...((title !== base.title || s !== base.s || e !== base.e) ? tidyMoveActs(base, s, e, title !== base.title ? title : '') : []), ...others.flatMap(tidyDelActs)];
+    return tidyRun(acts, '일정 정리 · 합치기');
+  }
+}
+
 function openEdit(kind, id) {
   let d;
   if (kind === 'e') {
@@ -2581,7 +2691,7 @@ const UNDO_LABEL = {
   delRule: '아이콘 규칙 삭제', skipOcc: '반복 일정 한 번 빼기', edSave: '일정 편집', bdSave: '불가 시간 설정', saveSettings: '설정 변경', imSave: '아이콘 색·이름',
   pushG: '구글에 추가', fEvent: '일정 추가', fBlock: '불가 시간 추가', taskForm: '할 일 추가', importData: '파일 가져오기'
 };
-const UNDO_SKIP = new Set(['inboxRun', 'analyzeMail', 'tgShow', 'tgHide', 'phoneLink', 'gDel', 'fltImp', 'fltIcons', 'fltTog', 'fltClear', 'fltClose', 'cmdToAI', 'cmdPick', 'cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
+const UNDO_SKIP = new Set(['tidyOpen', 'tidyDel', 'tidyTime', 'tidyMerge', 'inboxRun', 'analyzeMail', 'tgShow', 'tgHide', 'phoneLink', 'gDel', 'fltImp', 'fltIcons', 'fltTog', 'fltClear', 'fltClose', 'cmdToAI', 'cmdPick', 'cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
 function undoSnap() {
   const o = { settings: JSON.parse(JSON.stringify(S.settings)) };
   for (const c of COLS) o[c] = JSON.parse(JSON.stringify(S[c]));
@@ -4789,6 +4899,9 @@ document.addEventListener('click', async ev0 => {
       case 'absentG': { const k = el.dataset.k; const g = G.events.find(x => gKey(x) === k); if (g) setMark(k, { absent: !absentOfG(g) }); return; }
       case 'inboxRun': return inboxCheck(true);
       case 'analyzeMail': { const mm = S.emails.find(x => x.id === el.dataset.id); return mm ? reanalyze(mm) : undefined; }
+      case 'tidyOpen': return openTidy();
+      case 'tidyReset': await saveSettings({ ...S.settings, tidyKeep: [] }); return tidyRefresh();
+      case 'tidyDel': case 'tidyTime': case 'tidyMerge': case 'tidyKeep': return tidyAct(act, el);
       case 'tgShow': UI.tgShow = true; return renderDay(true);
       case 'tgHide': UI.tgShow = false; UI.qa = null; return renderDay(true);
       case 'phoneLink': return linkPhoneFile(true);
@@ -5133,7 +5246,7 @@ renderLegend();
 
 UI.selDay = todayStr();
 try { if (localStorage.getItem('calView') === 'month') UI.view = 'month'; } catch {}
-function renderAll() { applyImpStyle(); applyFont(); applyLayout(); renderHeader(); renderTasks(); renderMails(); renderCal(); renderDay(false); renderRail(); renderGChip(); renderSync(); renderSheet(false); }
+function renderAll() { try { renderTidyBtn(); } catch {} applyImpStyle(); applyFont(); applyLayout(); renderHeader(); renderTasks(); renderMails(); renderCal(); renderDay(false); renderRail(); renderGChip(); renderSync(); renderSheet(false); }
 renderAll();
 setInterval(() => { renderHeader(); if (UI.selDay === todayStr()) renderDay(false); }, 60000);
 
