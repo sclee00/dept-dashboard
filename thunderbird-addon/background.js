@@ -86,7 +86,7 @@ async function send(messages) {
     catch (e) { fails.push((m.subject || '(제목 없음)') + ': ' + (e.message || e)); }
   }
   if (fails.length) notify('일부 메일을 보내지 못했습니다', fails.join('\n'));
-  else notify('대시보드로 보냈습니다', (messages.length === 1 ? (messages[0].subject || '(제목 없음)') : `${ok}건`) + (dup ? ` · 이미 보낸 메일 ${dup}건` : '') + ' — 대시보드에서 자동 처리합니다.');
+  else notify('대시보드로 보냈습니다', (messages.length === 1 ? (messages[0].subject || '(제목 없음)') : `${ok}건`) + (dup ? ` · 이미 보낸 메일 ${dup}건` : '') + ' — 대시보드 이메일 처리 목록에 들어갑니다.');
 }
 
 async function selectedInTab(tab) {

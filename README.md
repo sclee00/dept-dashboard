@@ -34,4 +34,4 @@
 
 ## Thunderbird에서 보내기
 
-`thunderbird-addon/` 폴더의 애드온(`send-to-dept-dashboard.xpi`)을 설치하면 메일에서 **대시보드로 보내기**를 눌러 대시보드로 바로 넘길 수 있습니다. 메일은 Apps Script(버전 8 이상)를 통해 드라이브 `학과장실 대시보드/inbox`에 저장되고, PC에서 대시보드가 열려 있으면 자동으로 분석 창이 뜹니다. 휴대폰에서는 "Thunderbird 메일 N건" 버튼을 눌러 처리합니다. 처리한 메일은 `inbox/done`으로 옮겨집니다.
+`thunderbird-addon/` 폴더의 애드온(`send-to-dept-dashboard.xpi`)을 설치하면 메일에서 **대시보드로 보내기**를 눌러 대시보드로 바로 넘길 수 있습니다. 메일은 Apps Script(버전 8 이상)를 통해 드라이브 `학과장실 대시보드/inbox`에 저장되고, 대시보드가 이를 가져와 이메일 처리 목록에 "분석 전"으로 쌓고(첨부 내용도 읽어 둠), 목록의 "분석"을 누르면 분석합니다. 처리한 메일은 `inbox/done`으로 옮겨집니다.
