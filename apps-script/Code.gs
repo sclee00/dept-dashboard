@@ -15,6 +15,7 @@
  * 할 수 있는 일: 캘린더 목록, 일정 읽기, 일정 만들기·고치기·지우기 (반복 일정은 이 날만 또는 전체),
  *               일정 설명(메모) 읽기·쓰기, 내 드라이브의 dashboard-data.json 읽기·쓰기 (아이폰 등 폴더 저장이 안 되는 기기용)
  * 버전 4부터 드라이브 권한이 추가되었습니다. 코드를 바꾼 뒤 authorize를 한 번 더 실행해 권한을 허용하세요.
+ * 버전 7: 휴대폰이 PC와 같은 데이터 파일을 쓰도록 맞추기 (dataFiles, dataUse)
  * 버전 6: 반복 일정 전체의 시간을 바꾸려면 왼쪽 [서비스] + → Google Calendar API 추가 (apps-script/appsscript.json 참고)
  */
 const KEY = 'CHANGE_ME';
@@ -31,8 +32,10 @@ function doGet(e) {
   if (p.key !== KEY) return out({ ok: false, error: 'key' });
   try {
     switch (p.action) {
-      case 'ping': return out({ ok: true, email: Session.getEffectiveUser().getEmail(), tz: Session.getScriptTimeZone(), version: 6, advanced: typeof Calendar !== 'undefined' });
+      case 'ping': return out({ ok: true, email: Session.getEffectiveUser().getEmail(), tz: Session.getScriptTimeZone(), version: 7, advanced: typeof Calendar !== 'undefined' });
       case 'dataGet': return out(Object.assign({ ok: true }, dataGet(p)));
+      case 'dataFiles': return out({ ok: true, current: PropertiesService.getScriptProperties().getProperty('DATA_FILE_ID') || '', files: dataFiles() });
+      case 'dataUse': return out(Object.assign({ ok: true }, dataUse(p)));
       case 'calendars': return out({ ok: true, calendars: listCalendars() });
       case 'events': return out({ ok: true, events: listEvents(p.cal, p.from, p.to) });
       case 'create': return out({ ok: true, event: createEvent(p) });
@@ -78,6 +81,24 @@ function dataFile(create) {
 }
 function whereOf(f) {
   try { const p = f.getParents(); return (p.hasNext() ? p.next().getName() + '/' : '') + f.getName(); } catch (e) { return f.getName(); }
+}
+// every dashboard-data.json in My Drive (name, folder, time, size — not the contents)
+function dataFiles() {
+  const list = [], it = DriveApp.getFilesByName(DATA_NAME);
+  while (it.hasNext() && list.length < 20) { const f = it.next(); if (!f.isTrashed()) list.push({ id: f.getId(), where: whereOf(f), modified: f.getLastUpdated().getTime(), size: f.getSize() }); }
+  return list;
+}
+// use the same file as the PC: by id, or the newest one inside a folder with this name
+function dataUse(p) {
+  let f = null;
+  if (p.id) { f = DriveApp.getFileById(p.id); if (f.getName() !== DATA_NAME || f.isTrashed()) throw new Error('대시보드 데이터 파일이 아닙니다.'); }
+  else if (p.folder) {
+    const it = DriveApp.getFilesByName(DATA_NAME);
+    while (it.hasNext()) { const g = it.next(); if (g.isTrashed()) continue; const ps = g.getParents(); const inIt = ps.hasNext() && ps.next().getName() === p.folder; if (inIt && (!f || g.getLastUpdated() > f.getLastUpdated())) f = g; }
+    if (!f) throw new Error('드라이브에서 "' + p.folder + '" 폴더의 ' + DATA_NAME + '을 찾지 못했습니다.');
+  } else throw new Error('파일을 지정해 주세요.');
+  PropertiesService.getScriptProperties().setProperty('DATA_FILE_ID', f.getId());
+  return { where: whereOf(f), modified: f.getLastUpdated().getTime() };
 }
 function dataGet(p) {
   const f = dataFile(false);

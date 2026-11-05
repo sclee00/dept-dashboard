@@ -2167,6 +2167,7 @@ async function syncNow() {
         dailyBackup();
       }
       DRIVE.state = 'ok'; DRIVE.last = Date.now();
+      setTimeout(() => linkPhoneFile(false), 2000);
     }
   } catch (e) {
     if (e && e.name === 'NotAllowedError') FS.perm = 'prompt';
@@ -2174,6 +2175,41 @@ async function syncNow() {
   }
   DRIVE.saving = false; renderSync();
   if (DRIVE.again) { DRIVE.again = false; syncNow(); }
+}
+// PC with a Drive folder + Apps Script: make the phone (which reads Drive through the script) use the very same file
+async function linkPhoneFile(force) {
+  if (!fsReady() || !gasOn() || !FS.handle || (DRIVE.phoneChecked && !force)) return;
+  DRIVE.phoneChecked = true;
+  const want = FS.handle.name + '/' + FILE_NAME;
+  try {
+    const j = await gas({ action: 'dataFiles' });
+    const mine = (j.files || []).filter(f => f.where === want);
+    if (!mine.length) {
+      // Drive desktop may not have uploaded a brand-new folder yet
+      DRIVE.phone = { warn: 'nofolder', want, where: ((j.files || []).find(f => f.id === j.current) || {}).where || '' };
+      if (force) toast(`구글 드라이브에서 "${FS.handle.name}" 폴더의 데이터 파일을 찾지 못했습니다. 이 폴더가 구글 드라이브 안에 있는지 확인해 주세요.`);
+      return renderSettingsIfOpen();
+    }
+    const best = mine.sort((a, b) => Math.abs(a.modified - (DRIVE.remoteMod || 0)) - Math.abs(b.modified - (DRIVE.remoteMod || 0)))[0];
+    if (j.current !== best.id) { await gas({ action: 'dataUse', id: best.id }); toast(`휴대폰도 PC와 같은 파일(${best.where})을 쓰도록 맞췄습니다.`); }
+    else if (force) toast(`휴대폰과 PC가 같은 파일(${best.where})을 쓰고 있습니다.`);
+    DRIVE.phone = { warn: '', want, where: best.where };
+  } catch (e) {
+    DRIVE.phone = { warn: e && e.code === 'action' ? 'old' : 'error', want, where: '' };
+    if (force) toast('확인하지 못했습니다. ' + ((e && e.message) || ''));
+  }
+  renderSettingsIfOpen();
+}
+function renderSettingsIfOpen() { try { const box = document.getElementById('phoneLinkBox'); if (box) box.outerHTML = phoneLinkHtml(); } catch {} }
+function phoneLinkHtml() {
+  const p = DRIVE.phone;
+  if (!fsReady()) return `<div id="phoneLinkBox"></div>`;
+  const msg = !p ? '확인 중…'
+    : p.warn === 'nofolder' ? `<span class="warnline">PC 저장 폴더(<b>${esc(p.want)}</b>)가 구글 드라이브에서 보이지 않습니다. 구글 드라이브 데스크톱 앱의 '내 드라이브' 안 폴더여야 휴대폰과 같이 씁니다.${p.where ? ` 지금 휴대폰은 <b>${esc(p.where)}</b>를 씁니다.` : ''}</span>`
+    : p.warn === 'old' ? '<span class="warnline">스크립트를 버전 7로 다시 배포해야 확인할 수 있습니다.</span>'
+    : p.warn === 'error' ? '<span class="warnline">확인하지 못했습니다.</span>'
+    : `휴대폰과 PC가 같은 파일을 씁니다: <b>${esc(p.where)}</b>`;
+  return `<div id="phoneLinkBox" class="row" style="align-items:center;flex-wrap:wrap"><span class="count">${msg}</span><button class="btn small" type="button" data-act="phoneLink">${ic('refresh')}다시 맞추기</button></div>`;
 }
 async function dailyBackup() {
   const name = `dashboard-${todayStr()}.json`;
@@ -2532,7 +2568,7 @@ const UNDO_LABEL = {
   delRule: '아이콘 규칙 삭제', skipOcc: '반복 일정 한 번 빼기', edSave: '일정 편집', bdSave: '불가 시간 설정', saveSettings: '설정 변경', imSave: '아이콘 색·이름',
   pushG: '구글에 추가', fEvent: '일정 추가', fBlock: '불가 시간 추가', taskForm: '할 일 추가', importData: '파일 가져오기'
 };
-const UNDO_SKIP = new Set(['gDel', 'fltImp', 'fltIcons', 'fltTog', 'fltClear', 'fltClose', 'cmdToAI', 'cmdPick', 'cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
+const UNDO_SKIP = new Set(['phoneLink', 'gDel', 'fltImp', 'fltIcons', 'fltTog', 'fltClear', 'fltClose', 'cmdToAI', 'cmdPick', 'cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
 function undoSnap() {
   const o = { settings: JSON.parse(JSON.stringify(S.settings)) };
   for (const c of COLS) o[c] = JSON.parse(JSON.stringify(S[c]));
@@ -3260,6 +3296,7 @@ function phoneSettingsHtml() {
   return `<div class="bsec"><b>${ic('phone')} 휴대폰에서 쓰기</b>
     <div class="phonebox"><div id="phoneQR" class="qr">QR 만드는 중…</div>
     <ol class="count steps"><li>아이폰 카메라로 이 QR을 찍어 사파리로 엽니다.</li><li>사파리 아래 <b>공유</b> 버튼 → <b>홈 화면에 추가</b>를 누르면 앱처럼 열립니다. 아이콘 앱이 "연결 안 됨"이면 그 앱에서 붙여넣기로 연결합니다.</li><li>휴대폰은 Apps Script를 통해 드라이브의 같은 데이터 파일을 읽고 씁니다${DRIVE.where ? ` (<b>${esc(DRIVE.where)}</b>)` : ''}.</li></ol></div>
+    ${phoneLinkHtml()}
     <div class="row"><button class="btn small" type="button" data-act="copyConnect">${ic('copy')}연결 링크 복사</button><span class="count warnline">이 QR·링크에는 비밀 키가 들어 있으니 다른 사람에게 보내지 마세요.</span></div>
     <span class="count">스크립트가 버전 4 이상이어야 합니다. 이전 버전이면 새 Code.gs로 바꾸고 authorize 실행 → 배포 관리 → 새 버전으로 배포하세요.</span></div>`;
 }
@@ -4661,6 +4698,7 @@ document.addEventListener('click', async ev0 => {
       case 'evAbsent': UI.edits['ev-a-' + el.dataset.i] = el.checked ? '1' : ''; return renderSheet(true);
       case 'absentT': { const e = S.events.find(x => x.id === id); if (e) await patch('events', id, { absent: !e.absent }); return; }
       case 'absentG': { const k = el.dataset.k; const g = G.events.find(x => gKey(x) === k); if (g) setMark(k, { absent: !absentOfG(g) }); return; }
+      case 'phoneLink': return linkPhoneFile(true);
       case 'copyConnect': { const l = connectLink(); try { await navigator.clipboard.writeText(l); toast('연결 링크를 복사했습니다. 휴대폰으로 보내 사파리에서 여세요.'); } catch { prompt('이 링크를 휴대폰에서 여세요', l); } return; }
       case 'setTab': UI.setTab = el.dataset.t; document.querySelectorAll('.stab').forEach(x => x.hidden = x.dataset.tab !== el.dataset.t); document.querySelectorAll('.settabs [data-act="setTab"]').forEach(x => x.setAttribute('aria-selected', String(x.dataset.t === el.dataset.t))); return;
       case 'wcAdd': { UI.wcDraft = [...wcReadForm(), { w: '', color: '#ff6b6b', bold: false }]; const box = document.querySelector('.wclist'); if (box) { const t = document.createElement('div'); t.innerHTML = wordSettingsHtml(); box.replaceWith(t.querySelector('.wclist')); const ins = document.querySelectorAll('.wcrow [data-wc="w"]'); ins.length && ins[ins.length - 1].focus(); } return; }
