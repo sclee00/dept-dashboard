@@ -2051,12 +2051,21 @@ function mergeIn(r) {
     for (const [id, t] of Object.entries(del)) { const cur = map.get(id); if (cur && (cur._u || 0) <= t) { map.delete(id); changed = true; } }
     S[col] = [...map.values()];
   }
-  if (isObj(r.settings) && (r.settingsU || 0) > (S.settingsU || 0)) { S.settings = { ...DEFAULTS, ...r.settings }; S.settingsU = r.settingsU; changed = true; }
+  if (isObj(r.settings) && (r.settingsU || 0) > (S.settingsU || 0)) {
+    // the Apps Script connection belongs to this device: newer settings from another device never take it away
+    const conn = gasConnSaved() || (S.settings.gasUrl && S.settings.gasKey ? { u: S.settings.gasUrl, k: S.settings.gasKey } : null);
+    S.settings = { ...DEFAULTS, ...r.settings }; S.settingsU = r.settingsU; changed = true;
+    if (conn && !(S.settings.gasUrl && S.settings.gasKey)) { S.settings.gasUrl = conn.u; S.settings.gasKey = conn.k; }
+  }
   if (r.gcache && gCacheAdopt(r.gcache)) changed = true;
   return changed;
 }
-function cacheLocal() { try { const o = snapshot(); delete o.gcache; localStorage.setItem('deptDash', JSON.stringify(o)); } catch {} }
-function loadLocal() { try { const d = JSON.parse(localStorage.getItem('deptDash') || 'null'); if (d) mergeIn(d); } catch {} }
+function cacheLocal() { try { const o = snapshot(); delete o.gcache; localStorage.setItem('deptDash', JSON.stringify(o)); if (gasOn()) localStorage.setItem('gasConn', JSON.stringify({ u: S.settings.gasUrl, k: S.settings.gasKey })); else localStorage.removeItem('gasConn'); } catch {} }
+function gasConnSaved() { try { const c = JSON.parse(localStorage.getItem('gasConn') || 'null'); return c && c.u && c.k ? c : null; } catch { return null; } }
+function loadLocal() {
+  try { const d = JSON.parse(localStorage.getItem('deptDash') || 'null'); if (d) mergeIn(d); } catch {}
+  const c = gasConnSaved(); if (c && !gasOn()) { S.settings.gasUrl = c.u; S.settings.gasKey = c.k; }
+}
 function changed() { undoCommit(); renderAll(); cacheLocal(); DRIVE.dirty = true; clearTimeout(DRIVE.timer); DRIVE.timer = setTimeout(syncNow, 1500); }
 async function add(col, data) { const id = uid(); S[col].push({ id, ...data, _u: Date.now() }); changed(); return id; }
 async function patch(col, id, data) { const x = S[col].find(r => r.id === id); if (x) { deepMerge(x, JSON.parse(JSON.stringify(data))); x._u = Date.now(); } changed(); }
