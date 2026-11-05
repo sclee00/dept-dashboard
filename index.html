@@ -2092,7 +2092,13 @@ async function fsPick() {
   if (!fsOK) { toast('이 브라우저는 폴더 저장을 지원하지 않습니다. 크롬이나 엣지에서 열어 주세요.'); return; }
   try {
     const h = await window.showDirectoryPicker({ id: 'deptdash', mode: 'readwrite', startIn: 'documents' });
-    FS.handle = h; FS.perm = 'granted'; await kvSet('dir', h);
+    if (/^backup$/i.test(h.name)) {
+      const v = await gAsk({ title: '"backup" 폴더를 고르셨습니다', icon: 'drive', note: 'backup은 하루 한 번 날짜별 사본을 모아 두는 폴더입니다. 보통은 그 위의 <b>학과장실 대시보드</b> 폴더를 골라야 휴대폰·다른 PC와 같은 파일을 씁니다.',
+        choices: [{ v: 'again', label: '다시 고르기', primary: true }, { v: 'use', label: '그래도 이 폴더 사용' }] });
+      if (v === 'again') return fsPick();
+      if (!v) return;
+    }
+    FS.handle = h; DRIVE.phoneChecked = false; DRIVE.phone = null; DRIVE.phoneTry = 0; FS.perm = 'granted'; await kvSet('dir', h);
     DRIVE.remoteMod = null; DRIVE.last = 0;
     toast(`"${h.name}" 폴더에 저장합니다.`);
     await syncNow();
@@ -2177,7 +2183,7 @@ async function syncNow() {
   if (DRIVE.again) { DRIVE.again = false; syncNow(); }
 }
 // PC with a Drive folder + Apps Script: make the phone (which reads Drive through the script) use the very same file
-async function linkPhoneFile(force) {
+async function linkPhoneFile(force, quiet) {
   if (!fsReady() || !gasOn() || !FS.handle || (DRIVE.phoneChecked && !force)) return;
   DRIVE.phoneChecked = true;
   const want = FS.handle.name + '/' + FILE_NAME;
@@ -2187,12 +2193,14 @@ async function linkPhoneFile(force) {
     if (!mine.length) {
       // Drive desktop may not have uploaded a brand-new folder yet
       DRIVE.phone = { warn: 'nofolder', want, where: ((j.files || []).find(f => f.id === j.current) || {}).where || '' };
-      if (force) toast(`구글 드라이브에서 "${FS.handle.name}" 폴더의 데이터 파일을 찾지 못했습니다. 이 폴더가 구글 드라이브 안에 있는지 확인해 주세요.`);
+      // a folder picked just now may still be uploading: look again a few times
+      if ((DRIVE.phoneTry = (DRIVE.phoneTry || 0) + 1) <= 4) setTimeout(() => linkPhoneFile(true, true), 60000);
+      if (force && !quiet) toast(`구글 드라이브에서 "${FS.handle.name}" 폴더의 데이터 파일을 찾지 못했습니다. 이 폴더가 구글 드라이브 안에 있는지 확인해 주세요.`);
       return renderSettingsIfOpen();
     }
     const best = mine.sort((a, b) => Math.abs(a.modified - (DRIVE.remoteMod || 0)) - Math.abs(b.modified - (DRIVE.remoteMod || 0)))[0];
     if (j.current !== best.id) { await gas({ action: 'dataUse', id: best.id }); toast(`휴대폰도 PC와 같은 파일(${best.where})을 쓰도록 맞췄습니다.`); }
-    else if (force) toast(`휴대폰과 PC가 같은 파일(${best.where})을 쓰고 있습니다.`);
+    else if (force && !quiet) toast(`휴대폰과 PC가 같은 파일(${best.where})을 쓰고 있습니다.`);
     DRIVE.phone = { warn: '', want, where: best.where };
   } catch (e) {
     DRIVE.phone = { warn: e && e.code === 'action' ? 'old' : 'error', want, where: '' };
@@ -2205,7 +2213,7 @@ function phoneLinkHtml() {
   const p = DRIVE.phone;
   if (!fsReady()) return `<div id="phoneLinkBox"></div>`;
   const msg = !p ? '확인 중…'
-    : p.warn === 'nofolder' ? `<span class="warnline">PC 저장 폴더(<b>${esc(p.want)}</b>)가 구글 드라이브에서 보이지 않습니다. 구글 드라이브 데스크톱 앱의 '내 드라이브' 안 폴더여야 휴대폰과 같이 씁니다.${p.where ? ` 지금 휴대폰은 <b>${esc(p.where)}</b>를 씁니다.` : ''}</span>`
+    : p.warn === 'nofolder' ? `<span class="warnline">PC 저장 폴더(<b>${esc(p.want)}</b>)가 구글 드라이브에서 아직 보이지 않습니다. 방금 고른 폴더라면 드라이브 앱이 올리는 데 1~2분 걸릴 수 있어 잠시 뒤 다시 확인합니다.${/^backup\//i.test(p.want) ? ' 지금 고른 곳은 날짜별 사본을 두는 <b>backup</b> 폴더입니다. "폴더 바꾸기"로 그 위의 학과장실 대시보드 폴더를 고르세요.' : " 구글 드라이브 데스크톱 앱의 '내 드라이브' 안 폴더여야 휴대폰과 같이 씁니다."}${p.where ? ` 지금 휴대폰은 <b>${esc(p.where)}</b>를 씁니다.` : ''}</span>`
     : p.warn === 'old' ? '<span class="warnline">스크립트를 버전 7로 다시 배포해야 확인할 수 있습니다.</span>'
     : p.warn === 'error' ? '<span class="warnline">확인하지 못했습니다.</span>'
     : `휴대폰과 PC가 같은 파일을 씁니다: <b>${esc(p.where)}</b>`;
