@@ -15,6 +15,7 @@
  * 할 수 있는 일: 캘린더 목록, 일정 읽기, 일정 만들기·고치기·지우기 (반복 일정은 이 날만 또는 전체),
  *               일정 설명(메모) 읽기·쓰기, 내 드라이브의 dashboard-data.json 읽기·쓰기 (아이폰 등 폴더 저장이 안 되는 기기용)
  * 버전 4부터 드라이브 권한이 추가되었습니다. 코드를 바꾼 뒤 authorize를 한 번 더 실행해 권한을 허용하세요.
+ * 버전 9: 브라우저가 못 읽는 첨부(hwp·doc·ppt 등)를 구글 드라이브로 PDF 변환해 같이 넣기 (서비스에 Drive API 추가 필요)
  * 버전 8: Thunderbird '대시보드로 보내기' 메일 받기 (mailPut → inbox 폴더, inboxList/inboxGet/inboxDone)
  * 버전 7: 휴대폰이 PC와 같은 데이터 파일을 쓰도록 맞추기 (dataFiles, dataUse)
  * 버전 6: 반복 일정 전체의 시간을 바꾸려면 왼쪽 [서비스] + → Google Calendar API 추가 (apps-script/appsscript.json 참고)
@@ -33,7 +34,7 @@ function doGet(e) {
   if (p.key !== KEY) return out({ ok: false, error: 'key' });
   try {
     switch (p.action) {
-      case 'ping': return out({ ok: true, email: Session.getEffectiveUser().getEmail(), tz: Session.getScriptTimeZone(), version: 8, advanced: typeof Calendar !== 'undefined' });
+      case 'ping': return out({ ok: true, email: Session.getEffectiveUser().getEmail(), tz: Session.getScriptTimeZone(), version: 9, advanced: typeof Calendar !== 'undefined' });
       case 'dataGet': return out(Object.assign({ ok: true }, dataGet(p)));
       case 'dataFiles': return out({ ok: true, current: PropertiesService.getScriptProperties().getProperty('DATA_FILE_ID') || '', files: dataFiles() });
       case 'dataUse': return out(Object.assign({ ok: true }, dataUse(p)));
@@ -114,9 +115,32 @@ function inboxFolder(sub) {
   const inbox = get(base, 'inbox');
   return sub ? get(inbox, sub) : inbox;
 }
+// attachments the dashboard cannot read in a browser: let Google Drive convert them, then export as PDF
+const PDF_CONVERT = { hwp: 'doc', doc: 'doc', rtf: 'doc', odt: 'doc', wpd: 'doc', ppt: 'slide', pps: 'slide', odp: 'slide' };
+function toPdf(a) {
+  const ext = (String(a.name || '').toLowerCase().match(/\.([a-z0-9]+)$/) || [])[1];
+  const kind = PDF_CONVERT[ext];
+  if (!kind || !a.b64) return null;
+  if (typeof Drive === 'undefined') throw new Error('스크립트 서비스에 Drive API가 없습니다.');
+  const blob = Utilities.newBlob(Utilities.base64Decode(a.b64), a.type || 'application/octet-stream', a.name);
+  const target = kind === 'slide' ? MimeType.GOOGLE_SLIDES : MimeType.GOOGLE_DOCS;
+  const f = Drive.Files.create ? Drive.Files.create({ name: '(변환 중) ' + a.name, mimeType: target }, blob)
+    : Drive.Files.insert({ title: '(변환 중) ' + a.name, mimeType: target }, blob, { convert: true });
+  try {
+    const pdf = DriveApp.getFileById(f.id).getAs(MimeType.PDF);
+    const bytes = pdf.getBytes();
+    return { name: String(a.name).replace(/\.[^.]+$/, '') + '.pdf', type: 'application/pdf', size: bytes.length, b64: Utilities.base64Encode(bytes), convertedFrom: a.name };
+  } finally { try { DriveApp.getFileById(f.id).setTrashed(true); } catch (e) {} }
+}
 function mailPut(m) {
   if (!m || typeof m !== 'object') throw new Error('메일 내용이 없습니다.');
   const folder = inboxFolder();
+  const conv = [], convErr = [];
+  const atts = m.attachments || [];
+  for (let i = 0; i < atts.length; i++) {
+    try { const p = toPdf(atts[i]); if (p) { atts.splice(i + 1, 0, p); i++; conv.push(atts[i - 1].name); } }
+    catch (e) { atts[i].convertError = String((e && e.message) || e); convErr.push(atts[i].name); }
+  }
   if (m.msgId) {
     const it = folder.getFiles();
     while (it.hasNext()) { const g = it.next(); try { if (JSON.parse(g.getDescription() || '{}').msgId === m.msgId) return { id: g.getId(), dup: true }; } catch (e) {} }
@@ -124,7 +148,7 @@ function mailPut(m) {
   const name = 'mail-' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd-HHmmss') + '-' + Math.random().toString(36).slice(2, 6) + '.json';
   const f = folder.createFile(name, JSON.stringify(m), 'application/json');
   f.setDescription(JSON.stringify({ msgId: m.msgId || '', subject: String(m.subject || '').slice(0, 200), from: String(m.from || '').slice(0, 200), atts: (m.attachments || []).length }));
-  return { id: f.getId() };
+  return { id: f.getId(), converted: conv, convertFailed: convErr };
 }
 function inboxList() {
   const it = inboxFolder().getFiles(), list = [];

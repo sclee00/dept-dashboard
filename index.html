@@ -4510,7 +4510,8 @@ async function attsFrom(m) {
     const f = b64File(a); let r = {};
     try { r = await extractAtt(f); } catch { r = { fail: true }; }
     const text = r.text || '';
-    out.push({ id: uid(), file: f, name: f.name, size: f.size, type: f.type || '', kind: r.kind || attKind(f.name), text: text.slice(0, ATT_FILE_MAX), chars: text.length, cut: text.length > ATT_FILE_MAX, note: r.note || '', at: todayStr() });
+    const note = a.convertedFrom ? `${a.convertedFrom}을 PDF로 바꾼 파일` : a.convertError ? `PDF 변환 실패: ${a.convertError}` : (r.note || '');
+    out.push({ id: uid(), file: f, name: f.name, size: f.size, type: f.type || '', kind: r.kind || attKind(f.name), text: text.slice(0, ATT_FILE_MAX), chars: text.length, cut: text.length > ATT_FILE_MAX, note, ...(a.convertedFrom ? { convertedFrom: a.convertedFrom } : {}), at: todayStr() });
   }
   return out;
 }
