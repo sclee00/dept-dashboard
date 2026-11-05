@@ -15,6 +15,7 @@
  * 할 수 있는 일: 캘린더 목록, 일정 읽기, 일정 만들기·고치기·지우기 (반복 일정은 이 날만 또는 전체),
  *               일정 설명(메모) 읽기·쓰기, 내 드라이브의 dashboard-data.json 읽기·쓰기 (아이폰 등 폴더 저장이 안 되는 기기용)
  * 버전 4부터 드라이브 권한이 추가되었습니다. 코드를 바꾼 뒤 authorize를 한 번 더 실행해 권한을 허용하세요.
+ * 버전 11: 아무 메일 앱에서나 '내아이디+dash@gmail.com'으로 전달하면 대시보드로 (지메일 확인, 5분마다 + 대시보드가 열려 있으면 바로)
  * 버전 10: Gemini 자동 분석 (aiKey로 Gemini API 키를 스크립트 속성에 보관, ai로 질문) — 키는 대시보드·데이터 파일에 남지 않습니다
  * 버전 9: 브라우저가 못 읽는 첨부(doc·ppt·rtf 등)를 구글 드라이브로 PDF 변환해 같이 넣기 (서비스에 Drive API 추가 필요)
  * 버전 8: Thunderbird '대시보드로 보내기' 메일 받기 (mailPut → inbox 폴더, inboxList/inboxGet/inboxDone)
@@ -27,6 +28,11 @@ function authorize() {
   CalendarApp.getDefaultCalendar().getName();
   DriveApp.getRootFolder().getName();
   UrlFetchApp.fetch('https://generativelanguage.googleapis.com/', { muteHttpExceptions: true });
+  GmailApp.getUserLabelByName(DONE_LABEL);
+  // check the forwarding address every 5 minutes (one trigger only)
+  if (!ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction() === 'gmailPoll'; }))
+    ScriptApp.newTrigger('gmailPoll').timeBased().everyMinutes(5).create();
+  Logger.log('전달 주소: ' + dashAddress());
   Logger.log('권한 확인 완료: ' + Session.getEffectiveUser().getEmail());
 }
 
@@ -36,7 +42,7 @@ function doGet(e) {
   if (p.key !== KEY) return out({ ok: false, error: 'key' });
   try {
     switch (p.action) {
-      case 'ping': return out({ ok: true, email: Session.getEffectiveUser().getEmail(), tz: Session.getScriptTimeZone(), version: 10, gemini: !!PropertiesService.getScriptProperties().getProperty('GEMINI_KEY'), advanced: typeof Calendar !== 'undefined' });
+      case 'ping': return out({ ok: true, email: Session.getEffectiveUser().getEmail(), tz: Session.getScriptTimeZone(), version: 11, forward: dashAddress(), gemini: !!PropertiesService.getScriptProperties().getProperty('GEMINI_KEY'), advanced: typeof Calendar !== 'undefined' });
       case 'dataGet': return out(Object.assign({ ok: true }, dataGet(p)));
       case 'dataFiles': return out({ ok: true, current: PropertiesService.getScriptProperties().getProperty('DATA_FILE_ID') || '', files: dataFiles() });
       case 'dataUse': return out(Object.assign({ ok: true }, dataUse(p)));
@@ -191,6 +197,8 @@ function mailPut(m) {
   return { id: f.getId(), converted: conv, convertFailed: convErr };
 }
 function inboxList() {
+  // the dashboard asks every 45 s: look at Gmail too, at most once a minute
+  try { const c = CacheService.getScriptCache(); if (!c.get('gmailPolled')) { c.put('gmailPolled', '1', 60); gmailPoll(); } } catch (e) {}
   const it = inboxFolder().getFiles(), list = [];
   while (it.hasNext() && list.length < 50) {
     const f = it.next(); if (f.isTrashed() || !/\.json$/.test(f.getName())) continue;
@@ -198,6 +206,55 @@ function inboxList() {
     list.push({ id: f.getId(), at: f.getDateCreated().getTime(), size: f.getSize(), msgId: d.msgId || '', subject: d.subject || '', from: d.from || '', atts: d.atts || 0 });
   }
   return list.sort(function (a, b) { return a.at - b.at; });
+}
+/* ---------- mail forwarded from any app to <me>+dash@gmail.com ---------- */
+const DONE_LABEL = '대시보드/처리됨';
+function dashAddress() { const e = Session.getEffectiveUser().getEmail() || ''; return e.replace(/@/, '+dash@'); }
+// the original sender and date inside a forwarded message (Apple Mail, Gmail, Outlook, Naver … in Korean or English)
+function forwardedHeader(body) {
+  const b = String(body || '');
+  const mark = b.search(/(Begin forwarded message|Forwarded message|전달된 메시지|전달된 메일|원본 메일|원본 메시지|Original Message)/i);
+  const part = mark >= 0 ? b.slice(mark) : b;
+  const pick = re => { const m = part.match(re); return m ? m[1].trim() : ''; };
+  return {
+    from: pick(/^\s*(?:From|보낸\s*사람|보낸사람|발신자?)\s*[:：]\s*(.+)$/im),
+    date: pick(/^\s*(?:Date|Sent|날짜|보낸\s*날짜|발송일|보낸 시간)\s*[:：]\s*(.+)$/im),
+    subject: pick(/^\s*(?:Subject|제목)\s*[:：]\s*(.+)$/im)
+  };
+}
+function gmailPoll() {
+  const addr = dashAddress(); if (!addr) return 0;
+  const label = GmailApp.getUserLabelByName(DONE_LABEL) || GmailApp.createLabel(DONE_LABEL);
+  const threads = GmailApp.search('to:' + addr + ' -label:' + DONE_LABEL.replace('/', '-') + ' newer_than:30d', 0, 20);
+  let n = 0;
+  threads.forEach(function (th) {
+    th.getMessages().forEach(function (msg) {
+      if ((msg.getTo() + ' ' + msg.getCc()).toLowerCase().indexOf(addr.toLowerCase()) < 0) return;
+      const body = msg.getPlainBody() || '';
+      const fw = forwardedHeader(body);
+      const atts = []; let total = 0;
+      msg.getAttachments({ includeInlineImages: false }).forEach(function (a) {
+        const size = a.getSize(), item = { name: a.getName(), type: a.getContentType(), size: size };
+        if (total + size <= 20 * 1024 * 1024) { item.b64 = Utilities.base64Encode(a.getBytes()); total += size; } else item.skipped = '용량이 커서 이름만 보냄';
+        atts.push(item);
+      });
+      mailPut({
+        source: 'gmail',
+        msgId: (msg.getHeader('Message-ID') || '') || ('gmail:' + msg.getId()),
+        subject: (fw.subject || msg.getSubject() || '').replace(/^\s*((fwd?|fw|전달|re)\s*:\s*)+/i, ''),
+        from: fw.from || msg.getFrom(),
+        forwardedBy: msg.getFrom(),
+        date: fw.date || msg.getDate().toISOString(),
+        to: msg.getTo(),
+        body: body,
+        attachments: atts,
+        sentAt: new Date().toISOString()
+      });
+      n++;
+    });
+    th.addLabel(label);
+  });
+  return n;
 }
 function inboxGet(id) {
   const f = DriveApp.getFileById(id);

@@ -1754,7 +1754,7 @@ function renderMails() {
         </button>
         <div class="pills">
           ${m.unanalyzed && isActive(m) ? `<span class="pill pend">${ic('spark')}${m.analysis ? '이어진 메일 · 분석 전' : '분석 전'}</span><button class="btn small primary" type="button" data-act="analyzeMail" data-id="${m.id}">${ic('spark')}분석</button>` : ''}
-          ${m.via === 'thunderbird' ? `<span class="pill done" title="Thunderbird에서 보낸 메일">${ic('inbox')}Thunderbird${(m.attachments || []).length ? ' · 첨부 ' + m.attachments.length : ''}</span>` : ''}
+          ${m.via === 'thunderbird' || m.via === 'forward' ? `<span class="pill done" title="${m.via === 'forward' ? '메일 앱에서 전달한 메일' : 'Thunderbird에서 보낸 메일'}">${ic('inbox')}${m.via === 'forward' ? '전달' : 'Thunderbird'}${(m.attachments || []).length ? ' · 첨부 ' + m.attachments.length : ''}</span>` : ''}
           ${needsReplyNow(m) && isDate(m.replyDeadline) ? `<span class="pill reply">${ic('clock')}${fmtShort(m.replyDeadline)}까지 답장 ${dchip(m.replyDeadline)}</span>` : ''}
           ${m.replied ? `<span class="pill replied">${ic('check')}답장 완료</span>` : ''}
           ${m.delegable && !m.delegated && isActive(m) ? `<span class="pill deleg">${ic('hand')}조교 전달</span>` : ''}
@@ -3655,6 +3655,7 @@ function phoneSettingsHtml() {
     <div class="phonebox"><div id="phoneQR" class="qr">QR 만드는 중…</div>
     <ol class="count steps"><li>아이폰 카메라로 이 QR을 찍어 사파리로 엽니다.</li><li>사파리 아래 <b>공유</b> 버튼 → <b>홈 화면에 추가</b>를 누르면 앱처럼 열립니다. 아이콘 앱이 "연결 안 됨"이면 그 앱에서 붙여넣기로 연결합니다.</li><li>휴대폰은 Apps Script를 통해 드라이브의 같은 데이터 파일을 읽고 씁니다${DRIVE.where ? ` (<b>${esc(DRIVE.where)}</b>)` : ''}.</li></ol></div>
     ${phoneLinkHtml()}
+    <div class="count" style="margin-top:.4rem">${ic('inbox')} <b>아이폰 메일·다른 메일 앱에서 보내기</b>: 메일을 <b>전달</b> → 받는 사람 <code>${esc((localStorage.getItem('gasEmail') || 'sclee00@gmail.com').replace('@', '+dash@'))}</code> (연락처에 "대시보드"로 저장해 두면 편합니다). 몇 분 안에 이메일 처리 목록에 들어옵니다. 스크립트 버전 11이 필요합니다.</div>
     <div class="row"><button class="btn small" type="button" data-act="copyConnect">${ic('copy')}연결 링크 복사</button><span class="count warnline">이 QR·링크에는 비밀 키가 들어 있으니 다른 사람에게 보내지 마세요.</span></div>
     <span class="count">스크립트가 버전 4 이상이어야 합니다. 이전 버전이면 새 Code.gs로 바꾸고 authorize 실행 → 배포 관리 → 새 버전으로 배포하세요.</span></div>`;
 }
@@ -4716,9 +4717,9 @@ function b64File(a) {
 }
 function mailAsText(m) {
   const d = m.date ? new Date(m.date) : null;
-  const when = d && !isNaN(d) ? `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}` : '';
+  const when = d && !isNaN(d) ? `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}` : String(m.date || '');
   const skipped = (m.attachments || []).filter(a => !a.b64).map(a => `${a.name} (${a.skipped || '내용 없음'})`);
-  return [`보낸 사람: ${m.from || ''}`, m.to ? `받는 사람: ${m.to}` : '', m.cc ? `참조: ${m.cc}` : '', when ? `날짜: ${when}` : '', `제목: ${m.subject || ''}`,
+  return [`보낸 사람: ${m.from || ''}`, m.forwardedBy && m.forwardedBy !== m.from ? `전달한 사람: ${m.forwardedBy}` : '', m.to ? `받는 사람: ${m.to}` : '', m.cc ? `참조: ${m.cc}` : '', when ? `날짜: ${when}` : '', `제목: ${m.subject || ''}`,
     skipped.length ? `첨부(내용 없이 이름만): ${skipped.join(', ')}` : '', '', String(m.body || '').trim()].filter((x, i) => x || i === 6).join('\n');
 }
 async function inboxCheck(manual) {
@@ -4766,7 +4767,7 @@ async function inboxImport() {
           status: 'open', replied: false, updatedAt: nowISO(), unanalyzed: true, msgIds: [...(prev.msgIds || []), m.msgId].filter(Boolean) });
         id = prev.id;
       } else {
-        id = await add('emails', { raw: text, category: $('mailCat').value || '기타', createdAt: nowISO(), status: 'open', replied: false, via: 'thunderbird', msgId: m.msgId || '', unanalyzed: true,
+        id = await add('emails', { raw: text, category: $('mailCat').value || '기타', createdAt: nowISO(), status: 'open', replied: false, via: m.source === 'gmail' ? 'forward' : 'thunderbird', msgId: m.msgId || '', unanalyzed: true,
           subject: (m.subject || '(제목 없음)').slice(0, 80), from: m.from || '', mailDate: m.date || '', summary: '', priority: 'mid', attachments: attRecord(atts),
           needsReply: false, replyDeadline: null, analysis: null, reply: { draft: '' }, delegate: { draft: '' } });
       }
@@ -5128,7 +5129,7 @@ document.addEventListener('click', async ev0 => {
         if (!key) return toast('비밀 키를 넣어 주세요.');
         const keep = { url: S.settings.gasUrl, key: S.settings.gasKey };
         S.settings.gasUrl = url; S.settings.gasKey = key;
-        try { const j = await gas({ action: 'ping' }); toast(`연결됐습니다: ${j.email || '내 계정'}. 저장을 누르면 캘린더를 불러옵니다.`); }
+        try { const j = await gas({ action: 'ping' }); if (j.email) localStorage.setItem('gasEmail', j.email); toast(`연결됐습니다: ${j.email || '내 계정'}. 저장을 누르면 캘린더를 불러옵니다.`); }
         catch (e) { toast(e.message || '연결하지 못했습니다.'); }
         S.settings.gasUrl = keep.url; S.settings.gasKey = keep.key;
         return;
