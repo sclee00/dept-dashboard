@@ -2186,7 +2186,7 @@ function renderSync() {
     glocal: ['', '드라이브와 맞추는 중'], gsaving: ['', '드라이브에 저장 중'],
     gok: ['ok', `드라이브에 저장됨${t ? ' ' + pad(t.getHours()) + ':' + pad(t.getMinutes()) : ''}`],
     gerror: ['warn', '드라이브 저장 실패 · 다시 시도'], ggasold: ['warn', '스크립트 업데이트 필요'],
-    unsupported: ['warn', '이 브라우저에만 저장됨 (크롬·엣지에서 폴더 저장)'],
+    unsupported: ['warn', isIOS() || isStandalone() ? 'PC와 연결 안 됨 · 눌러서 연결' : '이 브라우저에만 저장됨 (크롬·엣지에서 폴더 저장)'],
     none: ['ask', '저장 폴더 고르기'],
     prompt: ['ask', '저장 폴더 다시 허용'],
     saving: ['', '폴더에 저장 중'],
@@ -3250,7 +3250,7 @@ function phoneSettingsHtml() {
   setTimeout(drawPhoneQR, 0);
   return `<div class="bsec"><b>${ic('phone')} 휴대폰에서 쓰기</b>
     <div class="phonebox"><div id="phoneQR" class="qr">QR 만드는 중…</div>
-    <ol class="count steps"><li>아이폰 카메라로 이 QR을 찍어 사파리로 엽니다.</li><li>사파리 아래 <b>공유</b> 버튼 → <b>홈 화면에 추가</b>를 누르면 앱처럼 열립니다.</li><li>휴대폰은 Apps Script를 통해 드라이브의 같은 데이터 파일을 읽고 씁니다${DRIVE.where ? ` (<b>${esc(DRIVE.where)}</b>)` : ''}.</li></ol></div>
+    <ol class="count steps"><li>아이폰 카메라로 이 QR을 찍어 사파리로 엽니다.</li><li>사파리 아래 <b>공유</b> 버튼 → <b>홈 화면에 추가</b>를 누르면 앱처럼 열립니다. 아이콘 앱이 "연결 안 됨"이면 그 앱에서 붙여넣기로 연결합니다.</li><li>휴대폰은 Apps Script를 통해 드라이브의 같은 데이터 파일을 읽고 씁니다${DRIVE.where ? ` (<b>${esc(DRIVE.where)}</b>)` : ''}.</li></ol></div>
     <div class="row"><button class="btn small" type="button" data-act="copyConnect">${ic('copy')}연결 링크 복사</button><span class="count warnline">이 QR·링크에는 비밀 키가 들어 있으니 다른 사람에게 보내지 마세요.</span></div>
     <span class="count">스크립트가 버전 4 이상이어야 합니다. 이전 버전이면 새 Code.gs로 바꾸고 authorize 실행 → 배포 관리 → 새 버전으로 배포하세요.</span></div>`;
 }
@@ -3259,17 +3259,65 @@ async function drawPhoneQR() {
   try { await loadLib('qr'); const q = qrcode(0, 'M'); q.addData(connectLink()); q.make(); box.innerHTML = q.createSvgTag({ cellSize: 4, margin: 2, scalable: true }); }
   catch { box.textContent = 'QR을 만들지 못했습니다. "연결 링크 복사"로 휴대폰에 보내 주세요.'; }
 }
-// opened from the QR: take the script address and key, then load everything from Drive
-function takeConnectLink() {
-  const m = location.hash.match(/connect=([\w-]+)/); if (!m) return false;
+// a connect link (…#connect=CODE) or just the CODE → { u, k } or null
+function readConnectCode(text) {
+  const m = String(text || '').trim().match(/(?:connect=)?([\w-]{20,})\s*$/); if (!m) return null;
   try {
     const j = JSON.parse(decodeURIComponent(escape(atob(m[1].replace(/-/g, '+').replace(/_/g, '/')))));
-    if (/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(j.u || '') && j.k) {
-      S.settings = { ...S.settings, gasUrl: j.u, gasKey: j.k }; // settingsU is left as is, so the PC's full settings win on the first merge
-      cacheLocal(); history.replaceState(null, '', location.pathname); toast('PC와 연결했습니다. 드라이브에서 데이터를 불러옵니다.'); return true;
-    }
-  } catch {}
-  history.replaceState(null, '', location.pathname); toast('연결 링크가 올바르지 않습니다. PC 설정에서 QR을 다시 찍어 주세요.'); return false;
+    return /^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(j.u || '') && j.k ? j : null;
+  } catch { return null; }
+}
+const isStandalone = () => { try { return !!(navigator.standalone || matchMedia('(display-mode: standalone)').matches); } catch { return false; } };
+const isIOS = () => /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+function applyConnect(j) {
+  const same = S.settings.gasUrl === j.u && S.settings.gasKey === j.k;
+  S.settings = { ...S.settings, gasUrl: j.u, gasKey: j.k }; // settingsU is left as is, so the PC's full settings win on the first merge
+  cacheLocal();
+  return !same;
+}
+// opened from the QR: take the script address and key, then load everything from Drive.
+// The link stays in the address bar so that "홈 화면에 추가" keeps it: an iPhone home-screen app starts with empty storage.
+function takeConnectLink() {
+  if (!/connect=/.test(location.hash)) return false;
+  const j = readConnectCode(location.hash);
+  if (!j) { history.replaceState(null, '', location.pathname); toast('연결 링크가 올바르지 않습니다. PC 설정에서 QR을 다시 찍어 주세요.'); return false; }
+  const fresh = applyConnect(j);
+  if (isStandalone()) { history.replaceState(null, '', location.pathname); if (fresh) toast('PC와 연결했습니다. 드라이브에서 데이터를 불러옵니다.'); return true; }
+  if (isIOS()) setTimeout(() => phoneSetup('safari'), 300);
+  else if (fresh) toast('PC와 연결했습니다. 드라이브에서 데이터를 불러옵니다.');
+  return true;
+}
+// iPhone: guide after opening the QR in Safari, and a paste box inside the home-screen app when it is not connected
+function phoneSetup(mode) {
+  let root = document.getElementById('askRoot');
+  if (!root) { root = document.createElement('div'); root.id = 'askRoot'; document.body.appendChild(root); }
+  const body = mode === 'safari' ? `
+      <h3>${ic('phone')}PC와 연결했습니다</h3>
+      <div class="count">이 사파리 창에서는 바로 쓸 수 있습니다. 홈 화면 아이콘으로 쓰려면:</div>
+      <ol class="count steps"><li>아래 <b>공유</b> 버튼 → <b>홈 화면에 추가</b> → 추가</li><li>홈 화면의 새 아이콘으로 열기 — 연결이 같이 들어갑니다.</li><li>혹시 아이콘으로 열었는데 "연결 안 됨"이 나오면, 여기서 <b>연결 코드 복사</b>를 누른 뒤 아이콘 앱에서 <b>붙여넣기</b>를 누르세요.</li></ol>
+      <div class="row" style="justify-content:flex-end;flex-wrap:wrap"><button class="btn" type="button" data-ps="copy">${ic('copy')}연결 코드 복사</button><button class="btn primary" type="button" data-ps="close">확인</button></div>`
+    : `
+      <h3>${ic('phone')}PC와 연결하기</h3>
+      <div class="count">홈 화면 앱은 사파리와 저장 공간이 따로라서 한 번 더 연결해야 합니다.</div>
+      <ol class="count steps"><li>사파리에서 PC의 QR을 찍어 연 화면에서 <b>연결 코드 복사</b>를 누르거나, PC 설정 → 저장·구글 → <b>연결 링크 복사</b>로 받은 링크를 복사합니다.</li><li>여기서 <b>붙여넣기</b>를 누릅니다.</li></ol>
+      <textarea id="psCode" rows="3" placeholder="연결 링크나 코드를 여기에 붙여넣어도 됩니다" style="width:100%"></textarea>
+      <div class="count err" id="psErr" hidden>연결 코드가 아닙니다. PC에서 다시 복사해 주세요.</div>
+      <div class="row" style="justify-content:flex-end;flex-wrap:wrap"><button class="btn" type="button" data-ps="close">나중에</button><button class="btn" type="button" data-ps="use">입력한 코드로 연결</button><button class="btn primary" type="button" data-ps="paste">${ic('copy')}붙여넣기</button></div>`;
+  root.innerHTML = `<div class="scrim" data-ps="close" style="z-index:60"></div><div class="dlg" style="z-index:61"><div class="dlgbox askbox" role="dialog" aria-modal="true">${body}</div></div>`;
+  const connect = text => {
+    const j = readConnectCode(text);
+    if (!j) { const e = $('psErr'); if (e) e.hidden = false; return; }
+    applyConnect(j); root.innerHTML = ''; toast('PC와 연결했습니다. 드라이브에서 데이터를 불러옵니다.');
+    renderAll(); syncNow(); signIn();
+  };
+  root.onclick = async e => {
+    const b = e.target.closest('[data-ps]'); if (!b) return; e.stopPropagation();
+    const a = b.dataset.ps;
+    if (a === 'close') { root.innerHTML = ''; return; }
+    if (a === 'copy') { try { await navigator.clipboard.writeText(connectLink()); toast('연결 코드를 복사했습니다. 홈 화면 앱에서 붙여넣기를 누르세요.'); } catch { prompt('이 코드를 길게 눌러 복사하세요', connectLink()); } return; }
+    if (a === 'use') return connect($('psCode').value);
+    if (a === 'paste') { try { const t = await navigator.clipboard.readText(); $('psCode').value = t; connect(t); } catch { $('psCode').focus(); toast('붙여넣기 권한이 없습니다. 칸을 길게 눌러 붙여넣은 뒤 "입력한 코드로 연결"을 누르세요.'); } }
+  };
 }
 
 /* ---------- click-to-add timetable in the day panel ---------- */
@@ -4572,6 +4620,7 @@ document.addEventListener('click', async ev0 => {
       }
       case 'sync':
         if (gasDataOn()) { if (DRIVE.state === 'gasold') toast('Apps Script를 새 코드(버전 4)로 다시 배포해야 드라이브에 저장됩니다.'); return syncNow(); }
+        if (!fsOK && (isIOS() || isStandalone())) return phoneSetup('app');
         if (!fsOK) { UI.setTab = 'link'; UI.dlg = 'settings'; openSettings(); return toast('이 기기에서는 Apps Script 연결로 드라이브에 저장합니다. PC 설정의 "휴대폰에서 쓰기" QR로 연결하세요.'); }
         if (!FS.handle) return fsPick();
         if (FS.perm !== 'granted') return fsAllow();
@@ -4952,6 +5001,7 @@ setInterval(() => { renderHeader(); if (UI.selDay === todayStr()) renderDay(fals
 applyOrder(document.querySelector('.tools'), 'tools');
 loadLocal();
 takeConnectLink();
+if (isStandalone() && !gasOn() && !fsOK) setTimeout(() => phoneSetup('app'), 400);
 gCacheLoad();
 renderAll();
 document.body.insertAdjacentHTML('beforeend', '<input type="file" id="importFile" accept="application/json,.json" hidden>');
