@@ -147,8 +147,12 @@ header.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:spac
 .srow .t{font-family:var(--mono);font-size:.78rem;color:var(--muted);font-variant-numeric:tabular-nums}
 .srow .tt{min-width:0;overflow-wrap:anywhere}
 .srow .sub3{display:block;font-size:.76rem;color:var(--muted)}
-.srow .acts{display:flex;gap:.25rem;align-items:center;flex-wrap:wrap}
-.srow:not(.freeslot){grid-template-columns:6.4rem 1.2rem minmax(0,1fr)}
+.srow .acts{display:flex;gap:.2rem;align-items:center;flex-wrap:wrap}
+.srow .t2{display:flex;flex-direction:column;line-height:1.25;padding-top:.1rem}.srow .t2 b{font-weight:600;color:var(--ink)}.srow .t2 span{font-size:.72rem}
+.srow:not(.freeslot){align-items:start}.srow:not(.freeslot)>.icbtn,.srow:not(.freeslot)>.ic{margin-top:.15rem}
+.srow .sub3{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+.srow .acts .impbtn{padding:.08rem .4rem;font-size:.74rem;gap:.2rem}.srow .acts .x{padding:.12rem .25rem}
+.srow:not(.freeslot){grid-template-columns:3.3rem 1.2rem minmax(0,1fr)}
 .srow:not(.freeslot) .acts{grid-column:3;justify-self:start}
 .srow:not(.freeslot) .acts:empty{display:none}
 .srow.hot{background:var(--red-soft)} .srow.hot .tt{color:var(--red);font-weight:600}
@@ -189,7 +193,7 @@ a.ext{color:var(--k-g);font-size:.8rem;display:inline-flex;align-items:center;ga
   .dn{font-size:.8rem}
   .dn em{display:none}
   .more{font-size:.62rem}
-  .srow{grid-template-columns:5.4rem 1.1rem minmax(0,1fr)}
+  .srow{grid-template-columns:3.3rem 1.1rem minmax(0,1fr)}
   .srow .acts{grid-column:3}
 }
 
@@ -4125,7 +4129,10 @@ function srow({ t, icon, kc, title, sub, cls, acts, tag, fixed, iconAct, memoKey
   if (memoKey) { acts = memoBtn(memoKey) + (acts || ''); if (memoHas(memoKey)) tag = (tag || '') + ` <span class="memodot" title="메모 있음">${ic('chat')}</span>`; }
   if (!fixed && GENERIC_ICONS.has(icon) && icon !== '마감') { const k = iconFor(title, icon); if (k !== icon) { icon = k; kc = ICON_GROUP[k] || kc; } }
   const icHtml = iconAct ? `<button type="button" class="icbtn" ${iconAct} title="아이콘 바꾸기" aria-label="아이콘 바꾸기">${ic(icon, kc || '')}</button>` : ic(icon, kc || '');
-  return `<div class="srow ${cls || ''}"><span class="t">${colorTimes(t || '')}</span>${icHtml}<span class="tt">${gs || ''}${esc(title)}${tag || ''}${sub ? `<span class="sub3">${sub}</span>` : ''}</span><span class="acts">${acts || ''}</span></div>` + (memoKey ? memoPanel(memoKey) : '');
+  // start and end on two lines so the title gets the width
+  const tp = String(t || '').split('–');
+  const tHtml = tp.length === 2 ? `<span class="t t2"><b>${colorTimes(tp[0])}</b><span>${colorTimes(tp[1])}</span></span>` : `<span class="t">${colorTimes(t || '')}</span>`;
+  return `<div class="srow ${cls || ''}">${tHtml}${icHtml}<span class="tt">${gs || ''}${esc(title)}${tag || ''}${sub ? `<span class="sub3">${sub}</span>` : ''}</span><span class="acts">${acts || ''}</span></div>` + (memoKey ? memoPanel(memoKey) : '');
 }
 function gSyncIcon(e) {
   return e.googleId ? `<span class="gst on" title="구글 캘린더와 연결됨">${ic('gcal')}<i>✓</i></span>`
@@ -4177,7 +4184,7 @@ function renderDay(force) {
   for (const m of S.emails.filter(m => needsReplyNow(m) && m.replyDeadline === day))
     ad.push(srow({ t: '답장 기한', icon: 'reply', kc: 'kc-reply', title: m.subject, cls: 'warn', acts: `<button class="btn small" type="button" data-act="openMail" data-id="${m.id}">열기</button>` }));
   for (const g of gAllDayOn(day))
-    ad.push(srow({ t: '종일', icon: iconOfG(g), kc: iconKc(iconOfG(g), 'kc-g'), fixed: true, iconAct: `data-act="ipOpen" data-kind="g" data-id="${esc(gKey(g))}"`, memoKey: gKey(g), gs: `<span class="gst on" title="구글 캘린더 일정">${ic('gcal')}<i>✓</i></span>`, title: g.title, sub: '구글 캘린더' + (g.calName ? ' · ' + esc(g.calName) : '') + (g.free ? ' · 바쁨 아님' : ''), cls: statusOfG(g) ? stCls(statusOfG(g)) : impOfG(g) === 'high' ? 'improw' : '', acts: `<button class="x" type="button" data-act="edOpen" data-kind="g" data-id="${esc(gKey(g))}" title="편집" aria-label="편집">${ic('pen')}</button>` + impBtn(impOfG(g) === 'high', 'impG', `data-k="${esc(gKey(g))}"`) + statusBtn(statusOfG(g), `data-kind="g" data-id="${esc(gKey(g))}"`) + `<button class="x" type="button" data-act="gDel" data-k="${esc(gKey(g))}" title="구글 캘린더에서 삭제 (확인 후)" aria-label="구글 캘린더에서 삭제">✕</button>` + (g.link ? `<a class="ext" href="${esc(g.link)}" target="_blank" rel="noopener">${ic('ext')}</a>` : '') }));
+    ad.push(srow({ t: '종일', icon: iconOfG(g), kc: iconKc(iconOfG(g), 'kc-g'), fixed: true, iconAct: `data-act="ipOpen" data-kind="g" data-id="${esc(gKey(g))}"`, memoKey: gKey(g), gs: `<span class="gst on" title="구글 캘린더 일정">${ic('gcal')}<i>✓</i></span>`, title: g.title, sub: '구글 캘린더' + (g.calName ? ' · ' + esc(String(g.calName).replace(/@.*$/, '')) : '') + (g.free ? ' · 바쁨 아님' : ''), cls: statusOfG(g) ? stCls(statusOfG(g)) : impOfG(g) === 'high' ? 'improw' : '', acts: `<button class="x" type="button" data-act="edOpen" data-kind="g" data-id="${esc(gKey(g))}" title="편집" aria-label="편집">${ic('pen')}</button>` + impBtn(impOfG(g) === 'high', 'impG', `data-k="${esc(gKey(g))}"`) + statusBtn(statusOfG(g), `data-kind="g" data-id="${esc(gKey(g))}"`) + `<button class="x" type="button" data-act="gDel" data-k="${esc(gKey(g))}" title="구글 캘린더에서 삭제 (확인 후)" aria-label="구글 캘린더에서 삭제">✕</button>` + (g.link ? `<a class="ext" href="${esc(g.link)}" target="_blank" rel="noopener">${ic('ext')}</a>` : '') }));
   for (const b of blocksOn(day).filter(b => b.allDay))
     ad.push(srow({ t: '종일', icon: iconOfBlock(b), fixed: true, iconAct: `data-act="ipOpen" data-kind="b" data-id="${b.id}"`, title: b.label, sub: '불가 시간', cls: 'busy', acts: `<button class="x" type="button" data-act="delBlock" data-id="${b.id}" aria-label="삭제">✕</button>` }));
 
@@ -4185,7 +4192,7 @@ function renderDay(force) {
   for (const b of weeklyOn(day)) timed.push({ s: b.s, h: srow({ t: `${fromMin(b.s)}–${fromMin(b.e)}`, icon: iconOfBlock(b), fixed: true, iconAct: b.id ? `data-act="ipOpen" data-kind="w" data-id="${esc(b.id)}"` : '', title: b.label, sub: '매주 반복 불가 시간', cls: 'busy', acts: `<button class="btn small" type="button" data-act="openBusy">편집</button>`, tag: b.example ? ' <span class="tag ex">예시</span>' : '' }) });
   for (const b of blocksOn(day).filter(b => !b.allDay)) timed.push({ s: b.s, h: srow({ t: `${fromMin(b.s)}–${fromMin(b.e)}`, icon: iconOfBlock(b), fixed: true, iconAct: `data-act="ipOpen" data-kind="b" data-id="${b.id}"`, title: b.label, sub: '불가 시간', cls: 'busy', acts: `<button class="x" type="button" data-act="delBlock" data-id="${b.id}" aria-label="삭제">✕</button>`, tag: b.example ? ' <span class="tag ex">예시</span>' : '' }) });
   for (const x of localTimedOn(day)) { const e = x.ev; timed.push({ s: x.s, h: srow({ t: `${fromMin(x.s)}–${fromMin(x.e)}`, icon: iconOfEvent(e), kc: iconKc(iconOfEvent(e), 'kc-' + (e.kind || '회의')), fixed: true, iconAct: `data-act="ipOpen" data-kind="e" data-id="${e.id}"`, memoKey: 'e:' + e.id, gs: gSyncIcon(e), title: e.title, sub: esc([repText(e), e.location, e.emailId ? '메일에서 추가' : ''].filter(Boolean).join(' · ')), cls: (e.kind === '마감' ? 'hot' : '') + (statusOfE(e) ? stCls(statusOfE(e)) : impOfEvent(e) === 'high' ? ' improw' : ''), acts: eventActs(e), tag: (statusOfE(e) ? ` <span class="tag st st-${statusOfE(e)}">${ST_KO[statusOfE(e)]}</span>` : '') + (e.example ? ' <span class="tag ex">예시</span>' : '') }) }); }
-  for (const g of gOn(day)) timed.push({ s: g.s, h: srow({ t: `${g.time}–${g.endTime}`, icon: iconOfG(g), kc: iconKc(iconOfG(g), 'kc-g'), fixed: true, iconAct: `data-act="ipOpen" data-kind="g" data-id="${esc(gKey(g))}"`, memoKey: gKey(g), gs: `<span class="gst on" title="구글 캘린더 일정">${ic('gcal')}<i>✓</i></span>`, title: g.title, sub: '구글 캘린더' + (g.calName ? ' · ' + esc(g.calName) : '') + (g.free ? ' · 바쁨 아님' : '') + (g.loc ? ' · ' + esc(g.loc) : ''), cls: statusOfG(g) ? stCls(statusOfG(g)) : impOfG(g) === 'high' ? 'improw' : '', acts: `<button class="x" type="button" data-act="edOpen" data-kind="g" data-id="${esc(gKey(g))}" title="편집" aria-label="편집">${ic('pen')}</button>` + impBtn(impOfG(g) === 'high', 'impG', `data-k="${esc(gKey(g))}"`) + statusBtn(statusOfG(g), `data-kind="g" data-id="${esc(gKey(g))}"`) + `<button class="x" type="button" data-act="gDel" data-k="${esc(gKey(g))}" title="구글 캘린더에서 삭제 (확인 후)" aria-label="구글 캘린더에서 삭제">✕</button>` + (g.link ? `<a class="ext" href="${esc(g.link)}" target="_blank" rel="noopener" title="구글 캘린더에서 열기">${ic('ext')}</a>` : '') }) });
+  for (const g of gOn(day)) timed.push({ s: g.s, h: srow({ t: `${g.time}–${g.endTime}`, icon: iconOfG(g), kc: iconKc(iconOfG(g), 'kc-g'), fixed: true, iconAct: `data-act="ipOpen" data-kind="g" data-id="${esc(gKey(g))}"`, memoKey: gKey(g), gs: `<span class="gst on" title="구글 캘린더 일정">${ic('gcal')}<i>✓</i></span>`, title: g.title, sub: '구글 캘린더' + (g.calName ? ' · ' + esc(String(g.calName).replace(/@.*$/, '')) : '') + (g.free ? ' · 바쁨 아님' : '') + (g.loc ? ' · ' + esc(g.loc) : ''), cls: statusOfG(g) ? stCls(statusOfG(g)) : impOfG(g) === 'high' ? 'improw' : '', acts: `<button class="x" type="button" data-act="edOpen" data-kind="g" data-id="${esc(gKey(g))}" title="편집" aria-label="편집">${ic('pen')}</button>` + impBtn(impOfG(g) === 'high', 'impG', `data-k="${esc(gKey(g))}"`) + statusBtn(statusOfG(g), `data-kind="g" data-id="${esc(gKey(g))}"`) + `<button class="x" type="button" data-act="gDel" data-k="${esc(gKey(g))}" title="구글 캘린더에서 삭제 (확인 후)" aria-label="구글 캘린더에서 삭제">✕</button>` + (g.link ? `<a class="ext" href="${esc(g.link)}" target="_blank" rel="noopener" title="구글 캘린더에서 열기">${ic('ext')}</a>` : '') }) });
   for (const [s, e] of freeSlots(day, 30)) timed.push({ s: s + 0.5, h: `<button type="button" class="srow freeslot" data-act="slotAdd" data-s="${s}" data-e="${e}"><span class="t">${colorTimes(fromMin(s) + '–' + fromMin(e))}</span>${ic('free')}<span class="tt">빈 시간 · ${durKo(e - s)}<span class="sub3">눌러서 이 시간에 일정 넣기</span></span><span class="acts"></span></button>` });
   timed.sort((a, b) => a.s - b.s);
 
