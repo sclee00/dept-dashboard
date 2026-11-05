@@ -545,6 +545,8 @@ body.resizing{user-select:none} body.rs-col,body.rs-col *{cursor:col-resize!impo
   .chead .free{display:none}
   .citems{display:flex!important;flex-wrap:wrap;justify-content:flex-start!important;gap:2px!important}
 }
+.inboxchip{margin-left:auto;border-color:var(--accent);color:var(--ink)}
+.inboxchip .count{margin-left:.35rem}
 .tgopen{margin-top:.6rem;width:100%;justify-content:center}
 .tgrid{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:10px;overflow:hidden;user-select:none;touch-action:none;background:var(--surface-2)}
 .tgrid .tr{display:grid;grid-template-columns:3.2rem minmax(0,1fr);min-height:1.15rem;cursor:pointer;border-top:1px solid transparent}
@@ -820,7 +822,7 @@ label.inl{display:inline-flex;align-items:center;gap:.3rem;font-size:.85rem} lab
 
   <div class="gutter h" data-split="quick" role="separator" aria-orientation="horizontal" tabindex="0" title="끌어서 높이 조절 · 두 번 누르면 원래대로"></div>
   <section class="quick" aria-label="메일 붙여넣기">
-    <div class="qhead"><span class="qic" data-ic="inbox"></span><b>자동 처리</b><span class="count">메일을 붙여넣으면 요약·일정·할 일·답장·조교 지시를 만들고, 짧게 명령하면 바로 실행합니다</span></div>
+    <div class="qhead"><span class="qic" data-ic="inbox"></span><b>자동 처리</b><span class="count">메일을 붙여넣으면 요약·일정·할 일·답장·조교 지시를 만들고, 짧게 명령하면 바로 실행합니다</span><button class="gchip inboxchip" id="inboxChip" type="button" data-act="inboxRun" hidden></button></div>
     <div class="qbody">
       <textarea class="field" id="rawMail" rows="3" placeholder="메일을 그대로 붙여넣거나 짧게 명령하세요 (Ctrl+Enter). 예: 매주 화요일 3시에 임원회의 일정 추가 · 금요일까지 예산서 제출 할 일 · 다음주 수요일 오후 출장 불가 · 11월 5일 2시~4시 교육과정위원회"></textarea>
       <div class="qctl">
@@ -2577,7 +2579,7 @@ const UNDO_LABEL = {
   delRule: '아이콘 규칙 삭제', skipOcc: '반복 일정 한 번 빼기', edSave: '일정 편집', bdSave: '불가 시간 설정', saveSettings: '설정 변경', imSave: '아이콘 색·이름',
   pushG: '구글에 추가', fEvent: '일정 추가', fBlock: '불가 시간 추가', taskForm: '할 일 추가', importData: '파일 가져오기'
 };
-const UNDO_SKIP = new Set(['tgShow', 'tgHide', 'phoneLink', 'gDel', 'fltImp', 'fltIcons', 'fltTog', 'fltClear', 'fltClose', 'cmdToAI', 'cmdPick', 'cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
+const UNDO_SKIP = new Set(['inboxRun', 'tgShow', 'tgHide', 'phoneLink', 'gDel', 'fltImp', 'fltIcons', 'fltTog', 'fltClear', 'fltClose', 'cmdToAI', 'cmdPick', 'cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
 function undoSnap() {
   const o = { settings: JSON.parse(JSON.stringify(S.settings)) };
   for (const c of COLS) o[c] = JSON.parse(JSON.stringify(S[c]));
@@ -4323,6 +4325,80 @@ function fieldsFrom(a, emailId) {
     delegable: a.relevance === 'irrelevant' ? false : a.delegable, delegate: { draft: a.relevance === 'irrelevant' ? '' : a.delegateDraft, items: a.relevance === 'irrelevant' ? [] : a.delegateItems, title: a.delegateTitle, short: '' }
   };
 }
+/* ---------- mail sent from Thunderbird ("대시보드로 보내기") → Drive inbox (via Apps Script) → auto processing here ---------- */
+const INBOX = { items: [], busy: false, at: 0, off: false };
+const normSubj = s => String(s || '').replace(/^\s*((re|fw|fwd|답장|전달|회신)\s*(\[\d+\])?\s*:\s*)+/i, '').replace(/\s+/g, ' ').trim().toLowerCase();
+function b64File(a) {
+  const bin = atob(a.b64 || ''), u = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+  return new File([u], a.name || 'file', { type: a.type || 'application/octet-stream' });
+}
+function mailAsText(m) {
+  const d = m.date ? new Date(m.date) : null;
+  const when = d && !isNaN(d) ? `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}` : '';
+  const skipped = (m.attachments || []).filter(a => !a.b64).map(a => `${a.name} (${a.skipped || '내용 없음'})`);
+  return [`보낸 사람: ${m.from || ''}`, m.to ? `받는 사람: ${m.to}` : '', m.cc ? `참조: ${m.cc}` : '', when ? `날짜: ${when}` : '', `제목: ${m.subject || ''}`,
+    skipped.length ? `첨부(내용 없이 이름만): ${skipped.join(', ')}` : '', '', String(m.body || '').trim()].filter((x, i) => x || i === 6).join('\n');
+}
+async function inboxCheck(manual) {
+  if (!gasOn() || INBOX.off || INBOX.busy) return;
+  let j;
+  try { j = await gas({ action: 'inboxList' }); }
+  catch (e) { if (e && e.code === 'action') INBOX.off = true; if (manual) toast('메일함을 확인하지 못했습니다. ' + ((e && e.message) || '')); return; }
+  INBOX.at = Date.now();
+  const items = j.items || [];
+  // already registered (from another device, or sent twice): just file it away
+  const known = new Set(S.emails.map(m => m.msgId).filter(Boolean));
+  for (const it of items.filter(x => x.msgId && known.has(x.msgId))) { try { await gas({ action: 'inboxDone', id: it.id }); } catch {} }
+  INBOX.items = items.filter(x => !(x.msgId && known.has(x.msgId)));
+  renderInbox();
+  if (INBOX.items.length && (manual || inboxCanAuto())) inboxRun();
+}
+// start by itself only on a PC whose screen is in use and whose input box is free
+function inboxCanAuto() {
+  return !touchUI() && Date.now() > (INBOX.snooze || 0) && !document.hidden && !UI.relay && !UI.dlg && !document.querySelector('#askRoot .dlg')
+    && !$('rawMail').value.trim() && !UI.att.length && !$('analyzeBtn').disabled;
+}
+function renderInbox() {
+  const el = $('inboxChip'); if (!el) return;
+  const n = INBOX.items.length;
+  el.hidden = !n;
+  el.innerHTML = n ? `${ic('inbox')}<b>Thunderbird 메일 ${n}건</b><span class="count">${INBOX.busy ? '처리 중' : '눌러서 처리'}</span>` : '';
+  el.title = INBOX.items.map(x => `${x.subject || '(제목 없음)'} — ${x.from || ''}`).join('\n');
+}
+async function inboxRun() {
+  if (INBOX.busy) return;
+  if ($('rawMail').value.trim() || UI.att.length) { toast('입력 칸에 쓰던 내용이 있습니다. 비우거나 처리한 뒤 다시 눌러 주세요.'); return; }
+  INBOX.busy = true; renderInbox();
+  try {
+    while (INBOX.items.length) {
+      const it = INBOX.items[0];
+      let m;
+      try { m = (await gas({ action: 'inboxGet', id: it.id })).mail; }
+      catch (e) { toast('메일을 불러오지 못했습니다. ' + ((e && e.message) || '')); break; }
+      if (m.msgId && S.emails.some(x => x.msgId === m.msgId)) { await gas({ action: 'inboxDone', id: it.id }).catch(() => {}); INBOX.items.shift(); continue; }
+      // fill the box exactly as if pasted, then run the usual processing
+      $('rawMail').value = mailAsText(m);
+      UI.att = []; const files = (m.attachments || []).filter(a => a.b64).map(b64File);
+      if (files.length) addAttFiles(files);
+      const prev = S.emails.filter(isActive).find(x => normSubj(x.subject) && normSubj(x.subject) === normSubj(m.subject));
+      $('threadOf').value = prev && [...$('threadOf').options].some(o => o.value === prev.id) ? prev.id : '';
+      UI.inMail = { msgId: m.msgId || '', subject: m.subject || '', from: m.from || '', date: m.date || '' };
+      const before = new Set(S.emails.map(x => x.id + ':' + (x.updatedAt || '')));
+      await analyzeNew();
+      UI.inMail = null;
+      const taken = S.emails.some(x => !before.has(x.id + ':' + (x.updatedAt || '')));
+      if (!taken) { // cancelled: leave it in the inbox for later
+        $('rawMail').value = ''; UI.att = []; renderAttList(); $('threadOf').value = '';
+        INBOX.snooze = Date.now() + 10 * 60000;
+        toast('취소했습니다. 이 메일은 "Thunderbird 메일" 버튼으로 다시 처리할 수 있습니다.'); break;
+      }
+      await gas({ action: 'inboxDone', id: it.id }).catch(() => {});
+      INBOX.items.shift();
+    }
+  } finally { INBOX.busy = false; renderInbox(); }
+}
+
 async function analyzeNew() {
   const text = $('rawMail').value.trim();
   const st = $('pasteStatus');
@@ -4357,11 +4433,12 @@ async function analyzeNew() {
   try {
     let id;
     if (prev) {
-      const upd = { raw, status: 'open', replied: false, updatedAt: nowISO(), attachments: attRecord(allAtts), ...(a ? fieldsFrom(a, prev.id) : {}) };
+      const upd = { raw, status: 'open', replied: false, updatedAt: nowISO(), attachments: attRecord(allAtts), ...(UI.inMail && UI.inMail.msgId ? { msgId: UI.inMail.msgId } : {}), ...(a ? fieldsFrom(a, prev.id) : {}) };
       await patch('emails', prev.id, upd); id = prev.id;
     } else {
-      const doc = { raw, category: cat, createdAt: nowISO(), status: 'open', replied: false,
-        subject: (text.split('\n').find(l => l.trim()) || (atts[0] && atts[0].name) || '(제목 없음)').slice(0, 80), from: '', summary: '', priority: 'mid', attachments: attRecord(atts),
+      const im = UI.inMail || {};
+      const doc = { raw, category: cat, createdAt: nowISO(), status: 'open', replied: false, ...(im.msgId ? { msgId: im.msgId, via: 'thunderbird' } : {}),
+        subject: (im.subject || text.split('\n').find(l => l.trim()) || (atts[0] && atts[0].name) || '(제목 없음)').slice(0, 80), from: im.from || '', summary: '', priority: 'mid', attachments: attRecord(atts),
         needsReply: false, replyDeadline: null, analysis: null, reply: { draft: '' }, delegate: { draft: '' } };
       id = await add('emails', a ? { ...doc, ...fieldsFrom(a, '') } : doc);
     }
@@ -4711,6 +4788,7 @@ document.addEventListener('click', async ev0 => {
       case 'evAbsent': UI.edits['ev-a-' + el.dataset.i] = el.checked ? '1' : ''; return renderSheet(true);
       case 'absentT': { const e = S.events.find(x => x.id === id); if (e) await patch('events', id, { absent: !e.absent }); return; }
       case 'absentG': { const k = el.dataset.k; const g = G.events.find(x => gKey(x) === k); if (g) setMark(k, { absent: !absentOfG(g) }); return; }
+      case 'inboxRun': return INBOX.items.length ? inboxRun() : inboxCheck(true);
       case 'tgShow': UI.tgShow = true; return renderDay(true);
       case 'tgHide': UI.tgShow = false; UI.qa = null; return renderDay(true);
       case 'phoneLink': return linkPhoneFile(true);
@@ -5071,6 +5149,9 @@ $('importFile').addEventListener('change', e => { const f = e.target.files[0]; i
 (function waitGis(n) { if (gisLoaded()) { initTokenClient(); G.cidUsed = clientId(); renderGChip(); } else if (n < 60) setTimeout(() => waitGis(n + 1), 250); })(0);
 fsRestore();
 setTimeout(() => { if (gasOn()) signIn(); }, 400);
+setTimeout(() => inboxCheck(false), 2500);
+setInterval(() => inboxCheck(false), 45000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) setTimeout(() => inboxCheck(false), 800); });
 setInterval(() => { syncNow(); if (gasOn() && !G.cals.length && G.state !== 'loading') signIn(); else if (gReady()) gLoad(false); else renderAll(); }, 60000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { syncNow(); if (gReady()) gLoad(false); } });
 window.addEventListener('beforeunload', e => { if (DRIVE.dirty && fsReady()) { syncNow(); e.preventDefault(); e.returnValue = ''; } });

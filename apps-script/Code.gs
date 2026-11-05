@@ -15,6 +15,7 @@
  * 할 수 있는 일: 캘린더 목록, 일정 읽기, 일정 만들기·고치기·지우기 (반복 일정은 이 날만 또는 전체),
  *               일정 설명(메모) 읽기·쓰기, 내 드라이브의 dashboard-data.json 읽기·쓰기 (아이폰 등 폴더 저장이 안 되는 기기용)
  * 버전 4부터 드라이브 권한이 추가되었습니다. 코드를 바꾼 뒤 authorize를 한 번 더 실행해 권한을 허용하세요.
+ * 버전 8: Thunderbird '대시보드로 보내기' 메일 받기 (mailPut → inbox 폴더, inboxList/inboxGet/inboxDone)
  * 버전 7: 휴대폰이 PC와 같은 데이터 파일을 쓰도록 맞추기 (dataFiles, dataUse)
  * 버전 6: 반복 일정 전체의 시간을 바꾸려면 왼쪽 [서비스] + → Google Calendar API 추가 (apps-script/appsscript.json 참고)
  */
@@ -32,10 +33,13 @@ function doGet(e) {
   if (p.key !== KEY) return out({ ok: false, error: 'key' });
   try {
     switch (p.action) {
-      case 'ping': return out({ ok: true, email: Session.getEffectiveUser().getEmail(), tz: Session.getScriptTimeZone(), version: 7, advanced: typeof Calendar !== 'undefined' });
+      case 'ping': return out({ ok: true, email: Session.getEffectiveUser().getEmail(), tz: Session.getScriptTimeZone(), version: 8, advanced: typeof Calendar !== 'undefined' });
       case 'dataGet': return out(Object.assign({ ok: true }, dataGet(p)));
       case 'dataFiles': return out({ ok: true, current: PropertiesService.getScriptProperties().getProperty('DATA_FILE_ID') || '', files: dataFiles() });
       case 'dataUse': return out(Object.assign({ ok: true }, dataUse(p)));
+      case 'inboxList': return out({ ok: true, items: inboxList() });
+      case 'inboxGet': return out({ ok: true, mail: inboxGet(p.id) });
+      case 'inboxDone': return out({ ok: true, done: inboxDone(p.id) });
       case 'calendars': return out({ ok: true, calendars: listCalendars() });
       case 'events': return out({ ok: true, events: listEvents(p.cal, p.from, p.to) });
       case 'create': return out({ ok: true, event: createEvent(p) });
@@ -55,6 +59,7 @@ function doPost(e) {
   if (b.key !== KEY) return out({ ok: false, error: 'key' });
   try {
     if (b.action === 'dataPut') return out(Object.assign({ ok: true }, dataPut(b)));
+    if (b.action === 'mailPut') return out(Object.assign({ ok: true }, mailPut(b.mail)));
     return out({ ok: false, error: 'action' });
   } catch (err) {
     return out({ ok: false, error: 'script', message: String((err && err.message) || err) });
@@ -100,6 +105,46 @@ function dataUse(p) {
   PropertiesService.getScriptProperties().setProperty('DATA_FILE_ID', f.getId());
   return { where: whereOf(f), modified: f.getLastUpdated().getTime() };
 }
+/* ---------- mail sent from Thunderbird: one JSON file per mail in <data folder>/inbox, moved to inbox/done once the dashboard took it ---------- */
+function inboxFolder(sub) {
+  const f = dataFile(true);
+  const ps = f.getParents();
+  const base = ps.hasNext() ? ps.next() : DriveApp.getRootFolder();
+  const get = function (parent, name) { const it = parent.getFoldersByName(name); return it.hasNext() ? it.next() : parent.createFolder(name); };
+  const inbox = get(base, 'inbox');
+  return sub ? get(inbox, sub) : inbox;
+}
+function mailPut(m) {
+  if (!m || typeof m !== 'object') throw new Error('메일 내용이 없습니다.');
+  const folder = inboxFolder();
+  if (m.msgId) {
+    const it = folder.getFiles();
+    while (it.hasNext()) { const g = it.next(); try { if (JSON.parse(g.getDescription() || '{}').msgId === m.msgId) return { id: g.getId(), dup: true }; } catch (e) {} }
+  }
+  const name = 'mail-' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd-HHmmss') + '-' + Math.random().toString(36).slice(2, 6) + '.json';
+  const f = folder.createFile(name, JSON.stringify(m), 'application/json');
+  f.setDescription(JSON.stringify({ msgId: m.msgId || '', subject: String(m.subject || '').slice(0, 200), from: String(m.from || '').slice(0, 200), atts: (m.attachments || []).length }));
+  return { id: f.getId() };
+}
+function inboxList() {
+  const it = inboxFolder().getFiles(), list = [];
+  while (it.hasNext() && list.length < 50) {
+    const f = it.next(); if (f.isTrashed() || !/\.json$/.test(f.getName())) continue;
+    let d = {}; try { d = JSON.parse(f.getDescription() || '{}'); } catch (e) {}
+    list.push({ id: f.getId(), at: f.getDateCreated().getTime(), size: f.getSize(), msgId: d.msgId || '', subject: d.subject || '', from: d.from || '', atts: d.atts || 0 });
+  }
+  return list.sort(function (a, b) { return a.at - b.at; });
+}
+function inboxGet(id) {
+  const f = DriveApp.getFileById(id);
+  return JSON.parse(f.getBlob().getDataAsString('UTF-8'));
+}
+function inboxDone(id) {
+  const f = DriveApp.getFileById(id);
+  f.moveTo(inboxFolder('done'));
+  return true;
+}
+
 function dataGet(p) {
   const f = dataFile(false);
   if (!f) return { exists: false, modified: 0 };

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><title>대시보드로 보내기 설정</title>
+<style>
+body{font:14px/1.55 system-ui,"Malgun Gothic",sans-serif;margin:16px;max-width:560px;color:#1d2433}
+h1{font-size:17px;margin:0 0 6px}p{margin:6px 0;color:#4a5466}
+textarea,input{width:100%;box-sizing:border-box;font:inherit;padding:7px 8px;border:1px solid #c4cad6;border-radius:6px}
+label{display:block;margin-top:10px;font-weight:600}
+.row{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+button{font:inherit;padding:7px 14px;border-radius:6px;border:1px solid #c4cad6;background:#fff;cursor:pointer}
+button.primary{background:#3b5bdb;border-color:#3b5bdb;color:#fff}
+#st{margin-top:10px;font-weight:600}.ok{color:#2b8a3e}.err{color:#c92a2a}
+details{margin-top:12px}
+</style></head>
+<body>
+<h1>학과장실 대시보드로 보내기</h1>
+<p>대시보드(PC) 설정 → <b>저장·구글</b> → "휴대폰에서 쓰기"의 <b>연결 링크 복사</b>를 눌러 복사한 링크를 아래에 붙여넣으세요.</p>
+<label for="link">연결 링크</label>
+<textarea id="link" rows="3" placeholder="https://sclee00.github.io/dept-dashboard/#connect=…"></textarea>
+<details><summary>주소와 비밀 키를 따로 넣기</summary>
+<label for="url">Apps Script 웹 앱 주소</label><input id="url" placeholder="https://script.google.com/macros/s/…/exec">
+<label for="key">비밀 키</label><input id="key" autocomplete="off">
+</details>
+<div class="row"><button class="primary" id="save" type="button">저장하고 연결 확인</button></div>
+<div id="st"></div>
+<p style="margin-top:16px">사용법: 메일을 고르고 도구 모음이나 메일 위의 <b>대시보드로 보내기</b> 버튼을 누르거나, 메일 목록에서 우클릭 → <b>대시보드로 보내기</b>. 여러 통을 골라 한 번에 보낼 수도 있습니다.</p>
+<script src="options.js"></script>
+</body></html>
