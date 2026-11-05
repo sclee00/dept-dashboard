@@ -545,6 +545,7 @@ body.resizing{user-select:none} body.rs-col,body.rs-col *{cursor:col-resize!impo
   .chead .free{display:none}
   .citems{display:flex!important;flex-wrap:wrap;justify-content:flex-start!important;gap:2px!important}
 }
+.tgopen{margin-top:.6rem;width:100%;justify-content:center}
 .tgrid{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:10px;overflow:hidden;user-select:none;touch-action:none;background:var(--surface-2)}
 .tgrid .tr{display:grid;grid-template-columns:3.2rem minmax(0,1fr);min-height:1.15rem;cursor:pointer;border-top:1px solid transparent}
 .tgrid .tr.hour{border-top-color:var(--line)} .tgrid .tr.half{border-top:1px dashed rgba(255,255,255,.04)}
@@ -2576,7 +2577,7 @@ const UNDO_LABEL = {
   delRule: '아이콘 규칙 삭제', skipOcc: '반복 일정 한 번 빼기', edSave: '일정 편집', bdSave: '불가 시간 설정', saveSettings: '설정 변경', imSave: '아이콘 색·이름',
   pushG: '구글에 추가', fEvent: '일정 추가', fBlock: '불가 시간 추가', taskForm: '할 일 추가', importData: '파일 가져오기'
 };
-const UNDO_SKIP = new Set(['phoneLink', 'gDel', 'fltImp', 'fltIcons', 'fltTog', 'fltClear', 'fltClose', 'cmdToAI', 'cmdPick', 'cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
+const UNDO_SKIP = new Set(['tgShow', 'tgHide', 'phoneLink', 'gDel', 'fltImp', 'fltIcons', 'fltTog', 'fltClear', 'fltClose', 'cmdToAI', 'cmdPick', 'cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
 function undoSnap() {
   const o = { settings: JSON.parse(JSON.stringify(S.settings)) };
   for (const c of COLS) o[c] = JSON.parse(JSON.stringify(S[c]));
@@ -3948,11 +3949,15 @@ function renderDay(force) {
     ${dayFormHtml(day)}
     ${ad.length ? `<div class="sgrp">종일 · 마감 · 할 일</div><div class="sched">${ad.join('')}</div>` : ''}
     <div class="sgrp">일정 목록</div>
-    <div class="sched">${timed.filter(x => !String(x.h).includes('freeslot')).length ? timed.filter(x => !String(x.h).includes('freeslot')).map(x => x.h).join('') : `<div class="empty">이 날 시간이 정해진 일정이 없습니다. 아래 시간표를 눌러 바로 넣으세요.</div>`}</div>
-    <div class="sgrp">시간표 · 빈 시간 <span class="count">빈 칸을 누르거나 끌어서 바로 추가</span></div>
+    <div class="sched">${timed.filter(x => !String(x.h).includes('freeslot')).length ? timed.filter(x => !String(x.h).includes('freeslot')).map(x => x.h).join('') : `<div class="empty">이 날 시간이 정해진 일정이 없습니다. 아래 시간표에서 눌러 바로 넣을 수 있습니다.</div>`}</div>
+    ${touchUI() && !UI.tgShow && !UI.qa
+      ? `<button class="btn small tgopen" type="button" data-act="tgShow">${ic('cal')}시간표에서 눌러 일정 추가</button>`
+      : `<div class="sgrp">시간표 · 빈 시간 <span class="count">빈 칸을 누르거나 끌어서 바로 추가</span>${touchUI() ? '<button class="linkish" type="button" data-act="tgHide" style="margin-left:auto">접기</button>' : ''}</div>
     ${timeGridHtml(day)}
-    ${qaFormHtml()}`;
+    ${qaFormHtml()}`}`;
 }
+// phones and tablets: the click-to-add timetable catches the finger, so it stays folded until asked for (PC unchanged)
+const touchUI = () => { try { return matchMedia('(hover: none) and (pointer: coarse)').matches; } catch { return false; } };
 function checkEventForm() {
   const w = $('fWarn'); if (!w) return;
   const day = $('fDate').value, s = toMin($('fStart').value); let e = toMin($('fEnd').value);
@@ -4706,6 +4711,8 @@ document.addEventListener('click', async ev0 => {
       case 'evAbsent': UI.edits['ev-a-' + el.dataset.i] = el.checked ? '1' : ''; return renderSheet(true);
       case 'absentT': { const e = S.events.find(x => x.id === id); if (e) await patch('events', id, { absent: !e.absent }); return; }
       case 'absentG': { const k = el.dataset.k; const g = G.events.find(x => gKey(x) === k); if (g) setMark(k, { absent: !absentOfG(g) }); return; }
+      case 'tgShow': UI.tgShow = true; return renderDay(true);
+      case 'tgHide': UI.tgShow = false; UI.qa = null; return renderDay(true);
       case 'phoneLink': return linkPhoneFile(true);
       case 'copyConnect': { const l = connectLink(); try { await navigator.clipboard.writeText(l); toast('연결 링크를 복사했습니다. 휴대폰으로 보내 사파리에서 여세요.'); } catch { prompt('이 링크를 휴대폰에서 여세요', l); } return; }
       case 'setTab': UI.setTab = el.dataset.t; document.querySelectorAll('.stab').forEach(x => x.hidden = x.dataset.tab !== el.dataset.t); document.querySelectorAll('.settabs [data-act="setTab"]').forEach(x => x.setAttribute('aria-selected', String(x.dataset.t === el.dataset.t))); return;
