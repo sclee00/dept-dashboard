@@ -2668,7 +2668,8 @@ function renderRelay() {
     <h3 id="dlgT">${ic('spark')}${esc(r.title)}</h3>
     <div class="rstep"><b>1</b><div>${relayFits(r) ? '아래 버튼을 누르면 질문이 미리 들어간 AI 창이 열립니다. 그 창에서 <b>Enter</b>만 누르세요.' : '아래 버튼을 누르면 질문이 복사되고 AI 창이 열립니다. 그 창에서 <b>Ctrl+V</b> → <b>Enter</b>를 누르세요.'}
       <div class="row" style="margin-top:.45rem">
-      <a class="btn primary" href="${esc(relayUrl('gpt', r))}" target="_blank" rel="noopener" data-act="relayCopy" data-open="1">${ic('ext')}ChatGPT로 보내기</a>
+      <a class="btn primary" href="https://gemini.google.com/app" target="_blank" rel="noopener" data-act="relayCopy" data-open="1">${ic('ext')}Gemini로 보내기</a>
+      <a class="btn" href="${esc(relayUrl('gpt', r))}" target="_blank" rel="noopener" data-act="relayCopy" data-open="1">${ic('ext')}ChatGPT로 보내기</a>
       <a class="btn" href="${esc(relayUrl('claude', r))}" target="_blank" rel="noopener" data-act="relayCopy" data-open="1">${ic('ext')}Claude로 보내기</a>
       <button class="btn small" type="button" data-act="relayCopy">${ic('copy')}복사만</button>
       <span class="count">${r.prompt.length.toLocaleString()}자</span></div>
@@ -2714,9 +2715,73 @@ function relayApply() {
   r.resolve(out);
 }
 function relayCancel() { const r = UI.relay; UI.relay = null; UI.dlg = null; $('dlgRoot').innerHTML = ''; if (r) r.reject({ code: 'cancelled' }); }
+/* ---------- Gemini: answers come back by themselves through the Apps Script (no copy and paste) ---------- */
+const aiAuto = () => S.settings.aiMode === 'gemini' && gasOn();
+function pickModel(list) {
+  const ids = (list || []).map(m => m.id);
+  const ver = id => { const m = id.match(/^gemini-(\d+(?:\.\d+)?)-flash$/); return m ? +m[1] : -1; };
+  const best = ids.filter(id => ver(id) >= 0).sort((a, b) => ver(b) - ver(a))[0];
+  return best || ids.find(id => /flash/.test(id) && !/lite|preview|exp/.test(id)) || ids[0] || 'gemini-2.5-flash';
+}
+function geminiAsk(prompt, title, json) {
+  return new Promise((resolve, reject) => {
+    const started = Date.now(); let done = false;
+    const close = () => { done = true; clearInterval(tick); if (UI.dlg === 'gem') { UI.dlg = null; $('dlgRoot').innerHTML = ''; } UI.gemCancel = null; };
+    UI.gemCancel = () => { if (done) return; close(); reject({ code: 'cancelled', message: '취소했습니다.' }); };
+    UI.dlg = 'gem';
+    $('dlgRoot').innerHTML = `<div class="scrim"></div><div class="dlg"><div class="dlgbox" role="dialog" aria-modal="true" aria-labelledby="dlgT">
+      <h3 id="dlgT"><span class="spin"></span>Gemini가 처리하는 중</h3>
+      <div class="count">${esc(title || '')}</div>
+      <div class="count" id="gemSec">0초</div>
+      <div class="row" style="justify-content:flex-end"><button class="btn" type="button" data-act="gemCancel">취소</button></div></div></div>`;
+    const tick = setInterval(() => { const el = $('gemSec'); if (el) el.textContent = Math.round((Date.now() - started) / 1000) + '초' + (Date.now() - started > 40000 ? ' · 긴 메일은 1분 넘게 걸릴 수 있습니다' : ''); }, 1000);
+    gasPost({ action: 'ai', prompt, json: !!json, model: S.settings.aiModel || 'gemini-2.5-flash' })
+      .then(j => { if (done) return; close(); if (!json) return resolve(j.text); try { resolve(parseLoose(j.text)); } catch { reject({ code: 'badjson', message: 'Gemini 답에서 JSON을 찾지 못했습니다.', text: j.text }); } })
+      .catch(e => { if (done) return; close(); reject(e && e.code === 'action' ? { code: 'old', message: '스크립트를 버전 10으로 다시 배포해야 Gemini를 쓸 수 있습니다.' } : e); });
+  });
+}
+// automatic first; if it cannot (no key, limit reached, network), the copy-and-paste window opens instead
+async function aiRun(prompt, opts, json) {
+  if (aiAuto()) {
+    try { return await geminiAsk(prompt, opts.title, json); }
+    catch (e) {
+      if (e && e.code === 'cancelled') throw e;
+      toast('Gemini 자동 처리가 안 돼 복사 방식으로 엽니다. ' + ((e && e.message) || ''));
+    }
+  }
+  return relay({ title: opts.title || (json ? 'AI 분석' : 'AI에게 답 받기'), prompt, json });
+}
+function aiSettingsHtml(s) {
+  const on = s.aiMode === 'gemini', models = s.aiModels || [];
+  return `<div class="bsec"><b>${ic('spark')} AI 분석</b>
+    <div class="row" style="flex-wrap:wrap;gap:.8rem">
+      <label class="chk"><input type="radio" name="aiMode" value="gemini" data-act="aiMode" ${on ? 'checked' : ''}> Gemini 자동 (복사·붙여넣기 없음)</label>
+      <label class="chk"><input type="radio" name="aiMode" value="copy" data-act="aiMode" ${on ? '' : 'checked'}> 복사해서 AI 창에 붙여넣기</label>
+    </div>
+    ${!gasOn() ? '<span class="count warnline">Gemini 자동은 아래 "저장·구글" 탭의 Apps Script 연결이 있어야 합니다.</span>' : `
+    <span class="count">Gemini API 키는 <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio → API 키</a>에서 만들 수 있습니다. 키는 내 Apps Script 안에만 보관되고 이 화면·데이터 파일에는 남지 않습니다.</span>
+    <div class="row" style="flex-wrap:wrap"><input class="field" id="aiKeyIn" type="password" autocomplete="off" placeholder="${s.aiKeySet ? '키 설정됨 — 바꾸려면 새 키를 넣으세요' : 'Gemini API 키 (AIza…)'}" style="flex:1;min-width:14rem">
+      <button class="btn small primary" type="button" data-act="aiKeySave">${ic('check')}키 저장·확인</button>${s.aiKeySet ? '<button class="btn small" type="button" data-act="aiKeyClear">키 지우기</button>' : ''}</div>
+    <div class="row" style="flex-wrap:wrap;align-items:center"><label>모델 <select class="field" id="aiModelSel">${(models.length ? models : [{ id: s.aiModel || 'gemini-2.5-flash', name: s.aiModel || 'gemini-2.5-flash' }]).map(m => `<option value="${esc(m.id)}" ${m.id === (s.aiModel || '') ? 'selected' : ''}>${esc(m.name)} (${esc(m.id)})</option>`).join('')}</select></label>
+      <button class="btn small" type="button" data-act="aiTest">${ic('spark')}시험해 보기</button><span class="count" id="aiTestOut"></span></div>
+    <span class="count">무료 등급(결제 미연결) 키는 보낸 내용이 구글 제품 개선에 쓰일 수 있습니다. 학생 개인정보가 담긴 메일이라면 AI Studio에서 결제를 연결한 유료 등급 키를 쓰세요. AI Pro 가입자는 Google Developer Program에서 매달 Cloud 크레딧을 받아 Gemini API 비용에 쓸 수 있습니다.</span>`}
+  </div>`;
+}
+async function aiKeySave(clear) {
+  const k = clear ? '' : ($('aiKeyIn') && $('aiKeyIn').value.trim());
+  if (!clear && !k && !S.settings.aiKeySet) { toast('Gemini API 키를 넣어 주세요.'); return; }
+  toast(clear ? '키를 지우는 중…' : '키를 확인하는 중…');
+  try {
+    const j = await gasPost({ action: 'aiKey', ...(clear ? { clear: true } : k ? { gemKey: k } : {}) });
+    const models = j.models || [];
+    await saveSettings({ ...S.settings, aiKeySet: !!j.set, aiModels: models, aiModel: models.some(m => m.id === S.settings.aiModel) ? S.settings.aiModel : pickModel(models), ...(j.set && !clear ? { aiMode: 'gemini' } : clear ? { aiMode: 'copy' } : {}) });
+    toast(clear ? 'Gemini 키를 지웠습니다. 복사 방식으로 돌아갑니다.' : `Gemini에 연결했습니다. 쓸 수 있는 모델 ${models.length}개 · ${S.settings.aiModel}`);
+  } catch (e) { toast((e && e.code === 'action') ? '스크립트를 버전 10으로 다시 배포해야 합니다.' : 'Gemini 키를 확인하지 못했습니다. ' + ((e && e.message) || '')); }
+  if (UI.dlg === 'settings') openSettings();
+}
 const sample = Object.assign(
-  async (prompt, opts = {}) => { const text = await relay({ title: opts.title || 'AI에게 답 받기', prompt, json: false }); if (opts.onText) opts.onText({ text, delta: text }); return { text, truncated: false }; },
-  { json: (prompt, opts = {}) => relay({ title: opts.title || 'AI 분석', prompt, json: true }) }
+  async (prompt, opts = {}) => { const text = await aiRun(prompt, opts, false); if (opts.onText) opts.onText({ text, delta: text }); return { text, truncated: false }; },
+  { json: (prompt, opts = {}) => aiRun(prompt, opts, true) }
 );
 
 /* ---------- undo / redo of data changes ---------- */
@@ -2729,7 +2794,7 @@ const UNDO_LABEL = {
   delRule: '아이콘 규칙 삭제', skipOcc: '반복 일정 한 번 빼기', edSave: '일정 편집', bdSave: '불가 시간 설정', saveSettings: '설정 변경', imSave: '아이콘 색·이름',
   pushG: '구글에 추가', fEvent: '일정 추가', fBlock: '불가 시간 추가', taskForm: '할 일 추가', importData: '파일 가져오기'
 };
-const UNDO_SKIP = new Set(['relayClip', 'stOpen', 'tidyOpen', 'tidyDel', 'tidyTime', 'tidyMerge', 'inboxRun', 'analyzeMail', 'tgShow', 'tgHide', 'phoneLink', 'gDel', 'fltImp', 'fltIcons', 'fltTog', 'fltClear', 'fltClose', 'cmdToAI', 'cmdPick', 'cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
+const UNDO_SKIP = new Set(['gemCancel', 'aiKeySave', 'aiKeyClear', 'aiTest', 'aiMode', 'aiModelSel', 'relayClip', 'stOpen', 'tidyOpen', 'tidyDel', 'tidyTime', 'tidyMerge', 'inboxRun', 'analyzeMail', 'tgShow', 'tgHide', 'phoneLink', 'gDel', 'fltImp', 'fltIcons', 'fltTog', 'fltClear', 'fltClose', 'cmdToAI', 'cmdPick', 'cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
 function undoSnap() {
   const o = { settings: JSON.parse(JSON.stringify(S.settings)) };
   for (const c of COLS) o[c] = JSON.parse(JSON.stringify(S[c]));
@@ -5115,6 +5180,11 @@ document.addEventListener('click', async ev0 => {
       case 'gReloadCals': return gLoadCals();
       case 'relayCopy': return relayCopy();
       case 'relayApply': return relayApply();
+      case 'aiMode': if (el.value === 'gemini' && !S.settings.aiKeySet) toast('먼저 Gemini API 키를 넣고 "키 저장·확인"을 눌러 주세요.'); await saveSettings({ ...S.settings, aiMode: el.value === 'gemini' ? 'gemini' : 'copy' }); return;
+      case 'gemCancel': return UI.gemCancel && UI.gemCancel();
+      case 'aiKeySave': return aiKeySave(false);
+      case 'aiKeyClear': return aiKeySave(true);
+      case 'aiTest': { const o = $('aiTestOut'); if (o) o.textContent = '…'; try { const t = await geminiAsk('한 단어로만 답하세요: "연결됨"', '연결 시험', false); toast('Gemini 답: ' + String(t).trim().slice(0, 60)); } catch (e) { toast('시험 실패: ' + ((e && e.message) || '')); } if (UI.dlg !== 'settings') openSettings(); return; }
       case 'relayClip': return relayFromClipboard(true);
       case 'relayCancel': return relayCancel();
       case 'relayAlt': { const t = UI.relay && UI.relay.alt && UI.relay.alt.text; relayCancel(); if (t) setTimeout(() => openChatPrompt(t), 0); return; }
@@ -5243,6 +5313,7 @@ document.addEventListener('click', async ev0 => {
   } catch (e) { dbErr(e); }
 });
 document.addEventListener('input', e => { if (e.target.matches && e.target.matches('[data-wc]')) wcLive(); if (e.target.matches && e.target.matches('[data-fx-k], #fxShort, #fxLong')) fxLive(); if (e.target.matches && e.target.matches('input[name=fontBody], #fontHead, #fontSmall, #fontSize')) fontLive(); });
+document.addEventListener('change', e => { if (e.target.id === 'aiModelSel') saveSettings({ ...S.settings, aiModel: e.target.value }).then(() => toast('모델: ' + e.target.value)); });
 document.addEventListener('change', e => { if (e.target.matches && e.target.matches('[data-wc]')) wcLive(); if (e.target.matches && e.target.matches('[data-fx-k], #fxShort, #fxLong')) fxLive(); if (e.target.matches && e.target.matches('input[name=fontBody], #fontHead, #fontSmall, #fontSize')) fontLive(); });
 document.addEventListener('input', e => { if (e.target.closest('#sheetRoot') && e.target.id) UI.edits[e.target.id] = e.target.value; });
 document.addEventListener('change', e => { if (e.target.closest('#sheetRoot') && e.target.id && e.target.type !== 'file') UI.edits[e.target.id] = e.target.value; });
@@ -5366,6 +5437,7 @@ function openSettings() {
     <div class="settabs" role="tablist">${SET_TABS.map(([k, l, i]) => `<button type="button" role="tab" data-act="setTab" data-t="${k}" aria-selected="${tab === k}">${ic(i)}${l}</button>`).join('')}</div>
     <div class="setbody">
     <div class="stab" data-tab="general" ${tab === 'general' ? '' : 'hidden'}>
+    ${aiSettingsHtml(s)}
     <label>학기 이름<input class="field" id="sLabel" value="${esc(s.semesterLabel)}"></label>
     <label>개강 주 월요일 (주차 계산 기준)<input class="field" type="date" id="sStart" value="${esc(s.semesterStart)}"></label>
     <label>답장 서명<textarea class="field" id="sSig" rows="3">${esc(s.signature)}</textarea></label>

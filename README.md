@@ -4,7 +4,7 @@
 
 - 주소: https://sclee00.github.io/dept-dashboard/
 - 저장: PC의 구글 드라이브 폴더(Google Drive 데스크톱 앱)에서 고른 폴더의 `dashboard-data.json`. 하루 한 번 `backup/`에 사본. 폴더를 고르기 전에는 그 브라우저에만 저장 (크롬·엣지 필요)
-- AI 분석: 프롬프트를 복사해 Claude나 ChatGPT에 붙여넣고, 받은 답을 다시 붙여넣는 방식 (API 키 없음)
+- AI 분석: 설정 → 기본 → AI 분석에서 'Gemini 자동'(Apps Script 버전 10 + Gemini API 키, 키는 스크립트 속성에만 보관) 또는 복사·붙여넣기 방식(Gemini·ChatGPT·Claude 창)
 - 캘린더: 일정 옆 "구글에 추가"는 구글 캘린더 일정 만들기 화면을 채워서 엽니다(설정 필요 없음). 구글 일정을 이 달력에 띄우는 것은 선택 기능이며 OAuth 클라이언트 ID가 필요합니다
 
 ## 처음 설정

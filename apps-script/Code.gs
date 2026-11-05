@@ -15,6 +15,7 @@
  * 할 수 있는 일: 캘린더 목록, 일정 읽기, 일정 만들기·고치기·지우기 (반복 일정은 이 날만 또는 전체),
  *               일정 설명(메모) 읽기·쓰기, 내 드라이브의 dashboard-data.json 읽기·쓰기 (아이폰 등 폴더 저장이 안 되는 기기용)
  * 버전 4부터 드라이브 권한이 추가되었습니다. 코드를 바꾼 뒤 authorize를 한 번 더 실행해 권한을 허용하세요.
+ * 버전 10: Gemini 자동 분석 (aiKey로 Gemini API 키를 스크립트 속성에 보관, ai로 질문) — 키는 대시보드·데이터 파일에 남지 않습니다
  * 버전 9: 브라우저가 못 읽는 첨부(doc·ppt·rtf 등)를 구글 드라이브로 PDF 변환해 같이 넣기 (서비스에 Drive API 추가 필요)
  * 버전 8: Thunderbird '대시보드로 보내기' 메일 받기 (mailPut → inbox 폴더, inboxList/inboxGet/inboxDone)
  * 버전 7: 휴대폰이 PC와 같은 데이터 파일을 쓰도록 맞추기 (dataFiles, dataUse)
@@ -25,6 +26,7 @@ const KEY = 'CHANGE_ME';
 function authorize() {
   CalendarApp.getDefaultCalendar().getName();
   DriveApp.getRootFolder().getName();
+  UrlFetchApp.fetch('https://generativelanguage.googleapis.com/', { muteHttpExceptions: true });
   Logger.log('권한 확인 완료: ' + Session.getEffectiveUser().getEmail());
 }
 
@@ -34,7 +36,7 @@ function doGet(e) {
   if (p.key !== KEY) return out({ ok: false, error: 'key' });
   try {
     switch (p.action) {
-      case 'ping': return out({ ok: true, email: Session.getEffectiveUser().getEmail(), tz: Session.getScriptTimeZone(), version: 9, advanced: typeof Calendar !== 'undefined' });
+      case 'ping': return out({ ok: true, email: Session.getEffectiveUser().getEmail(), tz: Session.getScriptTimeZone(), version: 10, gemini: !!PropertiesService.getScriptProperties().getProperty('GEMINI_KEY'), advanced: typeof Calendar !== 'undefined' });
       case 'dataGet': return out(Object.assign({ ok: true }, dataGet(p)));
       case 'dataFiles': return out({ ok: true, current: PropertiesService.getScriptProperties().getProperty('DATA_FILE_ID') || '', files: dataFiles() });
       case 'dataUse': return out(Object.assign({ ok: true }, dataUse(p)));
@@ -61,10 +63,47 @@ function doPost(e) {
   try {
     if (b.action === 'dataPut') return out(Object.assign({ ok: true }, dataPut(b)));
     if (b.action === 'mailPut') return out(Object.assign({ ok: true }, mailPut(b.mail)));
+    if (b.action === 'aiKey') return out(Object.assign({ ok: true }, aiKey(b)));
+    if (b.action === 'ai') return out(Object.assign({ ok: true }, aiAsk(b)));
     return out({ ok: false, error: 'action' });
   } catch (err) {
     return out({ ok: false, error: 'script', message: String((err && err.message) || err) });
   }
+}
+
+/* ---------- Gemini: the API key lives only in this script's properties ---------- */
+const GEM = 'https://generativelanguage.googleapis.com/v1beta/';
+function gemFetch(path, payload) {
+  const key = PropertiesService.getScriptProperties().getProperty('GEMINI_KEY');
+  if (!key) throw new Error('Gemini API 키가 아직 없습니다. 대시보드 설정에서 넣어 주세요.');
+  const r = UrlFetchApp.fetch(GEM + path, payload ? { method: 'post', contentType: 'application/json', payload: JSON.stringify(payload), muteHttpExceptions: true, headers: { 'x-goog-api-key': key } } : { muteHttpExceptions: true, headers: { 'x-goog-api-key': key } });
+  const code = r.getResponseCode(); let j = {};
+  try { j = JSON.parse(r.getContentText()); } catch (e) {}
+  if (code >= 300) {
+    const msg = (j.error && j.error.message) || ('응답 ' + code);
+    throw new Error(code === 429 ? 'Gemini 사용 한도를 넘었습니다. 잠시 뒤 다시 하거나, 결제(유료 등급)를 연결해 주세요. (' + msg + ')' : code === 400 || code === 403 ? 'Gemini가 요청을 거절했습니다: ' + msg : msg);
+  }
+  return j;
+}
+// set or clear the key (from the dashboard settings), then list the models it can use
+function aiKey(b) {
+  const props = PropertiesService.getScriptProperties();
+  if (b.clear) { props.deleteProperty('GEMINI_KEY'); return { set: false, models: [] }; }
+  if (b.gemKey) props.setProperty('GEMINI_KEY', String(b.gemKey).trim());
+  const j = gemFetch('models?pageSize=200');
+  const models = (j.models || []).filter(function (m) { return (m.supportedGenerationMethods || []).indexOf('generateContent') >= 0 && /gemini/i.test(m.name) && !/embedding|image|tts|audio|live|vision/i.test(m.name); })
+    .map(function (m) { return { id: m.name.replace(/^models\//, ''), name: m.displayName || m.name }; });
+  return { set: true, models: models };
+}
+function aiAsk(b) {
+  const model = String(b.model || 'gemini-2.5-flash').replace(/[^\w.\-]/g, '');
+  const body = { contents: [{ role: 'user', parts: [{ text: String(b.prompt || '') }] }], generationConfig: { temperature: 0.3 } };
+  if (b.json) body.generationConfig.responseMimeType = 'application/json';
+  const j = gemFetch('models/' + model + ':generateContent', body);
+  const c = (j.candidates || [])[0];
+  const text = c && c.content && (c.content.parts || []).map(function (p) { return p.text || ''; }).join('');
+  if (!text) throw new Error('Gemini가 답을 주지 않았습니다' + (c && c.finishReason ? ' (' + c.finishReason + ')' : (j.promptFeedback && j.promptFeedback.blockReason ? ' (' + j.promptFeedback.blockReason + ')' : '')) + '.');
+  return { text: text, model: model, usage: j.usageMetadata || null };
 }
 
 /* ---------- dashboard data file in My Drive (same file the PC folder uses) ---------- */
