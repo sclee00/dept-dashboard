@@ -3123,15 +3123,32 @@ async function saveAttFiles(emailId, list) {
   } catch { return false; }
 }
 const attRecord = list => list.map(({ file, ...r }) => r);
+const MIME_BY_EXT = { pdf: 'application/pdf', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', txt: 'text/plain', csv: 'text/csv', html: 'text/html', htm: 'text/html' };
+function showFile(f, name) {
+  const ext = (String(name).toLowerCase().match(/\.([a-z0-9]+)$/) || [])[1] || '';
+  const type = f.type || MIME_BY_EXT[ext] || '';
+  const blob = type && f.type !== type ? new Blob([f], { type }) : f;
+  const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url;
+  // what a browser can show opens in a new tab; the rest (한글, 엑셀, 워드 …) is saved so the computer opens it in its own program
+  if (/^(application\/pdf|image\/|text\/)/.test(type)) { a.target = '_blank'; a.rel = 'noopener'; } else a.download = name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 120000);
+}
+const INBOX_CACHE = new Map();
 async function openAttFile(emailId, name) {
   const m = S.emails.find(x => x.id === emailId), rec = m && (m.attachments || []).find(x => x.name === name);
-  if (!fsReady()) { toast('저장 폴더가 연결되어 있어야 원본을 열 수 있습니다. 위쪽 "저장 폴더"를 눌러 주세요.'); return; }
-  try {
-    const f = await (await (await (await FS.handle.getDirectoryHandle('attachments')).getDirectoryHandle(emailId)).getFileHandle((rec && rec.stored) || safeName(name))).getFile();
-    const url = URL.createObjectURL(f); const a = document.createElement('a'); a.href = url; a.target = '_blank'; a.rel = 'noopener';
-    if (!/^(application\/pdf|image\/|text\/)/.test(f.type)) a.download = f.name;
-    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 60000);
-  } catch { toast('저장 폴더에서 이 파일을 찾지 못했습니다. 다른 PC에서 넣었다면 드라이브 동기화가 끝났는지 확인해 주세요.'); }
+  if (fsReady() && rec && rec.saved) {
+    try { return showFile(await (await (await (await FS.handle.getDirectoryHandle('attachments')).getDirectoryHandle(emailId)).getFileHandle(rec.stored || safeName(name))).getFile(), name); } catch {}
+  }
+  if (rec && rec.inbox && gasOn()) {
+    toast('드라이브에서 파일을 가져오는 중…');
+    try {
+      let mail = INBOX_CACHE.get(rec.inbox);
+      if (!mail) { mail = (await gas({ action: 'inboxGet', id: rec.inbox })).mail; INBOX_CACHE.set(rec.inbox, mail); }
+      const a = (mail.attachments || []).find(x => x.name === name && x.b64);
+      if (a) return showFile(b64File(a), name);
+    } catch (e) { toast('드라이브에서 파일을 가져오지 못했습니다. ' + ((e && e.message) || '')); return; }
+  }
+  toast(rec && rec.saved ? '저장 폴더에서 이 파일을 찾지 못했습니다. 다른 PC에서 넣었다면 드라이브 동기화가 끝났는지 확인해 주세요.' : '이 파일의 원본은 보관되어 있지 않습니다. PC에서 저장 폴더를 연결한 뒤 넣은 파일만 열 수 있습니다.');
 }
 function attPromptBlock(list) {
   const atts = (list || []).filter(Boolean); if (!atts.length) return '';
@@ -4236,7 +4253,7 @@ function attSection(m) {
     ${list.length ? list.map((x, i) => { const g = gists.find(y => y.name === x.name) || gists[i];
       return `<div class="attrow">${attChip({ ...x, state: x.text ? 'ok' : x.note && /못/.test(x.note) ? 'fail' : 'skip' })}
         ${g && g.gist ? `<div class="gist">${esc(g.gist)}</div>` : ''}${x.note ? `<div class="count">${esc(x.note)}</div>` : ''}
-        <div class="row">${x.saved ? `<button class="btn small" type="button" data-act="attOpen" data-id="${m.id}" data-name="${esc(x.name)}">${ic('ext')}원본 열기</button>` : '<span class="count">원본은 보관 안 됨 (저장 폴더 연결 필요)</span>'}
+        <div class="row">${x.saved || x.inbox ? `<button class="btn small" type="button" data-act="attOpen" data-id="${m.id}" data-name="${esc(x.name)}">${ic('ext')}${/\.(pdf|png|jpe?g|gif|webp|txt)$/i.test(x.name) ? '열기' : '열기 (내려받아 열림)'}</button>` : '<span class="count">원본은 보관 안 됨 (저장 폴더 연결 필요)</span>'}
         ${x.text ? `<details><summary class="count" style="cursor:pointer">읽은 내용 보기 (${(x.chars || x.text.length).toLocaleString()}자${x.cut ? ', 앞부분만 분석에 사용' : ''})</summary><pre>${esc(x.text.slice(0, 8000))}${x.text.length > 8000 ? '\n…' : ''}</pre></details>` : ''}</div></div>`; }).join('')
       : '<div class="count">첨부파일이 없습니다. 메일에 딸린 파일이 있으면 "파일 추가"로 넣고 다시 분석하세요.</div>'}
     <input type="file" id="attInput2" multiple hidden></div>`;
@@ -4325,9 +4342,9 @@ function renderSheet(force) {
         ${decs.length ? `<div class="sec decsec"><h4><span>${ic('gavel')} 결정할 사항 ${decs.length}</span>${decChosen(m).length ? `<span class="count">${decChosen(m).length}/${decs.length} 결정함</span>` : ''}</h4>
           ${decs.map((d, i) => `<div class="dec"><div class="q">${i + 1}. ${esc(d.question)}</div><div class="optrow">${d.options.map((o, j) => `<button class="optchip ${dch[i] === j ? 'on' : ''}" type="button" data-act="decPick" data-i="${i}" data-j="${j}" aria-pressed="${dch[i] === j}"><b>${String.fromCharCode(9312 + j)} ${esc(o.label)}${d.recommend === j ? ' <em class="rec">추천</em>' : ''}</b>${o.detail ? `<span>${esc(o.detail)}</span>` : ''}</button>`).join('')}</div>${d.why && !simple ? `<div class="count">추천 이유: ${esc(d.why)}</div>` : ''}</div>`).join('')}
           ${decChosen(m).length ? `<div class="row"><button class="btn small" type="button" data-act="decRedraft">${ic('reply')}결정대로 답장 다시 쓰기</button><span class="count">조교 지시(짧은 버전)에는 결정이 자동으로 들어갑니다.</span></div>` : ''}</div>` : ''}
-        ${simple ? ((m.attachments || []).length ? `<div class="sec"><h4><span>${ic('doc')} 첨부파일 ${m.attachments.length}</span></h4><div class="attlist" style="margin:0">${m.attachments.map(x => attChip({ ...x, state: x.text ? 'ok' : 'skip' })).join('')}</div></div>` : '') : attSection(m)}
+        ${simple ? ((m.attachments || []).length ? `<div class="sec"><h4><span>${ic('doc')} 첨부파일 ${m.attachments.length}</span></h4><div class="attlist" style="margin:0">${m.attachments.map(x => attChip({ ...x, state: x.text ? 'ok' : 'skip' }) + (x.saved || x.inbox ? `<button class="btn small" type="button" data-act="attOpen" data-id="${m.id}" data-name="${esc(x.name)}" title="원본 열기">${ic('ext')}열기</button>` : '')).join('')}</div></div>` : '') : attSection(m)}
         ${!simple && (a.thread || []).length > 1 ? `<div class="sec"><h4><span>${ic('thread')} 스레드 흐름 ${a.thread.length}통</span></h4><ol class="timeline">${a.thread.map(t => `<li><div><div class="who">${t.date ? esc(fmtShort(t.date)) + ' · ' : ''}${esc(t.from)}</div>${esc(t.gist)}</div></li>`).join('')}</ol></div>` : ''}` :
-        `<div class="sec"><div class="summary">아직 분석되지 않은 메일입니다. <button class="btn small primary" type="button" data-act="reanalyze">지금 분석</button></div></div>`}
+        `<div class="sec"><div class="summary">아직 분석되지 않은 메일입니다. <button class="btn small primary" type="button" data-act="reanalyze">지금 분석</button></div></div>${(m.attachments || []).length ? attSection(m) : ''}`}
       ${m.analysis ? `
       <div class="sec"><h4><span>일정 ${evMain.length}${evs.length > evMain.length ? ` <span class="count">(전체 ${evs.length})</span>` : ''}</span>${evMain.filter(e => !e.added && !e.skipped).length > 1 ? '<button class="btn small" type="button" data-act="addAllEv">모두 추가</button>' : ''}</h4>
         ${evs.length ? split(evs, itemEv, 'Ev', '일정') : '<div class="count">이 메일에서 찾은 일정이 없습니다.</div>'}</div>
@@ -4541,14 +4558,14 @@ function renderInbox() {
   el.innerHTML = INBOX.busy ? `<span class="spin"></span><b>Thunderbird 메일 받는 중</b>` : '';
 }
 // file the mail into the mail list as it is (attachments read, nothing asked); analysis runs when the user presses 분석
-async function attsFrom(m) {
+async function attsFrom(m, inboxId) {
   const out = [];
   for (const a of (m.attachments || []).filter(x => x.b64).slice(0, 15)) {
     const f = b64File(a); let r = {};
     try { r = await extractAtt(f); } catch { r = { fail: true }; }
     const text = r.text || '';
     const note = a.convertedFrom ? `${a.convertedFrom}을 PDF로 바꾼 파일` : !text && a.convertError ? `PDF 변환 실패: ${a.convertError}` : (r.note || '');
-    out.push({ id: uid(), file: f, name: f.name, size: f.size, type: f.type || '', kind: r.kind || attKind(f.name), text: text.slice(0, ATT_FILE_MAX), chars: text.length, cut: text.length > ATT_FILE_MAX, note, ...(a.convertedFrom ? { convertedFrom: a.convertedFrom } : {}), at: todayStr() });
+    out.push({ id: uid(), file: f, name: f.name, size: f.size, type: f.type || '', kind: r.kind || attKind(f.name), text: text.slice(0, ATT_FILE_MAX), chars: text.length, cut: text.length > ATT_FILE_MAX, note, ...(a.convertedFrom ? { convertedFrom: a.convertedFrom } : {}), ...(inboxId ? { inbox: inboxId } : {}), at: todayStr() });
   }
   return out;
 }
@@ -4562,7 +4579,7 @@ async function inboxImport() {
       let m;
       try { m = (await gas({ action: 'inboxGet', id: it.id })).mail; } catch { continue; }
       if (m.msgId && S.emails.some(x => x.msgId === m.msgId || (x.msgIds || []).includes(m.msgId))) { await gas({ action: 'inboxDone', id: it.id }).catch(() => {}); continue; }
-      const atts = await attsFrom(m);
+      const atts = await attsFrom(m, it.id);
       const text = mailAsText(m);
       const prev = S.emails.filter(isActive).find(x => normSubj(x.subject) && normSubj(x.subject) === normSubj(m.subject));
       let id;
