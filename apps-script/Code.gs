@@ -15,7 +15,7 @@
  * 할 수 있는 일: 캘린더 목록, 일정 읽기, 일정 만들기·고치기·지우기 (반복 일정은 이 날만 또는 전체),
  *               일정 설명(메모) 읽기·쓰기, 내 드라이브의 dashboard-data.json 읽기·쓰기 (아이폰 등 폴더 저장이 안 되는 기기용)
  * 버전 4부터 드라이브 권한이 추가되었습니다. 코드를 바꾼 뒤 authorize를 한 번 더 실행해 권한을 허용하세요.
- * 버전 9: 브라우저가 못 읽는 첨부(hwp·doc·ppt 등)를 구글 드라이브로 PDF 변환해 같이 넣기 (서비스에 Drive API 추가 필요)
+ * 버전 9: 브라우저가 못 읽는 첨부(doc·ppt·rtf 등)를 구글 드라이브로 PDF 변환해 같이 넣기 (서비스에 Drive API 추가 필요)
  * 버전 8: Thunderbird '대시보드로 보내기' 메일 받기 (mailPut → inbox 폴더, inboxList/inboxGet/inboxDone)
  * 버전 7: 휴대폰이 PC와 같은 데이터 파일을 쓰도록 맞추기 (dataFiles, dataUse)
  * 버전 6: 반복 일정 전체의 시간을 바꾸려면 왼쪽 [서비스] + → Google Calendar API 추가 (apps-script/appsscript.json 참고)
@@ -116,7 +116,8 @@ function inboxFolder(sub) {
   return sub ? get(inbox, sub) : inbox;
 }
 // attachments the dashboard cannot read in a browser: let Google Drive convert them, then export as PDF
-const PDF_CONVERT = { hwp: 'doc', doc: 'doc', rtf: 'doc', odt: 'doc', wpd: 'doc', ppt: 'slide', pps: 'slide', odp: 'slide' };
+// (.hwp is not converted by Google Drive; the dashboard reads its text itself)
+const PDF_CONVERT = { doc: 'doc', rtf: 'doc', odt: 'doc', wpd: 'doc', ppt: 'slide', pps: 'slide', odp: 'slide' };
 function toPdf(a) {
   const ext = (String(a.name || '').toLowerCase().match(/\.([a-z0-9]+)$/) || [])[1];
   const kind = PDF_CONVERT[ext];

@@ -3023,17 +3023,54 @@ async function zipXmlText(buf, re, tagRe) {
   }
   return parts.filter(Boolean);
 }
+// old Hangul (.hwp, HWP 5 binary): an OLE container whose BodyText/SectionN streams hold (usually deflated) records; tag 67 = paragraph text in UTF-16
+async function hwpText(buf) {
+  const cfb = XLSX.CFB.read(new Uint8Array(buf), { type: 'array' });
+  const get = p => { const e = XLSX.CFB.find(cfb, p); return e && e.content ? new Uint8Array(e.content) : null; };
+  const head = get('/FileHeader');
+  if (!head) throw new Error('한글 문서가 아닙니다');
+  const flags = head[36] | (head[37] << 8) | (head[38] << 16) | (head[39] << 24);
+  if (flags & 2) return { text: '', note: '암호가 걸린 한글 문서라 내용을 읽을 수 없습니다.' };
+  const compressed = !!(flags & 1), distributed = !!(flags & 4);
+  // the inflate built into the spreadsheet library tolerates the padding some HWP streams carry after the data
+  const inflate = async u8 => compressed ? new Uint8Array(XLSX.CFB.utils._inflateRaw(u8)) : u8;
+  const paras = [];
+  for (let i = 0; i < 400; i++) {
+    const raw = get(`/${distributed ? 'ViewText' : 'BodyText'}/Section${i}`);
+    if (!raw) break;
+    if (distributed) return { text: '', note: '배포용(보기 전용)으로 잠긴 한글 문서라 내용을 읽을 수 없습니다.' };
+    const d = await inflate(raw), dv = new DataView(d.buffer, d.byteOffset, d.byteLength);
+    for (let p = 0; p + 4 <= d.length;) {
+      const h = dv.getUint32(p, true); p += 4;
+      const tag = h & 0x3ff; let size = h >>> 20;
+      if (size === 0xfff) { size = dv.getUint32(p, true); p += 4; }
+      if (tag === 67) {
+        let s = '';
+        for (let q = p; q + 1 < p + size; q += 2) {
+          const c = dv.getUint16(q, true);
+          if (c >= 32) { s += String.fromCharCode(c); continue; }
+          if (c === 9) s += '\t'; else if (c === 10 || c === 13) s += '\n';
+          // extended/inline controls take 8 characters in all; only char controls (0,10,13,24-31) are a single character
+          if (![0, 10, 13, 24, 25, 26, 27, 28, 29, 30, 31].includes(c)) q += 14;
+        }
+        paras.push(s.replace(/\n+$/, ''));
+      }
+      p += size;
+    }
+  }
+  return { text: paras.join('\n').replace(/\n{3,}/g, '\n\n').trim(), note: '' };
+}
 async function extractAtt(file) {
   const kind = attKind(file.name);
   if (file.size > ATT_SIZE_MAX) return { kind, text: '', note: '25MB가 넘어 내용은 읽지 않았습니다' };
   try {
     if (kind === 'image') return { kind, text: '', note: '이미지는 글자를 읽지 못합니다. 중요하면 Claude 대화창에 이미지를 직접 올려 주세요' };
-    if (kind === 'hwp') return { kind, text: '', note: '옛 한글(.hwp)은 브라우저에서 읽을 수 없습니다. 한글에서 PDF나 .hwpx로 저장해 넣어 주세요' };
     if (kind === 'zip' || kind === 'other') return { kind, text: '', note: '내용은 읽지 않고 파일만 보관합니다' };
     if (kind === 'text' || kind === 'csv') { let t = await file.text(); if (/\.html?$/i.test(file.name)) t = t.replace(/<style[\s\S]*?<\/style>|<script[\s\S]*?<\/script>/gi, '').replace(/<[^>]+>/g, ' ').replace(/[ \t]+/g, ' '); return { kind, text: t, note: '' }; }
     const buf = await file.arrayBuffer();
     if (kind === 'sheet') return { kind, ...(await sheetText(buf)) };
     if (kind === 'pdf') return { kind, ...(await pdfText(buf)) };
+    if (kind === 'hwp') { await loadLib('xlsx'); try { return { kind, ...(await hwpText(buf)) }; } catch (e) { return { kind, text: '', note: '이 한글(.hwp) 파일은 읽지 못했습니다. 한글에서 PDF나 .hwpx로 저장해 넣어 주세요' }; } }
     if (kind === 'docx') { await loadLib('mammoth'); const r = await mammoth.extractRawText({ arrayBuffer: buf }); return { kind, text: r.value, note: '' }; }
     if (kind === 'hwpx') { const p = await zipXmlText(buf, /^Contents\/section\d+\.xml$/i, /<[^>]+>/g); return { kind, text: p.join('\n\n'), note: '' }; }
     if (kind === 'pptx') { const p = await zipXmlText(buf, /^ppt\/slides\/slide\d+\.xml$/i, /<[^>]+>/g); return { kind, text: p.map((x, i) => `[슬라이드 ${i + 1}]\n${x}`).join('\n\n'), note: '' }; }
@@ -4510,7 +4547,7 @@ async function attsFrom(m) {
     const f = b64File(a); let r = {};
     try { r = await extractAtt(f); } catch { r = { fail: true }; }
     const text = r.text || '';
-    const note = a.convertedFrom ? `${a.convertedFrom}을 PDF로 바꾼 파일` : a.convertError ? `PDF 변환 실패: ${a.convertError}` : (r.note || '');
+    const note = a.convertedFrom ? `${a.convertedFrom}을 PDF로 바꾼 파일` : !text && a.convertError ? `PDF 변환 실패: ${a.convertError}` : (r.note || '');
     out.push({ id: uid(), file: f, name: f.name, size: f.size, type: f.type || '', kind: r.kind || attKind(f.name), text: text.slice(0, ATT_FILE_MAX), chars: text.length, cut: text.length > ATT_FILE_MAX, note, ...(a.convertedFrom ? { convertedFrom: a.convertedFrom } : {}), at: todayStr() });
   }
   return out;
