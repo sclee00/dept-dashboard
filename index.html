@@ -2198,7 +2198,7 @@ async function add(col, data) { const id = uid(); S[col].push({ id, ...data, _u:
 async function patch(col, id, data) { const x = S[col].find(r => r.id === id); if (x) { deepMerge(x, JSON.parse(JSON.stringify(data))); x._u = Date.now(); } changed(); }
 async function del(col, id) { S[col] = S[col].filter(r => r.id !== id); (S.deleted[col] ||= {})[id] = Date.now(); changed(); }
 async function saveSettings(data) { S.settings = data; S.settingsU = Date.now(); changed(); }
-function dbErr() { toast('저장하지 못했습니다. 다시 시도해 주세요.'); }
+function dbErr(e) { try { console.warn("dbErr", e && (e.stack || e.message || e)); } catch {} toast('저장하지 못했습니다. 다시 시도해 주세요.'); }
 /* ---------- folder storage (Google Drive desktop folder, File System Access API) ---------- */
 const FS = { handle: null, perm: 'none' };
 const fsOK = typeof window.showDirectoryPicker === 'function';
@@ -3793,7 +3793,7 @@ const CMD_VOCAB = ['땡겨', '앞당겨', '수정', '수정해', '바꿔', '바�
 const KNUM = { 한: 1, 두: 2, 세: 3, 네: 4, 다섯: 5, 여섯: 6, 일곱: 7, 여덟: 8, 아홉: 9, 열: 10, 열한: 11, 열두: 12 };
 // words in the user's own event titles, so they are never 'corrected' into command words
 let _tw = { at: 0, set: new Set() };
-function titleWords() {
+function knownTitleWords() {
   if (Date.now() - _tw.at < 5000) return _tw.set;
   const set = new Set(), addT = t => String(t || '').split(/[\s·,()\[\]\/]+/).forEach(w => { w = w.replace(/(을|를|은|는|이|가|도|의)$/, ''); if (w.length >= 2 && !CMD_VOCAB.includes(w)) set.add(w); });
   S.events.forEach(e => addT(e.title)); S.tasks.forEach(x => addT(x.title));
@@ -3812,7 +3812,7 @@ function normalizeCmd(raw) {
   t = t.replace(/[.,]?\s*(구글\s*(캘린더|캘|달력)?\s*(에도|도|에|까지)?\s*(같이|함께)?\s*(수정|반영|바꿔|변경|업데이트|적용)\S*)\s*[.!]?\s*$/, '').trim();
   t = t.replace(/(\d)\s*시\s*삼십\s*분/g, '$1시 30분').replace(/(\d)\s*시\s*십오\s*분/g, '$1시 15분');
   t = t.replace(/(오늘|내일|모레|\d\s*시(?:\s*\d+\s*분|\s*반)?)\s*(꺼|거|것|껀|건)(?=\s|$|을|를|은|는|이|도)/g, '$1 일정');
-  const known = titleWords();
+  const known = knownTitleWords();
   const out = t.split(' ').map(tok => {
     if (tok.length < 2 || /\d/.test(tok)) return tok;
     if ([...known].some(w => w.length >= 2 && (tok.startsWith(w) || w.startsWith(tok.replace(/(을|를|은|는|이|가|도|의|로|으로)$/, ''))))) return tok;
