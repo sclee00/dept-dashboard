@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "학과장실 대시보드 · Gemini 연결",
+  "description": "대시보드가 보낸 질문을 내 Gemini 웹 화면에 넣고 답을 받아 대시보드로 돌려줍니다.",
+  "version": "1.0.0",
+  "icons": { "128": "icons/icon128.png" },
+  "permissions": ["tabs", "scripting", "storage"],
+  "host_permissions": ["https://gemini.google.com/*"],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [{
+    "matches": ["https://sclee00.github.io/dept-dashboard/*", "http://localhost:8765/*"],
+    "js": ["dashboard.js"],
+    "run_at": "document_start"
+  }],
+  "action": { "default_title": "학과장실 대시보드 · Gemini 연결" }
+}

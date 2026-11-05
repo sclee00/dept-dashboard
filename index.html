@@ -2723,25 +2723,57 @@ function pickModel(list) {
   const best = ids.filter(id => ver(id) >= 0).sort((a, b) => ver(b) - ver(a))[0];
   return best || ids.find(id => /flash/.test(id) && !/lite|preview|exp/.test(id)) || ids[0] || 'gemini-2.5-flash';
 }
-function geminiAsk(prompt, title, json) {
+// Gemini web through the Chrome extension (gemini-bridge): the page asks, the extension types into a small Gemini window and reads the answer
+const bridgeOn = () => !!document.documentElement.dataset.geminiBridge;
+const aiWeb = () => bridgeOn() && (S.settings.aiMode === 'web' || !S.settings.aiMode);
+function bridgeAsk(prompt, title, json) {
+  return aiProgress(title, (setStatus) => new Promise((resolve, reject) => {
+    const id = uid();
+    const on = e => {
+      if (e.source !== window || !e.data || e.data.id !== id) return;
+      if (e.data.type === 'gb-status') return setStatus(e.data.text);
+      if (e.data.type !== 'gb-result') return;
+      window.removeEventListener('message', on);
+      if (e.data.error) return reject({ code: e.data.error, message: e.data.message });
+      resolve(e.data.text);
+    };
+    window.addEventListener('message', on);
+    window.postMessage({ type: 'gb-ask', id, prompt, json: !!json }, location.origin);
+  }), json, 'Gemini 웹');
+}
+// shared "working…" window with a cancel button; run(setStatus) does the actual asking
+function aiProgress(title, run, json, who) {
   return new Promise((resolve, reject) => {
     const started = Date.now(); let done = false;
     const close = () => { done = true; clearInterval(tick); if (UI.dlg === 'gem') { UI.dlg = null; $('dlgRoot').innerHTML = ''; } UI.gemCancel = null; };
     UI.gemCancel = () => { if (done) return; close(); reject({ code: 'cancelled', message: '취소했습니다.' }); };
     UI.dlg = 'gem';
     $('dlgRoot').innerHTML = `<div class="scrim"></div><div class="dlg"><div class="dlgbox" role="dialog" aria-modal="true" aria-labelledby="dlgT">
-      <h3 id="dlgT"><span class="spin"></span>Gemini가 처리하는 중</h3>
+      <h3 id="dlgT"><span class="spin"></span>${esc(who || 'Gemini')}에서 처리하는 중</h3>
       <div class="count">${esc(title || '')}</div>
+      <div class="count" id="gemState"></div>
       <div class="count" id="gemSec">0초</div>
       <div class="row" style="justify-content:flex-end"><button class="btn" type="button" data-act="gemCancel">취소</button></div></div></div>`;
     const tick = setInterval(() => { const el = $('gemSec'); if (el) el.textContent = Math.round((Date.now() - started) / 1000) + '초' + (Date.now() - started > 40000 ? ' · 긴 메일은 1분 넘게 걸릴 수 있습니다' : ''); }, 1000);
-    gasPost({ action: 'ai', prompt, json: !!json, model: S.settings.aiModel || 'gemini-2.5-flash' })
-      .then(j => { if (done) return; close(); if (!json) return resolve(j.text); try { resolve(parseLoose(j.text)); } catch { reject({ code: 'badjson', message: 'Gemini 답에서 JSON을 찾지 못했습니다.', text: j.text }); } })
-      .catch(e => { if (done) return; close(); reject(e && e.code === 'action' ? { code: 'old', message: '스크립트를 버전 10으로 다시 배포해야 Gemini를 쓸 수 있습니다.' } : e); });
+    run(t => { const el = $('gemState'); if (el) el.textContent = t; })
+      .then(text => { if (done) return; close(); if (!json) return resolve(text); try { resolve(parseLoose(text)); } catch { reject({ code: 'badjson', message: '답에서 JSON을 찾지 못했습니다.', text }); } })
+      .catch(e => { if (done) return; close(); reject(e); });
   });
+}
+function geminiAsk(prompt, title, json) {
+  return aiProgress(title, () => gasPost({ action: 'ai', prompt, json: !!json, model: S.settings.aiModel || 'gemini-2.5-flash' }).then(j => j.text)
+    .catch(e => { throw (e && e.code === 'action' ? { code: 'old', message: '스크립트를 버전 10으로 다시 배포해야 Gemini를 쓸 수 있습니다.' } : e); }), json, 'Gemini');
 }
 // automatic first; if it cannot (no key, limit reached, network), the copy-and-paste window opens instead
 async function aiRun(prompt, opts, json) {
+  if (aiWeb()) {
+    try { return await bridgeAsk(prompt, opts.title, json); }
+    catch (e) {
+      if (e && e.code === 'cancelled') throw e;
+      toast('Gemini 웹 자동 처리가 안 돼 복사 방식으로 엽니다. ' + ((e && e.message) || ''));
+      return relay({ title: opts.title || (json ? 'AI 분석' : 'AI에게 답 받기'), prompt, json });
+    }
+  }
   if (aiAuto()) {
     try { return await geminiAsk(prompt, opts.title, json); }
     catch (e) {
@@ -2755,10 +2787,12 @@ function aiSettingsHtml(s) {
   const on = s.aiMode === 'gemini', models = s.aiModels || [];
   return `<div class="bsec"><b>${ic('spark')} AI 분석</b>
     <div class="row" style="flex-wrap:wrap;gap:.8rem">
-      <label class="chk"><input type="radio" name="aiMode" value="gemini" data-act="aiMode" ${on ? 'checked' : ''}> Gemini 자동 (복사·붙여넣기 없음)</label>
-      <label class="chk"><input type="radio" name="aiMode" value="copy" data-act="aiMode" ${on ? '' : 'checked'}> 복사해서 AI 창에 붙여넣기</label>
+      <label class="chk"><input type="radio" name="aiMode" value="web" data-act="aiMode" ${aiWeb() || (!bridgeOn() && s.aiMode === 'web') ? 'checked' : ''}> Gemini 웹 자동 (크롬 확장 · Pro 플랜 그대로)</label>
+      <label class="chk"><input type="radio" name="aiMode" value="gemini" data-act="aiMode" ${on ? 'checked' : ''}> Gemini API 자동 (API 키)</label>
+      <label class="chk"><input type="radio" name="aiMode" value="copy" data-act="aiMode" ${s.aiMode === 'copy' || (!s.aiMode && !bridgeOn()) ? 'checked' : ''}> 복사해서 AI 창에 붙여넣기</label>
     </div>
-    ${!gasOn() ? '<span class="count warnline">Gemini 자동은 아래 "저장·구글" 탭의 Apps Script 연결이 있어야 합니다.</span>' : `
+    <span class="count">${bridgeOn() ? `${ic('check')} 이 브라우저에 Gemini 연결 확장(버전 ${esc(document.documentElement.dataset.geminiBridge)})이 있습니다. 질문하면 작은 Gemini 창이 열려 거기서 답을 받아 옵니다. 그 창은 닫지 말고 옆에 두세요. <button class="btn small" type="button" data-act="aiTest">${ic('spark')}시험해 보기</button><span class="count" id="aiTestOut"></span>` : `Gemini 웹 자동은 PC 크롬에 확장 프로그램을 한 번 설치해야 합니다: <a href="gemini-bridge.zip" download>확장 프로그램 내려받기</a> → 압축 풀기 → 크롬 주소창에 chrome://extensions → 오른쪽 위 '개발자 모드' 켜기 → '압축해제된 확장 프로그램 로드' → 푼 폴더 선택 → 이 페이지 새로고침.`}</span>
+    ${s.aiMode !== 'gemini' ? '' : !gasOn() ? '<span class="count warnline">Gemini API 자동은 "저장·구글" 탭의 Apps Script 연결이 있어야 합니다.</span>' : `
     <span class="count">Gemini API 키는 <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio → API 키</a>에서 만들 수 있습니다. 키는 내 Apps Script 안에만 보관되고 이 화면·데이터 파일에는 남지 않습니다.</span>
     <div class="row" style="flex-wrap:wrap"><input class="field" id="aiKeyIn" type="password" autocomplete="off" placeholder="${s.aiKeySet ? '키 설정됨 — 바꾸려면 새 키를 넣으세요' : 'Gemini API 키 (AIza…)'}" style="flex:1;min-width:14rem">
       <button class="btn small primary" type="button" data-act="aiKeySave">${ic('check')}키 저장·확인</button>${s.aiKeySet ? '<button class="btn small" type="button" data-act="aiKeyClear">키 지우기</button>' : ''}</div>
@@ -5180,11 +5214,11 @@ document.addEventListener('click', async ev0 => {
       case 'gReloadCals': return gLoadCals();
       case 'relayCopy': return relayCopy();
       case 'relayApply': return relayApply();
-      case 'aiMode': if (el.value === 'gemini' && !S.settings.aiKeySet) toast('먼저 Gemini API 키를 넣고 "키 저장·확인"을 눌러 주세요.'); await saveSettings({ ...S.settings, aiMode: el.value === 'gemini' ? 'gemini' : 'copy' }); return;
+      case 'aiMode': if (el.value === 'gemini' && !S.settings.aiKeySet) toast('먼저 Gemini API 키를 넣고 "키 저장·확인"을 눌러 주세요.'); if (el.value === 'web' && !bridgeOn()) toast('먼저 Gemini 연결 확장 프로그램을 설치해 주세요.'); await saveSettings({ ...S.settings, aiMode: ['web', 'gemini'].includes(el.value) ? el.value : 'copy' }); if (UI.dlg === 'settings') openSettings(); return;
       case 'gemCancel': return UI.gemCancel && UI.gemCancel();
       case 'aiKeySave': return aiKeySave(false);
       case 'aiKeyClear': return aiKeySave(true);
-      case 'aiTest': { const o = $('aiTestOut'); if (o) o.textContent = '…'; try { const t = await geminiAsk('한 단어로만 답하세요: "연결됨"', '연결 시험', false); toast('Gemini 답: ' + String(t).trim().slice(0, 60)); } catch (e) { toast('시험 실패: ' + ((e && e.message) || '')); } if (UI.dlg !== 'settings') openSettings(); return; }
+      case 'aiTest': { const o = $('aiTestOut'); if (o) o.textContent = '…'; try { const t = await (aiWeb() ? bridgeAsk : geminiAsk)('한 단어로만 답하세요: "연결됨"', '연결 시험', false); toast('Gemini 답: ' + String(t).trim().slice(0, 60)); } catch (e) { toast('시험 실패: ' + ((e && e.message) || '')); } if (UI.dlg !== 'settings') openSettings(); return; }
       case 'relayClip': return relayFromClipboard(true);
       case 'relayCancel': return relayCancel();
       case 'relayAlt': { const t = UI.relay && UI.relay.alt && UI.relay.alt.text; relayCancel(); if (t) setTimeout(() => openChatPrompt(t), 0); return; }
