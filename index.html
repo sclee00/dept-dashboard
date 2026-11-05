@@ -547,6 +547,12 @@ body.resizing{user-select:none} body.rs-col,body.rs-col *{cursor:col-resize!impo
 }
 .inboxchip{margin-left:auto;border-color:var(--accent);color:var(--ink)}
 .inboxchip .count{margin-left:.35rem}
+.cell.trip{box-shadow:inset 0 0 0 999px color-mix(in srgb,var(--trip,#2f6fb3) var(--trip-a,32%),transparent)}
+.cell.trip.past{box-shadow:inset 0 0 0 999px color-mix(in srgb,var(--trip,#2f6fb3) calc(var(--trip-a,32%) * .6),transparent)}
+.tripdemo{display:inline-flex;width:3.2rem;height:2.2rem;border-radius:8px;border:1px solid var(--line);padding:.2rem .35rem;font-size:.8rem;box-shadow:inset 0 0 0 999px color-mix(in srgb,var(--trip) var(--trip-a),transparent)}
+.tripics{display:flex;flex-wrap:wrap;gap:.3rem;margin-top:.4rem}
+.tripic{display:inline-flex;align-items:center;gap:.25rem;border:1px solid var(--line);border-radius:999px;padding:.15rem .5rem;font-size:.8rem;cursor:pointer}
+.tripic input{position:absolute;opacity:0;pointer-events:none}.tripic.on{border-color:var(--trip);background:color-mix(in srgb,var(--trip) 25%,transparent)}
 .tidylist{max-height:min(62vh,640px);overflow:auto;display:flex;flex-direction:column;gap:.7rem;margin-top:.6rem}
 .tidygrp{border:1px solid var(--line);border-radius:10px;padding:.55rem .7rem;display:flex;flex-direction:column;gap:.4rem}
 .tidyhead{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
@@ -3934,6 +3940,37 @@ function freeBadge(day) {
   const lab = n === 0 ? '꽉 참' : n < 60 ? `빈 ${n}m` : `빈 ${Math.floor(n / 30) / 2}h`;
   return `<span class="free ${cls}" title="근무시간 중 빈 시간 ${durKo(n)}">${lab}</span>`;
 }
+/* ---------- trip days: a day holding an item whose icon is 출장 (or other chosen icons) gets a tinted cell ---------- */
+const TRIP_DEF = { on: true, color: '#2f6fb3', strength: 32, icons: ['plane'] };
+const tripCfg = () => ({ ...TRIP_DEF, ...((S.settings && S.settings.trip) || {}) });
+function tripDay(day) {
+  const c = tripCfg(); if (!c.on || !(c.icons || []).length) return false;
+  const set = new Set(c.icons);
+  try { return cellItems(day).some(x => set.has(x.ic)); } catch { return false; }
+}
+function applyTripStyle(c) {
+  c = c || tripCfg();
+  const r = document.documentElement.style;
+  r.setProperty('--trip', c.color || TRIP_DEF.color);
+  r.setProperty('--trip-a', Math.max(5, Math.min(90, +c.strength || TRIP_DEF.strength)) + '%');
+}
+function tripSettingsHtml(s) {
+  const c = tripCfg(), set = new Set(c.icons || []);
+  const all = [['plane', '출장'], ...ICON_LEGEND.filter(([k]) => k !== 'plane')];
+  return `<div class="bsec"><b>${ic('plane')} 출장 날짜 칸 색</b>
+    <span class="count">아이콘이 아래에서 고른 것(기본: 출장)인 일정·불가 시간이 있는 날은 달력 칸 전체에 색을 칠합니다. 여러 날짜에 걸친 출장은 그 날들 모두 칠합니다.</span>
+    <div class="row" style="align-items:center;flex-wrap:wrap;gap:.8rem">
+      <label class="chk"><input type="checkbox" id="tripOn" ${c.on ? 'checked' : ''}> 날짜 칸에 색 칠하기</label>
+      <label>색 <input type="color" id="tripColor" value="${esc(c.color)}"></label>
+      <label>진하기 <span id="tripStrV">${c.strength}%</span> <input type="range" id="tripStr" min="5" max="90" step="1" value="${c.strength}"></label>
+      <span class="tripdemo" aria-hidden="true"><span>12</span></span>
+    </div>
+    <details><summary class="count" style="cursor:pointer">칠할 아이콘 고르기 (${set.size}개 선택)</summary>
+      <div class="tripics">${all.map(([k, n]) => `<label class="tripic ${set.has(k) ? 'on' : ''}"><input type="checkbox" data-tripic="${esc(k)}" ${set.has(k) ? 'checked' : ''}>${ic(k, iconKc(k))}<span>${esc(n)}</span></label>`).join('')}</div>
+    </details>
+  </div>`;
+}
+const tripReadForm = () => ({ on: $('tripOn').checked, color: $('tripColor').value, strength: +$('tripStr').value, icons: [...document.querySelectorAll('[data-tripic]')].filter(x => x.checked).map(x => x.dataset.tripic) });
 function renderCal() {
   if (!UI.month) { const d = new Date(); UI.month = new Date(d.getFullYear(), d.getMonth(), 1); }
   const m = UI.month, t = todayStr(), wk = UI.view !== 'month', titles = S.settings.cellMode === 'titles';
@@ -3951,8 +3988,8 @@ function renderCal() {
     const shown = items.length > UI.cap ? items.slice(0, Math.max(1, UI.cap - 1)) : items;
     const more = items.length - shown.length;
     const cls = ['cell', !wk && d.getMonth() !== m.getMonth() ? 'out' : '', d.getDay() === 0 ? 'sun' : '', d.getDay() === 6 ? 'sat' : '',
-      s === t ? 'today' : '', s === UI.selDay ? 'sel' : '', s < t ? 'past' : '', workWin(s) ? '' : 'off'].join(' ');
-    html += `<div role="button" tabindex="0" class="${cls}" data-act="pickDay" data-day="${s}" aria-label="${d.getMonth() + 1}월 ${d.getDate()}일, 항목 ${items.length}개">
+      s === t ? 'today' : '', s === UI.selDay ? 'sel' : '', s < t ? 'past' : '', workWin(s) ? '' : 'off', tripDay(s) ? 'trip' : ''].join(' ');
+    html += `<div role="button" tabindex="0" class="${cls}" data-act="pickDay" data-day="${s}" aria-label="${d.getMonth() + 1}월 ${d.getDate()}일${tripDay(s) ? ', 출장' : ''}, 항목 ${items.length}개">
       <span class="chead"><span class="dn">${wk && (d.getDate() === 1 || i === 0) ? `<b>${d.getMonth() + 1}월</b>` : ''}${d.getDate()}${s === t ? '<em>오늘</em>' : ''}</span>${freeBadge(s)}</span>
       <span class="citems">${shown.map(x => { const tip = esc((x.tm ? x.tm + ' ' : '') + x.tx) + (x.dk ? ' · 끌어서 날짜 옮기기' : ''), drag = x.dk ? ` draggable="true" data-dk="${esc(x.dk)}"` : '', st = x.gc ? ` style="--gc:${esc(x.gc)}"` : '';
         const fa = x.tr ? fxAttrs(x.tr) : { cls: '', st: '', data: '' }, sty = [x.gc ? `--gc:${esc(x.gc)}` : '', fa.st].filter(Boolean).join(';');
@@ -4982,6 +5019,7 @@ document.addEventListener('click', async ev0 => {
         const fxData = $('fxShort') ? fxReadForm() : null, fontData = $('fontSize') ? fontReadForm() : null, wcData = document.querySelector('.wclist') ? wcReadForm() : null;
         const data = { ...S.settings, semesterLabel: $('sLabel').value.trim() || DEFAULTS.semesterLabel, semesterStart: isDate($('sStart').value) ? $('sStart').value : DEFAULTS.semesterStart, signature: $('sSig').value.trim() || DEFAULTS.signature, assistant: $('sAsst').value.trim() || DEFAULTS.assistant,
           ...(fxData ? { fx: fxData } : {}), ...(fontData ? { font: fontData } : {}), ...(wcData ? { wordColors: wcData } : {}), cellMode: $('sCellMode') && $('sCellMode').value === 'titles' ? 'titles' : 'icons', googleShow: $('sGShow').checked, googleBusy: $('sGBusy').checked, googlePush: $('sGPush').checked };
+        if ($('tripOn')) data.trip = tripReadForm();
         if ($('impMode')) { const iv = impFormValues(); const amber = getComputedStyle(document.documentElement).getPropertyValue('--amber').trim(); data.impStyle = { ...iv, color: iv.color.toLowerCase() === amber.toLowerCase() ? '' : iv.color }; }
         { const gu = $('sGasUrl').value.trim(), gk = $('sGasKey').value.trim();
           if (gu && !/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(gu)) { toast('웹 앱 주소는 https://script.google.com/macros/s/…/exec 형태여야 합니다.'); return; }
@@ -5137,6 +5175,7 @@ document.addEventListener('input', e => {
   if (t.id === 'ipWordIn' && UI.ipick) UI.ipick.word = t.value.trim();
   if (UI.dlg === 'iconmgr' && t.dataset.im) { const k = t.dataset.k; UI.im[k] = { ...(UI.im[k] || {}), [t.dataset.im]: t.value }; if (t.dataset.im === 'color') { const r = t.closest('.imrow'); if (r) r.querySelector('.imic').style.color = t.value; } }
   if (['impColor', 'impColorBy', 'impPast', 'impPastDim', 'impWidth', 'impSpeed', 'impMode', 'impDim'].includes(t.id)) { const v = impFormValues(); applyImpStyle(v); $('impWidthV').textContent = v.width + 'px'; $('impSpeedV').textContent = v.speed + '초'; $('impDimV').textContent = Math.round((1 - v.dim) * 100) + '%'; $('impPastDimV').textContent = Math.round(v.pastDim * 100) + '%'; }
+  if (['tripColor', 'tripStr', 'tripOn'].includes(t.id) || (t.dataset && t.dataset.tripic)) { const v = tripReadForm(); applyTripStyle(v); $('tripStrV').textContent = v.strength + '%'; if (t.dataset.tripic) t.closest('.tripic').classList.toggle('on', t.checked); }
   if (t.id === 'edAll') { $('edStart').disabled = $('edEnd').disabled = t.checked; }
   if (t.id === 'rawMail') t.classList.toggle('big', t.value.length > 160 || t.value.split('\n').length > 3);
   if (t.closest('#fEvent')) { checkEventForm(); if ((t.id === 'fTitle') && !$('fImp').dataset.touched) $('fImp').value = autoImp($('fTitle').value, $('fKind').value); }
@@ -5207,6 +5246,7 @@ function openSettings() {
       ${(s.iconRules || []).length ? `<div class="rulelist">${s.iconRules.map(r => `<span class="rule">${ic(r.icon, iconKc(r.icon))}<b>${esc(r.w)}</b><button class="x" type="button" data-act="delRule" data-w="${esc(r.w)}" aria-label="규칙 지우기">✕</button></span>`).join('')}</div>` : '<span class="count">아직 없습니다. 날짜를 눌러 일정 왼쪽 아이콘을 누르면 바꿀 수 있고, 그때 단어를 기억시킬 수 있습니다.</span>'}</div>
     </div><div class="stab" data-tab="emph" ${tab === 'emph' ? '' : 'hidden'}>
     ${impSettingsHtml(s)}
+    ${tripSettingsHtml(s)}
     ${wordSettingsHtml()}
     </div><div class="stab" data-tab="link" ${tab === 'link' ? '' : 'hidden'}>
     ${phoneSettingsHtml()}
@@ -5246,7 +5286,7 @@ renderLegend();
 
 UI.selDay = todayStr();
 try { if (localStorage.getItem('calView') === 'month') UI.view = 'month'; } catch {}
-function renderAll() { try { renderTidyBtn(); } catch {} applyImpStyle(); applyFont(); applyLayout(); renderHeader(); renderTasks(); renderMails(); renderCal(); renderDay(false); renderRail(); renderGChip(); renderSync(); renderSheet(false); }
+function renderAll() { try { renderTidyBtn(); } catch {} applyTripStyle(); applyImpStyle(); applyFont(); applyLayout(); renderHeader(); renderTasks(); renderMails(); renderCal(); renderDay(false); renderRail(); renderGChip(); renderSync(); renderSheet(false); }
 renderAll();
 setInterval(() => { renderHeader(); if (UI.selDay === todayStr()) renderDay(false); }, 60000);
 
