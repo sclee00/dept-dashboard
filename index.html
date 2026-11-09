@@ -727,12 +727,12 @@ label.inl{display:inline-flex;align-items:center;gap:.3rem;font-size:.85rem} lab
 .qtab .qn{font-family:var(--mono);font-size:.72rem;font-weight:500;opacity:.8}
 .qtabs .qsp{flex:1}
 /* smaller controls in the bottom row */
-.qctl{gap:.3rem}
+.qrow .qctl{gap:.3rem;grid-template-columns:1fr;align-content:start}
 .qctl select.field{padding:.22rem .4rem;font-size:.8rem;height:1.85rem}
 .qctl .btn{padding:.18rem .5rem;font-size:.78rem;min-height:1.75rem}
 .qctl .btn .ic{width:.85rem;height:.85rem}
 .qctl .btn.primary{font-size:.85rem;min-height:2rem}
-.qrow .qbody{grid-template-columns:minmax(0,1fr) 12px var(--qcw,20rem)}
+.qrow .qbody{grid-template-columns:minmax(0,1fr) 12px var(--qcw,12rem)}
 .quick .btn.small{padding:.15rem .5rem;font-size:.78rem}
 .qtab{font-size:.85rem;padding:.22rem .55rem}
 .qrow .tools.toolgrid{grid-template-columns:repeat(auto-fill,minmax(8rem,1fr));grid-auto-rows:minmax(2rem,auto);gap:.35rem;padding:.55rem .7rem}
@@ -3740,7 +3740,7 @@ function setSplit(kind, [a, b], dx, dy) {
   if (kind === 'quick') LAY.qh = Math.round(Math.max(quickMin(), Math.min(window.innerHeight * 0.6, a - dy)));
   if (kind === 'head') { const x = Math.max(60, Math.min(a + b - 60, a + dx)); LAY.head = Math.round(x); }
   if (kind === 'qrow') { const x = Math.max(300, Math.min(a + b - 150, a + dx)); LAY.qrow = [Math.round(x), Math.round(a + b - x)]; }
-  if (kind === 'qin') LAY.qin = Math.round(Math.max(200, Math.min(a + b - 140, b - dx)));
+  if (kind === 'qin') LAY.qin = Math.round(Math.max(130, Math.min(a + b - 140, b - dx)));
   if (kind === 'sheet') LAY.sheetw = Math.round(Math.max(380, Math.min(window.innerWidth - 40, a - dx)));
   applyLayout(); const g = $('cal'); if (g) fitIcons(g);
 }
