@@ -137,15 +137,25 @@ browser.menus.onClicked.addListener(async (info, tab) => {
 /* ---------- replies the dashboard asks for: open Thunderbird's own reply window (with the quoted original) and put the draft on top ---------- */
 const escHtml = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const draftHtml = t => String(t).replace(/\r\n/g, '\n').split(/\n{2,}/).map(p => `<p>${escHtml(p).replace(/\n/g, '<br>')}</p>`).join('');
-async function findMessage(it) {
-  if (it.msgId) {
-    const id = it.msgId.replace(/^<|>$/g, '');
-    for (const v of [id, '<' + id + '>']) {
-      try { const r = await browser.messages.query({ headerMessageId: v }); const l = (r && r.messages) || []; if (l.length) return l[0]; } catch (e) {}
-    }
+// messages.query may answer page by page (newer Thunderbird): walk the pages until something turns up
+async function queryAll(q, want) {
+  let page; try { page = await browser.messages.query(q); } catch (e) { return []; }
+  const out = [];
+  for (let n = 0; page && n < 50; n++) {
+    for (const m of page.messages || []) if (!want || want(m)) { out.push(m); if (want) return out; }
+    if (!page.id || !browser.messages.continueList) break;
+    try { page = await browser.messages.continueList(page.id); } catch (e) { break; }
   }
-  if (it.subject) {
-    try { const r = await browser.messages.query({ subject: it.subject.replace(/^\s*(re|fwd?)\s*:\s*/i, '') }); const l = ((r && r.messages) || []).filter(m => !it.from || (m.author || '').includes((it.from.match(/[\w.+-]+@[\w.-]+/) || [''])[0])); if (l.length) return l[l.length - 1]; } catch (e) {}
+  return out;
+}
+const bare = id => String(id || '').trim().replace(/^<|>$/g, '');
+async function findMessage(it) {
+  const id = bare(it.msgId);
+  if (id) {
+    for (const v of [id, '<' + id + '>']) { const l = await queryAll({ headerMessageId: v }); if (l.length) return l[0]; }
+    // older Thunderbird without headerMessageId search: look through the sender's recent mail
+    const addr = (String(it.from || '').match(/[\w.+-]+@[\w.-]+/) || [''])[0];
+    if (addr) { const l = await queryAll({ author: addr, fromDate: new Date(Date.now() - 120 * 864e5) }, m => bare(m.headerMessageId) === id); if (l.length) return l[0]; }
   }
   return null;
 }
@@ -153,7 +163,11 @@ async function openReply(it) {
   const msg = await findMessage(it);
   if (!msg) throw new Error('Thunderbird에서 원본 메일을 찾지 못했습니다 (지워졌거나 다른 폴더·계정).');
   const tab = await browser.compose.beginReply(msg.id, 'replyToSender');
-  if (!it.text) return msg;
+  if (it.text) await fillReply(tab, it.text);
+  return msg;
+}
+async function fillReply(tab, text) {
+  const it = { text };
   let d = null;
   for (let k = 0; k < 20 && !d; k++) { await new Promise(r => setTimeout(r, k ? 250 : 400)); try { d = await browser.compose.getComposeDetails(tab.id); } catch (e) { d = null; } }
   if (!d) throw new Error('답장 창은 열었지만 내용을 넣지 못했습니다. 대시보드에서 복사해 붙여넣어 주세요.');
@@ -162,15 +176,17 @@ async function openReply(it) {
     const body = d.body || '', mm = body.match(/<body[^>]*>/i), ins = draftHtml(it.text) + '<br>';
     await browser.compose.setComposeDetails(tab.id, { body: mm ? body.replace(mm[0], mm[0] + ins) : ins + body });
   }
-  return msg;
 }
 let replyBusy = false;
 async function replyPoll() {
   if (replyBusy) return; replyBusy = true;
   try {
     const s = await settings(); if (!s) return;
-    const r = await fetch(s.gasUrl + '?action=replyTake&key=' + encodeURIComponent(s.gasKey) + '&t=' + Date.now(), { redirect: 'follow', cache: 'no-store' });
-    let j = null; try { j = await r.json(); } catch (e) {}
+    let j = null, err = '';
+    try { const r = await fetch(s.gasUrl + '?action=replyTake&key=' + encodeURIComponent(s.gasKey) + '&t=' + Date.now(), { redirect: 'follow', cache: 'no-store' }); j = await r.json(); }
+    catch (e) { err = String((e && e.message) || e); }
+    if (j && !j.ok) err = j.error === 'action' ? '스크립트가 버전 12보다 오래됐습니다' : j.error === 'key' ? '비밀 키가 다릅니다' : (j.message || '응답 오류');
+    await browser.storage.local.set({ replyPollAt: Date.now(), replyPollErr: err });
     if (!j || !j.ok || !(j.items || []).length) return;
     const log = [];
     for (const it of j.items) {
@@ -183,5 +199,35 @@ async function replyPoll() {
 }
 setInterval(replyPoll, 6000);
 setTimeout(replyPoll, 1500);
+
+// in Thunderbird itself: "대시보드 답장으로 답장" on the selected or open mail
+async function replyFromDashboard(messages) {
+  const msg = messages[0];
+  if (!msg) { notify('대시보드 답장으로 답장', '메일을 먼저 선택해 주세요.'); return; }
+  const s = await settings();
+  if (!s) { notify('대시보드 답장으로 답장', '먼저 연결 설정이 필요합니다.'); browser.runtime.openOptionsPage(); return; }
+  let data = null;
+  try { const r = await fetch(s.gasUrl + '?action=dataGet&key=' + encodeURIComponent(s.gasKey) + '&t=' + Date.now(), { redirect: 'follow', cache: 'no-store' }); const j = await r.json(); data = j && j.ok ? (typeof j.data === 'string' ? JSON.parse(j.data) : j.data) : null; } catch (e) {}
+  if (!data) { notify('대시보드 답장으로 답장', '대시보드 데이터를 읽지 못했습니다.'); return; }
+  const id = bare(msg.headerMessageId);
+  const m = (data.emails || []).find(x => bare(x.msgId) === id || (x.msgIds || []).map(bare).includes(id));
+  const sig = String((data.settings && data.settings.signature) || '').trim();
+  let text = m && ((m.reply && m.reply.draft) || ((m.replyOptions || [])[m.replyChoice || 0] || {}).draft) || '';
+  if (text && sig) { const k = text.indexOf(sig); if (k >= 0) text = text.slice(0, k + sig.length); }
+  const base = { at: new Date().toISOString(), kind: 'reply', subject: 'Re: ' + (msg.subject || ''), from: msg.author || '' };
+  try {
+    const tab = await browser.compose.beginReply(msg.id, 'replyToSender');
+    if (text) await fillReply(tab, text);
+    else notify('대시보드 답장으로 답장', m ? '이 메일의 답장 초안이 아직 없어 빈 답장 창을 열었습니다.' : '대시보드에 없는 메일이라 빈 답장 창을 열었습니다.');
+    await logAdd([{ ...base, result: 'reply' }]);
+  } catch (e) { const er = String((e && e.message) || e); notify('답장 창을 열지 못했습니다', er); await logAdd([{ ...base, result: 'fail', error: er }]); }
+}
+for (const [id, ctx] of [['dash-reply', 'message_list'], ['dash-reply-md', 'message_display_action'], ['dash-reply-ba', 'browser_action']])
+  try { browser.menus.create({ id, title: '대시보드 답장 초안으로 답장', contexts: [ctx] }); } catch (e) {}
+browser.menus.onClicked.addListener(async (info, tab) => {
+  if (!String(info.menuItemId).startsWith('dash-reply')) return;
+  const msgs = (info.selectedMessages && info.selectedMessages.messages) || [];
+  replyFromDashboard(msgs.length ? msgs : await selectedInTab(tab));
+});
 
 browser.runtime.onInstalled.addListener(async () => { if (!(await settings())) browser.runtime.openOptionsPage(); });

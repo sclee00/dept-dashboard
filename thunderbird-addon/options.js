@@ -55,3 +55,9 @@ $('logCsv').addEventListener('click', async () => {
 browser.runtime.onMessage.addListener(m => { if (m && m.type === 'logChanged') renderLog(); });
 browser.storage.onChanged.addListener(c => { if (c.sendLog) renderLog(); });
 renderLog();
+async function renderPoll() {
+  const { replyPollAt, replyPollErr } = await browser.storage.local.get(['replyPollAt', 'replyPollErr']);
+  const v = browser.runtime.getManifest().version;
+  $('poll').innerHTML = `애드온 ${esc(v)} · 대시보드 답장 요청 확인: ${replyPollAt ? esc(when(new Date(replyPollAt).toISOString())) + (replyPollErr ? ` <b style="color:#c92a2a">${esc(replyPollErr)}</b>` : ' <b style="color:#2b8a3e">정상</b>') : '아직 확인 전'}`;
+}
+renderPoll(); setInterval(renderPoll, 5000);
