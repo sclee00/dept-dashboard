@@ -925,9 +925,9 @@ label.inl{display:inline-flex;align-items:center;gap:.3rem;font-size:.85rem} lab
         <select class="field" id="mailCat" aria-label="분류">
           <option>대학본부·행정</option><option>교원</option><option>학생</option><option>외부기관</option><option>기타</option>
         </select>
-        <select class="field" id="threadOf" aria-label="이어지는 메일"><option value="">새 메일로 등록</option></select>
+        <select class="field" id="threadOf" aria-label="이어지는 메일" hidden><option value="">새 메일로 등록</option></select>
         <button class="btn small" type="button" data-act="attPick" title="메일에 딸린 파일(엑셀·한글·PDF·워드 등)을 같이 넣으면 내용까지 읽어 분석합니다. 이 칸에 끌어다 놓아도 됩니다" style="justify-content:center"><span data-ic="doc"></span>첨부파일 넣기</button>
-        <button class="btn small" type="button" data-act="toChat" title="입력한 명령을 Claude 대화창에 붙여넣을 프롬프트로 만듭니다" style="justify-content:center"><span data-ic="copy"></span>Claude에게 시킬 프롬프트 만들기</button>
+        <button class="btn small" type="button" data-act="toChat" hidden title="입력한 명령을 Claude 대화창에 붙여넣을 프롬프트로 만듭니다" style="justify-content:center"><span data-ic="copy"></span>Claude에게 시킬 프롬프트 만들기</button>
         <div class="row"><button class="btn" type="button" data-act="cancelAnalyze" id="stopBtn" hidden>중지</button><button class="btn primary grow" type="button" data-act="analyze" id="analyzeBtn"><span data-ic="spark"></span>자동 처리</button></div>
       </div>
     </div>
