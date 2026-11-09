@@ -3463,7 +3463,7 @@ function addAttFiles(files) {
   renderAttList();
 }
 function attChip(x, removeAct) {
-  const st = x.state === 'reading' ? '<span class="spin"></span>읽는 중' : x.state === 'ok' ? `${ic('check')}${(x.chars || x.text.length).toLocaleString()}자` : x.state === 'fail' ? `${ic('alert')}못 읽음` : '보관만';
+  const st = x.state === 'reading' ? '<span class="spin"></span>읽는 중' : x.state === 'ok' ? `${ic('check')}${(x.chars || x.text.length).toLocaleString()}자` : x.state === 'fail' ? `${ic('alert')}못 읽음` : /\.(png|jpe?g|webp|gif|heic)$/i.test(x.name || '') || /^image\//.test((x.file && x.file.type) || x.type || '') ? '그림 · AI가 직접 봄' : '내용은 못 읽고 파일만 보관';
   return `<span class="attchip ${x.state || ''}" title="${esc(x.name + (x.note ? ' · ' + x.note : ''))}">${ic('doc')}<b>${esc(x.name)}</b><span class="count">${ATT_KO[x.kind || attKind(x.name)]} · ${fmtSize(x.size || 0)} · ${st}</span>${removeAct ? `<button class="x" type="button" ${removeAct} aria-label="빼기">✕</button>` : ''}</span>`;
 }
 function renderAttList() {
