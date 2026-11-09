@@ -961,7 +961,7 @@ label.inl{display:inline-flex;align-items:center;gap:.3rem;font-size:.85rem} lab
 
 <script>
 (() => {
-const DEFAULTS = { semesterLabel: '2026학년도 2학기', semesterStart: '2026-08-31', signature: '컴퓨터공학과 학과장 드림', assistant: '학과 조교',
+const DEFAULTS = { semesterLabel: '2026학년도 2학기', semesterStart: '2026-08-31', signature: '컴퓨터공학과 학과장 드림', assistant: '학과 조교', useDelegate: false,
   mf: { name: '', title: '컴퓨터공학과 학과장', greet: '안녕하세요. {직함} {이름}입니다.', close: '감사합니다.', tone: 'formal', len: 'normal', rules: '', dGreet: '{조교}님, 수고 많으십니다.', dSig: '학과장', dTone: 'polite', dRules: '' },
   workStart: '09:00', workEnd: '18:00', workDays: [1, 2, 3, 4, 5], weekly: [], googleShow: true, googleBusy: true, googlePush: false, gAutoPush: true, gCals: null, gPushCal: 'primary' };
 const G_LOGO = '<svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>';
@@ -1697,7 +1697,7 @@ function renderHeader() {
   $('stats').innerHTML = [
     [urgent, '오늘·지난 마감', urgent ? 'hot' : '', 'alert'],
     [reply, '답장 대기', reply ? 'warn' : '', 'reply'],
-    [deleg, '조교 전달 대기', deleg ? 'warn' : '', 'hand'],
+    ...(S.settings.useDelegate ? [[deleg, '조교 전달 대기', deleg ? 'warn' : '', 'hand']] : []),
     [open, '처리 중 메일', '', 'mail'],
     [weekN, '7일 내 일정', '', 'cal']
   ].map(([n, l, c, i]) => { const go = { alert: 'data-act="rail" data-r="tasks"', reply: 'data-act="gotoMf" data-mf="reply"', hand: 'data-act="gotoMf" data-mf="open"', mail: 'data-act="gotoMf" data-mf="open"', cal: 'data-act="thisMonth"' }[i] || ''; return `<button type="button" class="stat ${c} ${n ? '' : 'zero'}" ${go} data-ok="${i}" draggable="true" title="${l} ${n} · 끌어서 순서 바꾸기">${ic(i)}<span class="n">${n}</span><span class="l">${l}</span></button>`; }).join('');
@@ -1793,7 +1793,7 @@ function pendingCount(m) {
 const isActive = m => m.status !== 'archived' && m.status !== 'ignored';
 const askIgnore = m => m.relevance === 'irrelevant' && !m.relevanceDecided && m.status === 'open';
 const needsReplyNow = m => m.needsReply && !m.replied && isActive(m) && !askIgnore(m);
-const needsChoice = m => needsReplyNow(m) && (m.replyOptions || []).length > 0 && m.replyChoice == null;
+const needsChoice = () => false; // one draft only (options were dropped)
 function replyBlock(m) {
   if (askIgnore(m)) return `<div class="mbox ign">
       <div>${ic('ban')} <b>나와 상관없는 메일 같습니다</b>${m.ignoreReason ? ` · ${esc(m.ignoreReason)}` : ''}</div>
@@ -1805,7 +1805,7 @@ function replyBlock(m) {
       <div>${ic('reply')} <b>어떻게 답할까요?</b> <span class="count">고르면 그 방향의 답장 전문이 바로 준비됩니다</span></div>
       <div class="optrow">${opts.map((o, i) => `<button class="optchip" type="button" data-act="pickOpt" data-id="${m.id}" data-i="${i}" title="${esc(o.summary)}"><b>${esc(o.label)}</b><span>${esc(o.summary)}</span></button>`).join('')}</div>
     </div>`;
-  const d = (m.reply && m.reply.draft) || '';
+  const d = fixNames((m.reply && m.reply.draft) || (opts[m.replyChoice ?? 0] || {}).draft || '');
   if (d) return `<div class="mbox draft">
       <div class="row" style="justify-content:space-between"><span>${ic('reply')} <b>답장 초안</b>${m.replyChoice != null && opts[m.replyChoice] ? ` <span class="pill pend">${esc(opts[m.replyChoice].label)}</span>` : ''}</span>
         <span class="row">${opts.length ? `<button class="btn small" type="button" data-act="clearOpt" data-id="${m.id}">다른 안</button>` : ''}<button class="btn small primary" type="button" data-act="copyReply" data-id="${m.id}">${ic('copy')}복사</button><button class="btn small" type="button" data-act="openMail" data-id="${m.id}">고치기</button></span></div>
@@ -3486,6 +3486,17 @@ const MF_LEN = { short: '아주 짧게 (3~5줄)', normal: '적당히 (5~10줄)',
 const MF_DTONE = { polite: '정중한 부탁 말투', direct: '짧고 분명한 지시 말투', friendly: '친근하고 부드러운 말투' };
 function mfOf() { return { ...DEFAULTS.mf, ...(S.settings.mf || {}) }; }
 function mfFill(t) { const f = mfOf(); return String(t || '').replace(/\{이름\}/g, f.name || '').replace(/\{직함\}/g, f.title || '').replace(/\{조교\}/g, S.settings.assistant || '조교').replace(/\s{2,}/g, ' ').trim(); }
+// the AI sometimes signs with another person's name taken from the recipient list: put the real name back
+function fixNames(t) {
+  t = String(t || ''); if (!t) return t;
+  const f = mfOf(), me = (f.name || '').trim();
+  const STOP = /^(입니다|드림|올림|배상|님|회의|위원|명의)$/;
+  t = t.replace(/(학과장|교수|주임교수)\s+([가-힣]{2,4})(?=\s*(입니다|드림|올림|배상)|\s*$)/gm, (all, role, nm) => STOP.test(nm) || nm === me ? all : me ? `${role} ${me}` : role);
+  // the old default sign-off line → the signature set now
+  const sig = mfFill(S.settings.signature || '');
+  if (sig && sig !== DEFAULTS.signature) t = t.replace(new RegExp('^[ \\t]*' + DEFAULTS.signature.replace(/\s+/g, '[ \\t]*') + '[ \\t]*$', 'm'), sig);
+  return t;
+}
 function replyFmt() {
   const f = mfOf();
   return [`답장 형식:`,
@@ -4719,7 +4730,7 @@ function renderSheet(force) {
   const decs = a.decisions || [], dch = m.decisionChoices || {};
   const items = delegateItems(m), hasShort = items.length > 0, tab = UI.dlgTab || (hasShort ? 'short' : 'long');
   const pend = pendingCount(m);
-  const draft = UI.edits.draft ?? (m.reply && m.reply.draft) ?? '';
+  const draft = UI.edits.draft ?? fixNames((m.reply && m.reply.draft) || ((m.replyOptions || [])[m.replyChoice ?? 0] || {}).draft || '');
   root.innerHTML = `<div class="scrim" data-act="closeSheet"></div>
   <aside class="sheet ${simple ? 'simple' : ''}" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
     <div class="gutter sgrip" data-split="sheet" role="separator" aria-orientation="vertical" tabindex="0" title="끌어서 너비 조절 · 두 번 누르면 원래대로"></div>
@@ -4751,7 +4762,7 @@ function renderSheet(force) {
         ${evs.length ? split(evs, itemEv, 'Ev', '일정') : '<div class="count">이 메일에서 찾은 일정이 없습니다.</div>'}</div>
       <div class="sec"><h4><span>할 일 ${tkMain.length}${tks.length > tkMain.length ? ` <span class="count">(전체 ${tks.length})</span>` : ''}</span>${tkMain.filter(e => !e.added && !e.skipped).length > 1 ? '<button class="btn small" type="button" data-act="addAllTk">모두 추가</button>' : ''}</h4>
         ${tks.length ? split(tks, itemTk, 'Tk', '할 일') : '<div class="count">이 메일에서 찾은 할 일이 없습니다.</div>'}</div>` : ''}
-      <div class="sec delegsec"><h4><span>${ic('hand')} ${esc(S.settings.assistant)}에게 업무 지시</span>${m.delegated ? `<span class="pill replied">${ic('check')}전달함</span>` : m.delegable ? '<span class="pill deleg">전달 권장</span>' : ''}</h4>
+      <div class="sec delegsec" ${S.settings.useDelegate ? '' : 'hidden'}><h4><span>${ic('hand')} ${esc(S.settings.assistant)}에게 업무 지시</span>${m.delegated ? `<span class="pill replied">${ic('check')}전달함</span>` : m.delegable ? '<span class="pill deleg">전달 권장</span>' : ''}</h4>
         <div class="seg" role="group" aria-label="지시 메일 길이" style="margin-bottom:.5rem"><button type="button" data-act="dlgTab" data-v="short" aria-pressed="${tab === 'short'}">짧은 버전 · 개조식</button><button type="button" data-act="dlgTab" data-v="long" aria-pressed="${tab === 'long'}">자세한 버전</button></div>
         ${tab === 'short' ? (hasShort ? `<div class="count" style="margin-bottom:.3rem">넣을 항목을 고르세요. <b>넣을까요?</b> 표시는 AI가 판단을 맡긴 항목입니다.</div>
           <div class="dlitems">${items.map((x, i) => `<label class="chk dli ${x.essential ? '' : 'opt'}"><input type="checkbox" data-act="dlSel" data-i="${i}" ${delegateSel(m, i) ? 'checked' : ''}><span>${esc(x.text)}</span>${x.essential ? '' : '<em class="ask">넣을까요?</em>'}</label>`).join('')}</div>
@@ -4776,7 +4787,6 @@ function renderSheet(force) {
           <button class="btn small" type="button" data-act="redraft" data-tone="요청을 수락하는 방향으로 다시 써 주세요.">수락</button>
           <button class="btn small" type="button" data-act="redraft" data-tone="요청을 정중하게 거절하는 방향으로, 가능하면 대안을 제시하며 다시 써 주세요.">정중히 거절</button>
         </span>`}</h4>
-        ${(m.replyOptions || []).length ? `<div class="count" style="margin-bottom:.35rem">답장 방향을 고르세요. 고른 안이 아래 초안으로 들어갑니다.</div><div class="optrow" style="margin-bottom:.6rem">${m.replyOptions.map((o, i) => `<button class="optchip ${m.replyChoice === i ? 'on' : ''}" type="button" data-act="pickOpt" data-id="${m.id}" data-i="${i}"><b>${esc(o.label)}</b><span>${esc(o.summary)}</span></button>`).join('')}</div>` : ''}
         <textarea class="field" id="draft" placeholder="${m.needsReply ? '' : '답장이 필요 없는 메일로 판단했습니다. 필요하면 아래에 지시를 적고 초안 작성을 누르세요.'}">${esc(draft)}</textarea>
         <div class="row" style="margin-top:.5rem">
           <input class="field grow" id="draftNote" placeholder="추가 지시 예: 11월 5일까지 제출하겠다고, 담당 교수 김OO 참조" value="${ev('draftNote', '')}" autocomplete="off">
@@ -4848,9 +4858,9 @@ ${(S.settings.ignoreHints || []).length ? '전에 내가 "상관없다"고 넘�
   "tasks": [{"title": "학과장이 할 일을 '~하기' 형태의 짧은 문장으로", "due": "YYYY-MM-DD 또는 null", "priority": "high | mid | low", "forHead": true 또는 false}],
   "relevance": "relevant | irrelevant",
   "ignoreReason": "irrelevant이면 그렇게 본 이유 한 문장, 아니면 null",
-  "replyMode": "draft | options | none",
+  "replyMode": "draft | none",
   "replyDraft": "replyMode가 draft일 때 학과장 명의의 한국어 답장 전문, 아니면 null",
-  "replyOptions": [{"label": "짧은 이름 (예: 참석, 불참, 대리 참석)", "summary": "이 답의 요지 한 문장", "draft": "그 방향의 답장 전문"}],
+  "replyOptions": [],
   "delegable": true 또는 false  (자료 취합, 공문 작성, 일정 조율, 명단 정리, 회신 발송처럼 조교가 실무를 맡을 수 있는 일이 있으면 true),
   "delegateDraft": "delegable이면 학과장이 ${S.settings.assistant}에게 보내는 업무 지시 메일 전문(15줄 이내), 아니면 null",
   "delegateTitle": "업무 지시 메일 제목 (짧게)",
@@ -4865,10 +4875,10 @@ decisions: 내가 골라야 답장·지시를 마무리할 수 있는 결정만 
 delegateItems: 조교 지시를 개조식으로 한 줄씩 쪼갠 것(3~8개). 꼭 필요한 건 essential true, 넣을지 내가 판단할 만한 건 false.
 highlights: 원문에서 내가 눈여겨볼 구절(마감·기한, 요청·회신 요구, 결정할 부분, 날짜·시간, 첨부 언급, 주의·필수 사항) 최대 20개. text는 원문이랑 글자 하나까지 똑같아야 해.
 조교 지시 메일은 첫 줄에 "제목: ...", 빈 줄, 그다음 본문. 본문은 배경 한 문장 → 할 일 개조식(-), 줄마다 산출물·기한 → 내 확인이 필요한 지점 → 완료 보고 방식 한 줄. 전체 15줄 안으로 짧게. 조교가 원메일 안 봐도 일할 수 있게 구체적으로 쓰고, 내가 정할 건 [대괄호]로 남겨 둬.
-${delegFmt()}
+${S.settings.useDelegate ? delegFmt() : '조교 지시는 이번엔 필요 없어. delegable은 false, delegateDraft·delegateTitle은 null, delegateItems는 빈 배열로 둬.'}
 important: 내가 직접 참석·결정해야 하는 일정, 본부·외부 기관 공식 일정, 채용·입시·평가·예산·마감처럼 놓치면 곤란한 건 true. 참고용·선택 참석·홍보성은 false.
 관련성: 내가 처리하거나 알아야 할 게 없는 메일(학회·세미나·저널·출판사 홍보, 원고 모집, 광고, 단체 뉴스레터, 다른 학과나 다른 대상 안내 같은 거)은 relevance를 irrelevant로, needsReply는 false, replyMode는 none, events·tasks는 빈 배열로. 내가 발표자·위원·심사자로 지정된 학회 메일이나 학과 교수·학생한테 전달할 내용이면 relevant야.
-답장 방식: 답장이 필요하고 뭐라고 답할지 분명하면 replyMode는 draft, replyDraft에 전문. 답이 내 결정에 달려 있으면(참석 여부, 수락·거절, 승인, 여러 안 중 선택, 금액·인원 같은 거) replyMode는 options로 하고 replyOptions에 방향이 다른 답장 2~4개를 각각 완성된 전문으로 써 줘. 이때 replyDraft는 null. 답장이 필요 없으면 none.
+답장 방식: 답장이 필요하면 replyMode는 draft로 하고 replyDraft에 답장 전문을 딱 하나만 써 줘. 답이 내 결정에 달린 부분(참석 여부, 수락·거절, 승인, 금액·인원 같은 거)은 네가 정하지 말고 그 자리만 [참석 / 불참]처럼 대괄호로 비워 둬. replyOptions는 항상 빈 배열. 답장이 필요 없으면 none.
 답장 초안은 인사 → 요청에 대한 답 → 확인·요청 사항 → 맺음말 순서로. 내가 아직 안 정한 것(참석 여부, 승인 여부, 구체적인 숫자)은 [대괄호]로 비워 둬.
 ${replyFmt()}
 제출·회신 마감을 events(종류 "마감")랑 tasks 양쪽에 다 넣지는 마. 내가 직접 해야 하는 일은 tasks에, 참석하거나 기억할 날짜는 events에.
@@ -4892,11 +4902,11 @@ function cleanAnalysis(a) {
       location: e.location ? String(e.location).slice(0, 120) : '', kind: kinds.includes(e.kind) ? e.kind : '회의', important: typeof e.important === 'boolean' ? e.important : autoImp(e.title, e.kind) === 'high', forHead: e.forHead !== false, added: false })),
     tasks: (Array.isArray(a.tasks) ? a.tasks : []).filter(t => t && t.title).slice(0, 12).map(t => ({
       title: String(t.title).slice(0, 200), due: isDate(t.due) ? t.due : '', priority: pr(t.priority), forHead: t.forHead !== false, added: false })),
-    replyDraft: a.replyDraft ? String(a.replyDraft).slice(0, 8000) : '',
+    replyDraft: fixNames(a.replyDraft ? String(a.replyDraft).slice(0, 8000) : (a.replyMode === 'options' && Array.isArray(a.replyOptions) && a.replyOptions[0] && a.replyOptions[0].draft ? String(a.replyOptions[0].draft).slice(0, 8000) : '')),
     attachments: (Array.isArray(a.attachments) ? a.attachments : []).filter(x => x && x.name).slice(0, 20).map(x => ({ name: String(x.name).slice(0, 160), gist: String(x.gist || '').slice(0, 400) })),
     thread: (Array.isArray(a.thread) ? a.thread : []).filter(t => t && t.gist).slice(0, 30).map(t => ({ date: isDate(t.date) ? t.date : '', from: String(t.from || '').slice(0, 80), gist: String(t.gist).slice(0, 300) })),
     openIssues: (Array.isArray(a.openIssues) ? a.openIssues : []).filter(Boolean).slice(0, 10).map(x => String(x).slice(0, 200)),
-    delegable: !!a.delegable,
+    delegable: !!a.delegable && !!S.settings.useDelegate,
     relevance: a.relevance === 'irrelevant' ? 'irrelevant' : 'relevant',
     ignoreReason: a.ignoreReason ? String(a.ignoreReason).slice(0, 200) : '',
     replyOptions: a.replyMode === 'options' && Array.isArray(a.replyOptions) ? a.replyOptions.filter(o => o && o.draft).slice(0, 4).map(o => ({ label: String(o.label || '안').slice(0, 30), summary: String(o.summary || '').slice(0, 160), draft: String(o.draft).slice(0, 6000) })) : [],
@@ -4927,7 +4937,7 @@ function fieldsFrom(a, emailId) {
   return {
     ...(a.subject ? { subject: a.subject } : {}), from: a.from, summary: a.summary, priority: a.priority, needsReply: a.needsReply,
     replyDeadline: a.replyDeadline, analysis: { events: evs, tasks: tks, thread: a.thread, openIssues: a.openIssues, attachments: a.attachments, myAction: a.myAction, decisions: a.decisions, highlights: a.highlights }, decisionChoices: null, delegateSel: null,
-    reply: { draft: a.replyOptions.length ? '' : a.replyDraft }, replyOptions: a.replyOptions, replyChoice: null,
+    reply: { draft: a.replyDraft }, replyOptions: [], replyChoice: null,
     relevance: a.relevance, ignoreReason: a.ignoreReason, relevanceDecided: null,
     delegable: a.relevance === 'irrelevant' ? false : a.delegable, delegate: { draft: a.relevance === 'irrelevant' ? '' : a.delegateDraft, items: a.relevance === 'irrelevant' ? [] : a.delegateItems, title: a.delegateTitle, short: '' }
   };
@@ -5142,8 +5152,9 @@ ${String(m.raw).slice(0, 20000)}
   const before = ta.value;
   try {
     const { text } = await sample(prompt, { title: '답장 초안', onText: ({ text }) => { const t = $('draft'); if (t) t.value = text; } });
-    UI.edits.draft = text;
-    await patch('emails', m.id, { reply: { draft: text }, needsReply: true });
+    const fixed = fixNames(text); if (fixed !== text) { const t = $('draft'); if (t) t.value = fixed; }
+    UI.edits.draft = fixed;
+    await patch('emails', m.id, { reply: { draft: fixed }, needsReply: true });
     st.textContent = '초안을 저장했습니다. 대괄호 부분을 채운 뒤 복사해서 보내세요.';
   } catch (e) {
     if (e && e.text) { UI.edits.draft = e.text; } else { const t = $('draft'); if (t) t.value = before; }
@@ -5503,6 +5514,7 @@ document.addEventListener('click', async ev0 => {
       case 'saveSettings': {
         const fxData = $('fxShort') ? fxReadForm() : null, fontData = $('fontSize') ? fontReadForm() : null, wcData = document.querySelector('.wclist') ? wcReadForm() : null;
         const data = { ...S.settings, semesterLabel: $('sLabel').value.trim() || DEFAULTS.semesterLabel, semesterStart: isDate($('sStart').value) ? $('sStart').value : DEFAULTS.semesterStart, signature: $('sSig') ? $('sSig').value.trim() || DEFAULTS.signature : S.settings.signature, assistant: $('sAsst') ? $('sAsst').value.trim() || DEFAULTS.assistant : S.settings.assistant,
+          ...($('sUseDeleg') ? { useDelegate: $('sUseDeleg').checked } : {}),
           ...($('mfName') ? { mf: { name: $('mfName').value.trim(), title: $('mfTitle').value.trim(), greet: $('mfGreet').value.trim(), close: $('mfClose').value.trim(), tone: $('mfTone').value, len: $('mfLen').value, rules: $('mfRules').value.trim(), dGreet: $('mfDGreet').value.trim(), dSig: $('mfDSig').value.trim() || '학과장', dTone: $('mfDTone').value, dRules: $('mfDRules').value.trim() } } : {}),
           ...(fxData ? { fx: fxData } : {}), ...(fontData ? { font: fontData } : {}), ...(wcData ? { wordColors: wcData } : {}), cellMode: $('sCellMode') && $('sCellMode').value === 'titles' ? 'titles' : 'icons', googleShow: $('sGShow').checked, googleBusy: $('sGBusy').checked, gAutoPush: $('sGPush').checked };
         if ($('tripOn')) data.trip = tripReadForm();
@@ -5740,6 +5752,7 @@ function mailFmtHtml(s) {
       <label>그 밖의 규칙 (자유롭게)<textarea class="field" id="mfRules" rows="2" placeholder="예: 날짜는 11월 5일(수)처럼 요일까지 · 첨부를 언급할 때는 파일 이름을 적기">${esc(f.rules)}</textarea></label>
     </div>
     <div class="bsec"><b>${ic('hand')} 조교 지시 메일</b>
+      <label class="chk"><input type="checkbox" id="sUseDeleg" ${s.useDelegate ? 'checked' : ''}> 메일을 분석할 때 조교 업무 지시도 만들기 (끄면 메일 화면에 답장 초안만 보입니다)</label>
       <label>받는 조교 (이름·호칭)<input class="field" id="sAsst" value="${esc(s.assistant)}" placeholder="예: 김OO 조교"></label>
       <label>첫 인사<input class="field" id="mfDGreet" value="${esc(f.dGreet)}" placeholder="예: {조교}님, 수고 많으십니다."></label>
       <div class="row2"><label>서명<input class="field" id="mfDSig" value="${esc(f.dSig)}" placeholder="예: 학과장 {이름}"></label>
@@ -5954,7 +5967,7 @@ function renderHist() {
 }
 { let k = 'auto'; try { k = localStorage.getItem('qtab') || 'auto'; } catch {} qTab(k); }
 setInterval(() => { if (UI.qtab === 'stat' && !document.hidden) renderStat(); }, 30000);
-if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__dd = { S, add, UNDO, replyFmt, delegFmt, snapshot, mergeIn, renderAll, FS, G, parseEdit, normalizeCmd, pickDT, parseCommand };
+if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__dd = { S, add, UNDO, replyFmt, delegFmt, fixNames, snapshot, mergeIn, renderAll, FS, G, parseEdit, normalizeCmd, pickDT, parseCommand };
 })();
 </script>
 </body>
