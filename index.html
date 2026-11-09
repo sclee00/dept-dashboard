@@ -574,11 +574,11 @@ body.resizing{user-select:none} body.rs-col,body.rs-col *{cursor:col-resize!impo
 .tidylist{max-height:min(62vh,640px);overflow:auto;display:flex;flex-direction:column;gap:.7rem;margin-top:.6rem}
 .tidygrp{border:1px solid var(--line);border-radius:10px;padding:.55rem .7rem;display:flex;flex-direction:column;gap:.4rem}
 .tidyhead{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
-.tidyrow{display:grid;grid-template-columns:7.5rem minmax(0,1fr) auto;gap:.6rem;align-items:center;padding:.3rem 0;border-top:1px dashed var(--line)}
-.tidyrow .tidyt{display:flex;flex-direction:column;min-width:0}.tidyrow .tidyt b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.tidyctl{display:flex;align-items:center;gap:.3rem;flex-wrap:wrap}.tidyctl input{width:7rem;padding:.2rem .35rem}
+.tidyrow{display:grid;grid-template-columns:6.8rem minmax(0,1fr);gap:.25rem .6rem;align-items:start;padding:.4rem 0;border-top:1px dashed var(--line)}
+.tidyrow .tidyt{display:flex;flex-direction:column;min-width:0}.tidyrow .tidyt b{overflow-wrap:anywhere;line-height:1.35}.tidyrow .tidyt .count{overflow-wrap:anywhere}
+.tidyctl{grid-column:2/-1;display:flex;align-items:center;gap:.3rem;flex-wrap:wrap}.tidyctl input{width:8.2rem;padding:.2rem .35rem}
 .tidyn{display:inline-block;min-width:1.2em;padding:0 .3em;border-radius:999px;background:var(--red);color:#fff;font-size:.72em;text-align:center;margin-left:.2rem}
-@media (max-width:700px){.tidyrow{grid-template-columns:1fr}}
+@media (max-width:700px){.tidyrow{grid-template-columns:1fr}.tidyctl{grid-column:1/-1}}
 .tgopen{margin-top:.6rem;width:100%;justify-content:center}
 .tgrid{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:10px;overflow:hidden;user-select:none;touch-action:none;background:var(--surface-2)}
 .tgrid .tr{display:grid;grid-template-columns:3.2rem minmax(0,1fr);min-height:1.15rem;cursor:pointer;border-top:1px solid transparent}
