@@ -2,14 +2,32 @@
   "manifest_version": 2,
   "name": "학과장실 대시보드로 보내기",
   "description": "선택한 메일(첨부 포함)을 구글 드라이브로 보내 학과장실 대시보드가 바로 자동 처리하게 합니다.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": "학과장실 대시보드",
   "browser_specific_settings": {
-    "gecko": { "id": "send-to-dept-dashboard@sclee00.github.io", "strict_min_version": "115.0" }
+    "gecko": {
+      "id": "send-to-dept-dashboard@sclee00.github.io",
+      "strict_min_version": "115.0"
+    }
   },
-  "icons": { "32": "icons/send.svg", "64": "icons/send.svg" },
-  "permissions": ["messagesRead", "accountsRead", "storage", "menus", "notifications", "https://script.google.com/*", "https://script.googleusercontent.com/*"],
-  "background": { "scripts": ["background.js"] },
+  "icons": {
+    "32": "icons/send.svg",
+    "64": "icons/send.svg"
+  },
+  "permissions": [
+    "messagesRead",
+    "accountsRead",
+    "storage",
+    "menus",
+    "notifications",
+    "https://script.google.com/*",
+    "https://script.googleusercontent.com/*"
+  ],
+  "background": {
+    "scripts": [
+      "background.js"
+    ]
+  },
   "browser_action": {
     "default_title": "대시보드로 보내기",
     "default_label": "대시보드로 보내기",
@@ -20,5 +38,8 @@
     "default_label": "대시보드로 보내기",
     "default_icon": "icons/send.svg"
   },
-  "options_ui": { "page": "options.html", "open_in_tab": false }
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  }
 }

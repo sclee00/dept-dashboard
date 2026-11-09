@@ -22,3 +22,36 @@ $('save').addEventListener('click', async () => {
     show(`연결했습니다 (${j.email}). 이제 메일에서 "대시보드로 보내기"를 누르세요.`, true);
   } catch (e) { show('스크립트에 연결하지 못했습니다: ' + (e.message || e), false); }
 });
+
+/* ---------- send log ---------- */
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const two = n => String(n).padStart(2, '0');
+const when = iso => { if (!iso) return ''; const d = new Date(iso); return `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())} ${two(d.getHours())}:${two(d.getMinutes())}`; };
+const kb = n => !n ? '' : n < 1048576 ? Math.round(n / 1024) + 'KB' : (n / 1048576).toFixed(1) + 'MB';
+const RES = { ok: '보냄', dup: '이미 보낸 메일', fail: '실패' };
+async function renderLog() {
+  const { sendLog = [] } = await browser.storage.local.get('sendLog');
+  const q = $('logQ').value.trim().toLowerCase(), f = $('logF').value;
+  const rows = sendLog.filter(x => (!f || x.result === f) && (!q || (x.subject + ' ' + x.from).toLowerCase().includes(q)));
+  const nOk = sendLog.filter(x => x.result === 'ok').length, nFail = sendLog.filter(x => x.result === 'fail').length;
+  $('logN').textContent = sendLog.length ? `${sendLog.length}건 · 보냄 ${nOk} · 실패 ${nFail}` : '';
+  $('log').innerHTML = !rows.length ? `<div class="empty">${sendLog.length ? '찾는 기록이 없습니다.' : '아직 보낸 메일이 없습니다.'}</div>`
+    : `<table><thead><tr><th>보낸 시각</th><th>결과</th><th>메일</th><th>첨부</th></tr></thead><tbody>${rows.map(x => `<tr>
+      <td class="t">${esc(when(x.at))}</td>
+      <td class="res ${esc(x.result)}">${esc(RES[x.result] || x.result)}</td>
+      <td class="s"><div>${esc(x.subject)}</div><div class="sub">${esc(x.from)}${x.date ? ' · 받은 ' + esc(when(x.date)) : ''}${x.folder ? ' · ' + esc(x.folder) : ''}</div>${x.error ? `<div class="sub" style="color:#c92a2a">${esc(x.error)}</div>` : ''}</td>
+      <td class="t">${x.atts ? `${x.atts}개 ${esc(kb(x.size))}${x.attSkipped ? ` <span class="sub">(${x.attSkipped}개 이름만)</span>` : ''}` : ''}</td></tr>`).join('')}</tbody></table>`;
+}
+$('logQ').addEventListener('input', renderLog);
+$('logF').addEventListener('change', renderLog);
+$('logClear').addEventListener('click', async () => { if (!confirm('보낸 기록을 모두 지울까요? (대시보드에 들어간 메일은 그대로입니다)')) return; await browser.storage.local.set({ sendLog: [] }); renderLog(); });
+$('logCsv').addEventListener('click', async () => {
+  const { sendLog = [] } = await browser.storage.local.get('sendLog');
+  const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+  const csv = '\ufeff' + [['보낸 시각', '결과', '제목', '보낸 사람', '받은 시각', '폴더', '첨부 수', '첨부 크기', '오류'].map(q).join(',')]
+    .concat(sendLog.map(x => [when(x.at), RES[x.result] || x.result, x.subject, x.from, when(x.date), x.folder, x.atts || 0, kb(x.size), x.error || ''].map(q).join(','))).join('\r\n');
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = 'dashboard-send-log.csv'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+});
+browser.runtime.onMessage.addListener(m => { if (m && m.type === 'logChanged') renderLog(); });
+browser.storage.onChanged.addListener(c => { if (c.sendLog) renderLog(); });
+renderLog();

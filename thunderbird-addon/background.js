@@ -69,6 +69,15 @@ async function packMessage(msg) {
   };
 }
 
+/* ---------- log of what was sent (shown in the add-on's settings page) ---------- */
+const LOG_MAX = 300;
+async function logAdd(items) {
+  const { sendLog = [] } = await browser.storage.local.get('sendLog');
+  const next = items.concat(sendLog).slice(0, LOG_MAX);
+  await browser.storage.local.set({ sendLog: next });
+  try { browser.runtime.sendMessage({ type: 'logChanged' }).catch(() => {}); } catch (e) {}
+}
+
 async function post(s, mail) {
   const r = await fetch(s.gasUrl, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ key: s.gasKey, action: 'mailPut', mail }) });
   let j = null; try { j = await r.json(); } catch (e) {}
@@ -80,11 +89,23 @@ async function send(messages) {
   const s = await settings();
   if (!s) { notify('대시보드로 보내기', '먼저 연결 설정이 필요합니다. 설정 창이 열립니다.'); browser.runtime.openOptionsPage(); return; }
   if (!messages.length) { notify('대시보드로 보내기', '보낼 메일을 먼저 선택해 주세요.'); return; }
-  let ok = 0, dup = 0; const fails = [];
+  let ok = 0, dup = 0; const fails = [], log = [];
   for (const m of messages.slice(0, 20)) {
-    try { const j = await post(s, await packMessage(m)); if (j.dup) dup++; else ok++; }
-    catch (e) { fails.push((m.subject || '(제목 없음)') + ': ' + (e.message || e)); }
+    const base = { at: new Date().toISOString(), subject: m.subject || '(제목 없음)', from: m.author || '', date: m.date ? new Date(m.date).toISOString() : '', folder: m.folder ? m.folder.name || '' : '', msgId: m.headerMessageId || '' };
+    try {
+      const mail = await packMessage(m);
+      const j = await post(s, mail);
+      const att = mail.attachments || [];
+      log.push({ ...base, result: j.dup ? 'dup' : 'ok', atts: att.length, attSkipped: att.filter(a => a.skipped).length, size: att.reduce((n, a) => n + (a.size || 0), 0), converted: (j.converted || []).length || 0 });
+      if (j.dup) dup++; else ok++;
+    } catch (e) {
+      const msg = String((e && e.message) || e);
+      fails.push((m.subject || '(제목 없음)') + ': ' + msg);
+      log.push({ ...base, result: 'fail', error: msg.slice(0, 300) });
+    }
   }
+  if (messages.length > 20) log.push({ at: new Date().toISOString(), subject: `(한 번에 20통까지만 보냅니다 · ${messages.length - 20}통은 보내지 않음)`, result: 'fail', error: '20통 초과' });
+  await logAdd(log.reverse());
   if (fails.length) notify('일부 메일을 보내지 못했습니다', fails.join('\n'));
   else notify('대시보드로 보냈습니다', (messages.length === 1 ? (messages[0].subject || '(제목 없음)') : `${ok}건`) + (dup ? ` · 이미 보낸 메일 ${dup}건` : '') + ' — 대시보드 이메일 처리 목록에 들어갑니다.');
 }
@@ -104,7 +125,10 @@ browser.browserAction.onClicked.addListener(async tab => send(await selectedInTa
 browser.messageDisplayAction.onClicked.addListener(async tab => send(await selectedInTab(tab)));
 
 browser.menus.create({ id: 'send-dash', title: '대시보드로 보내기', contexts: ['message_list'] });
+for (const [id, ctx] of [['send-log', 'message_list'], ['send-log-ba', 'browser_action'], ['send-log-md', 'message_display_action']])
+  try { browser.menus.create({ id, title: '대시보드로 보낸 기록 보기', contexts: [ctx] }); } catch (e) {}
 browser.menus.onClicked.addListener(async (info, tab) => {
+  if (String(info.menuItemId).startsWith('send-log')) { browser.runtime.openOptionsPage(); return; }
   if (info.menuItemId !== 'send-dash') return;
   const msgs = (info.selectedMessages && info.selectedMessages.messages) || [];
   send(msgs.length ? msgs : await selectedInTab(tab));
