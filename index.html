@@ -1795,6 +1795,14 @@ function renderTasks() {
 }
 
 /* ---------- emails ---------- */
+// once every event/to-do of a mail is put in (or skipped), the mail goes to 처리 완료 by itself
+async function autoDone(id, msg) {
+  const m = S.emails.find(x => x.id === id);
+  if (!m || m.status !== 'open' || pendingCount(m) || !m.analysis || !((m.analysis.events || []).length + (m.analysis.tasks || []).length)) { if (msg) toast(msg); return false; }
+  await patch('emails', id, { status: 'done' });
+  toast(`${msg ? msg + ' ' : ''}모두 반영해서 처리 완료로 옮겼습니다.${needsReplyNow(m) ? ' 답장은 "답장 대기"에 남아 있습니다.' : ''}`);
+  closeSheet(); return true;
+}
 function pendingCount(m) {
   const a = m.analysis || {};
   return (a.events || []).filter(e => !e.added && !e.skipped).length + (a.tasks || []).filter(e => !e.added && !e.skipped).length;
@@ -5648,7 +5656,7 @@ document.addEventListener('click', async ev0 => {
       case 'addEv': case 'addTk': {
         const kind = act === 'addEv' ? 'events' : 'tasks';
         const a = await addFromItem(m, kind, Number(el.dataset.i));
-        if (a) { await patch('emails', m.id, { analysis: a }); toast(kind === 'events' ? '일정에 추가했습니다.' : '할 일에 추가했습니다.'); renderSheet(true); }
+        if (a) { await patch('emails', m.id, { analysis: a }); if (!(await autoDone(m.id, kind === 'events' ? '일정에 추가했습니다.' : '할 일에 추가했습니다.'))) renderSheet(true); }
         return;
       }
       case 'addAllEv': case 'addAllTk': {
@@ -5658,11 +5666,11 @@ document.addEventListener('click', async ev0 => {
           if (a[kind][i].added || a[kind][i].skipped) continue;
           const r = await addFromItem({ ...m, analysis: a }, kind, i); if (r) { a = r; n++; }
         }
-        await patch('emails', m.id, { analysis: a }); toast(`${n}건 추가했습니다.`); renderSheet(true); return;
+        await patch('emails', m.id, { analysis: a }); if (!(await autoDone(m.id, `${n}건 추가했습니다.`))) renderSheet(true); return;
       }
       case 'skipItem': {
         const a = JSON.parse(JSON.stringify(m.analysis)); a[el.dataset.kind][Number(el.dataset.i)].skipped = true;
-        await patch('emails', m.id, { analysis: a }); renderSheet(true); return;
+        await patch('emails', m.id, { analysis: a }); if (!(await autoDone(m.id, '건너뛰었습니다.'))) renderSheet(true); return;
       }
       case 'genPrompts': return genPrompts(m);
       case 'writeDelegate': return writeDelegate(m);
@@ -5692,7 +5700,25 @@ document.addEventListener('click', async ev0 => {
       }
       case 'replied': await patch('emails', m.id, { replied: true, reply: { draft: $('draft').value } }); renderSheet(true); return;
       case 'unreplied': await patch('emails', m.id, { replied: false }); renderSheet(true); return;
-      case 'setStatus': await patch('emails', m.id, { status: el.dataset.s }); if (el.dataset.s !== 'open') closeSheet(); else renderSheet(true); return;
+      case 'setStatus': {
+        // 처리 완료 with items not yet put in the calendar: put them in first, or finish without them
+        if (el.dataset.s === 'done' && pendingCount(m)) {
+          const n = pendingCount(m);
+          const v = await gAsk({ title: '처리 완료', icon: 'check', rows: [...((m.analysis || {}).events || []).filter(e => !e.added && !e.skipped).map(e => ['일정', `${e.date ? fmtShort(e.date) + ' ' : ''}${e.time || ''} ${e.title}`]), ...((m.analysis || {}).tasks || []).filter(e => !e.added && !e.skipped).map(e => ['할 일', e.title])], note: `아직 반영하지 않은 항목이 ${n}개 있습니다.`, choices: [{ v: 'all', label: `모두 반영하고 완료`, primary: true }, { v: 'skip', label: '반영하지 않고 완료' }] });
+          if (!v) return;
+          let a = m.analysis;
+          for (const kind of ['events', 'tasks']) for (let i = 0; i < (a[kind] || []).length; i++) {
+            if (a[kind][i].added || a[kind][i].skipped) continue;
+            if (v === 'all') { const r = await addFromItem({ ...m, analysis: a }, kind, i); if (r) { a = r; continue; } }
+            a = JSON.parse(JSON.stringify(a)); a[kind][i].skipped = true;
+          }
+          await patch('emails', m.id, { analysis: a, status: 'done' });
+          toast(v === 'all' ? '모두 반영하고 처리 완료로 옮겼습니다.' : '처리 완료로 옮겼습니다.'); closeSheet(); return;
+        }
+        await patch('emails', m.id, { status: el.dataset.s });
+        if (el.dataset.s === 'done') toast('처리 완료로 옮겼습니다.' + (needsReplyNow(S.emails.find(x => x.id === m.id) || {}) ? ' 답장은 "답장 대기"에 남아 있습니다.' : ''));
+        if (el.dataset.s !== 'open') closeSheet(); else renderSheet(true); return;
+      }
       case 'reanalyze': return reanalyze(m);
       case 'delMail':
         if (!UI.confirmDel) { UI.confirmDel = true; renderSheet(true); return; }
