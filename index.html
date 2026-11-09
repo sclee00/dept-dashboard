@@ -1793,6 +1793,13 @@ function pendingCount(m) {
 const isActive = m => m.status !== 'archived' && m.status !== 'ignored';
 const askIgnore = m => m.relevance === 'irrelevant' && !m.relevanceDecided && m.status === 'open';
 const needsReplyNow = m => m.needsReply && !m.replied && isActive(m) && !askIgnore(m);
+// the address to answer: the sender's e-mail in the stored "from" or the first 보낸 사람/From line of the mail
+function replyTo(m) {
+  const re = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/;
+  const f = String(m.from || '').match(re); if (f) return f[0];
+  const line = String(m.raw || '').split('\n').find(l => /^\s*(보낸\s*사람|보낸사람|from|발신자?)\s*[:：]/i.test(l));
+  const g = line && line.match(re); return g ? g[0] : '';
+}
 const needsChoice = () => false; // one draft only (options were dropped)
 function replyBlock(m) {
   if (askIgnore(m)) return `<div class="mbox ign">
@@ -1808,7 +1815,7 @@ function replyBlock(m) {
   const d = fixNames((m.reply && m.reply.draft) || (opts[m.replyChoice ?? 0] || {}).draft || '');
   if (d) return `<div class="mbox draft">
       <div class="row" style="justify-content:space-between"><span>${ic('reply')} <b>답장 초안</b>${m.replyChoice != null && opts[m.replyChoice] ? ` <span class="pill pend">${esc(opts[m.replyChoice].label)}</span>` : ''}</span>
-        <span class="row">${opts.length ? `<button class="btn small" type="button" data-act="clearOpt" data-id="${m.id}">다른 안</button>` : ''}<button class="btn small primary" type="button" data-act="copyReply" data-id="${m.id}">${ic('copy')}복사</button><button class="btn small" type="button" data-act="openMail" data-id="${m.id}">고치기</button></span></div>
+        <span class="row">${opts.length ? `<button class="btn small" type="button" data-act="clearOpt" data-id="${m.id}">다른 안</button>` : ''}<button class="btn small primary" type="button" data-act="copyReply" data-id="${m.id}">${ic('copy')}복사</button><button class="btn small" type="button" data-act="sendReply" data-id="${m.id}" title="메일 앱(Thunderbird 등)에 받는 사람·제목·내용을 채운 답장 창을 엽니다">${ic('mail')}보내기</button><button class="btn small" type="button" data-act="openMail" data-id="${m.id}">고치기</button></span></div>
       <div class="dprev">${esc(d)}</div>
     </div>`;
   return `<div class="mbox draft"><div class="row" style="justify-content:space-between"><span>${ic('reply')} <b>답장 필요</b> <span class="count">초안이 아직 없습니다</span></span><button class="btn small primary" type="button" data-act="quickDraft" data-id="${m.id}">${ic('spark')}초안 만들기</button></div></div>`;
@@ -3022,7 +3029,7 @@ const UNDO_LABEL = {
   delRule: '아이콘 규칙 삭제', skipOcc: '반복 일정 한 번 빼기', edSave: '일정 편집', bdSave: '불가 시간 설정', saveSettings: '설정 변경', imSave: '아이콘 색·이름',
   pushG: '구글에 추가', fEvent: '일정 추가', fBlock: '불가 시간 추가', taskForm: '할 일 추가', importData: '파일 가져오기'
 };
-const UNDO_SKIP = new Set(['gemCancel', 'gemEmbed', 'gemDockOpen', 'qTab', 'gemNew', 'gemTall', 'gemZoom', 'histUndo', 'histRedo', 'stPing', 'pushAllG', 'aiKeySave', 'aiKeyClear', 'aiTest', 'aiMode', 'aiModelSel', 'relayClip', 'stOpen', 'tidyOpen', 'tidyDel', 'tidyTime', 'tidyMerge', 'inboxRun', 'analyzeMail', 'tgShow', 'tgHide', 'phoneLink', 'gDel', 'fltImp', 'fltIcons', 'fltTog', 'fltClear', 'fltClose', 'cmdToAI', 'cmdPick', 'cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
+const UNDO_SKIP = new Set(['gemCancel', 'sendReply', 'copyReply', 'copyDraft', 'gemEmbed', 'gemDockOpen', 'qTab', 'gemNew', 'gemTall', 'gemZoom', 'histUndo', 'histRedo', 'stPing', 'pushAllG', 'aiKeySave', 'aiKeyClear', 'aiTest', 'aiMode', 'aiModelSel', 'relayClip', 'stOpen', 'tidyOpen', 'tidyDel', 'tidyTime', 'tidyMerge', 'inboxRun', 'analyzeMail', 'tgShow', 'tgHide', 'phoneLink', 'gDel', 'fltImp', 'fltIcons', 'fltTog', 'fltClear', 'fltClose', 'cmdToAI', 'cmdPick', 'cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
 function undoSnap() {
   const o = { settings: JSON.parse(JSON.stringify(S.settings)) };
   for (const c of COLS) o[c] = JSON.parse(JSON.stringify(S[c]));
@@ -4799,7 +4806,8 @@ function renderSheet(force) {
         </div>
         <div class="status" id="draftStatus"></div>
         <div class="row" style="margin-top:.3rem">
-          <button class="btn primary" type="button" data-act="copyDraft">${ic('copy')}초안 복사</button>
+          <button class="btn primary" type="button" data-act="copyDraft">${ic('copy')}복사</button>
+          <button class="btn" type="button" data-act="sendReply" data-id="${m.id}" title="메일 앱(Thunderbird 등)에 받는 사람·제목·내용을 채운 답장 창을 엽니다">${ic('mail')}메일 앱으로 보내기</button>
           <button class="btn" type="button" data-act="saveDraft">초안 저장</button>
           ${m.replied ? '<button class="btn" type="button" data-act="unreplied">답장 완료 취소</button>' : '<button class="btn" type="button" data-act="replied">답장 보냄으로 표시</button>'}
         </div>
@@ -5545,8 +5553,8 @@ document.addEventListener('click', async ev0 => {
       case 'pickOpt': { const mm = S.emails.find(x => x.id === id); if (mm) await pickOpt(mm, +el.dataset.i); return; }
       case 'clearOpt': await patch('emails', id, { replyChoice: null }); return;
       case 'copyReply': {
-        const mm = S.emails.find(x => x.id === id); const d = mm && mm.reply && mm.reply.draft; if (!d) return;
-        try { await navigator.clipboard.writeText(d); toast('답장을 복사했습니다. 메일 프로그램에 붙여넣으세요.'); } catch { openSheet(id); toast('복사하지 못했습니다. 열린 창에서 선택해 복사하세요.'); }
+        const mm = S.emails.find(x => x.id === id); const d = mm && fixNames((mm.reply && mm.reply.draft) || ((mm.replyOptions || [])[mm.replyChoice ?? 0] || {}).draft || ''); if (!d) return;
+        try { await navigator.clipboard.writeText(d); toast('답장을 복사했습니다. 메일 답장 창에 붙여넣으세요.'); } catch { openSheet(id); toast('복사하지 못했습니다. 열린 창에서 선택해 복사하세요.'); }
         return;
       }
       case 'quickDraft': { const mm = S.emails.find(x => x.id === id); if (!mm) return; openSheet(id); setTimeout(() => redraft(mm, ''), 0); return; }
@@ -5592,6 +5600,17 @@ document.addEventListener('click', async ev0 => {
       case 'redraft': return redraft(m, el.dataset.tone);
       case 'stopDraft': UI.draftCtl && UI.draftCtl.abort(); return;
       case 'saveDraft': await patch('emails', m.id, { reply: { draft: $('draft').value } }); toast('초안을 저장했습니다.'); return;
+      case 'sendReply': {
+        const mm = S.emails.find(x => x.id === id); if (!mm) return;
+        const ta = $('draft'), d = ta && UI.openId === id ? ta.value : fixNames((mm.reply && mm.reply.draft) || ((mm.replyOptions || [])[mm.replyChoice ?? 0] || {}).draft || '');
+        if (!d.trim()) return toast('보낼 답장 내용이 없습니다.');
+        try { await navigator.clipboard.writeText(d); } catch {}
+        const to = replyTo(mm), subj = 'Re: ' + String(mm.subject || '').replace(/^\s*(re|회신|답장)\s*:\s*/i, '');
+        const body = d.length > 1800 ? '' : d;
+        location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subj)}${body ? '&body=' + encodeURIComponent(body) : ''}`;
+        toast(body ? `메일 앱에 답장을 열었습니다${to ? ' (받는 사람: ' + to + ')' : ''}. 내용은 복사도 해 두었습니다.` : '답장이 길어서 본문은 복사해 두었습니다. 열린 메일 창에 붙여넣으세요.');
+        return;
+      }
       case 'copyDraft': {
         const ta = $('draft');
         try { await navigator.clipboard.writeText(ta.value); toast('복사했습니다. 메일 프로그램에 붙여넣으세요.'); }
