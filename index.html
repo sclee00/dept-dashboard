@@ -1858,7 +1858,7 @@ function renderMails() {
   const nAsk = S.emails.filter(askIgnore).length, nReply = S.emails.filter(needsReplyNow).length;
   $('mailCount').textContent = `답장 ${nReply} · 무시 확인 ${nAsk} · 전체 ${S.emails.length}`;
   document.querySelectorAll('#mailTabs .tab').forEach(b => {
-    const c = { reply: nReply, ask: nAsk }[b.dataset.mf];
+    const c = { reply: nReply, ask: nAsk, done: S.emails.filter(m => m.status === 'done').length }[b.dataset.mf];
     const base = b.dataset.label || (b.dataset.label = b.textContent);
     b.textContent = c ? `${base} ${c}` : base;
   });
