@@ -399,6 +399,14 @@ a.btn{text-decoration:none;color:inherit}
 .gsrow input{accent-color:var(--accent);width:1rem;height:1rem}
 .ci2.imp{box-shadow:0 0 0 var(--imp-w,2px) var(--imp-c,var(--amber));animation:impblink var(--imp-s,2.6s) ease-in-out infinite}
 .ci2.imp.hot{box-shadow:0 0 0 var(--imp-w,2px) var(--red)}
+/* 일정 겹침: blinking badge */
+.pill.clash{background:var(--red-soft,rgb(229 72 77 / .16));color:var(--red,#e5484d);border:1px solid currentColor}
+.pill.clash .ic{width:.9rem;height:.9rem}
+.clashbox{display:flex;gap:.6rem;align-items:flex-start;border:1px solid var(--red,#e5484d);background:var(--red-soft,rgb(229 72 77 / .1));border-radius:10px;padding:.55rem .75rem;font-size:.86rem}
+.clashbox>.ic{color:var(--red,#e5484d);width:1.3rem;height:1.3rem;flex:none}
+.clashbox ul{margin:.2rem 0 0;padding-left:1rem}
+@media (prefers-reduced-motion:no-preference){.pill.clash,.clashbox>.ic{animation:clashblink 1.1s ease-in-out infinite}}
+@keyframes clashblink{0%,100%{opacity:1}50%{opacity:.25}}
 @keyframes impblink{0%,100%{opacity:1}50%{opacity:var(--imp-o,.28)}}
 .imp-invert .ci2.imp{animation-name:impinv}
 .imp-invert .ci2.imp .ic{animation:impinvic var(--imp-s,2.6s) ease-in-out infinite}
@@ -976,6 +984,7 @@ const IP = {
   dash:'<path d="M6 12h12"/>',
   alert:'<path d="M12 3 2 20h20L12 3z"/><path d="M12 10v4M12 17.3v.01"/>',
   clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  clash:'<rect x="3" y="3" width="12" height="12" rx="2"/><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M9 9h6v6H9z" fill="currentColor" stroke="none" opacity=".55"/>',
   gout:'<path d="M7 17 17 7"/><path d="M9 7h8v8"/>',
   gin:'<path d="M17 7 7 17"/><path d="M15 17H7V9"/>',
   mail:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
@@ -1859,7 +1868,8 @@ function renderMails() {
           ${m.via === 'thunderbird' || m.via === 'forward' ? `<span class="pill done" title="${m.via === 'forward' ? '메일 앱에서 전달한 메일' : 'Thunderbird에서 보낸 메일'}">${ic('inbox')}${m.via === 'forward' ? '전달' : 'Thunderbird'}${(m.attachments || []).length ? ' · 첨부 ' + m.attachments.length : ''}</span>` : ''}
           ${needsReplyNow(m) && isDate(m.replyDeadline) ? `<span class="pill reply">${ic('clock')}${fmtShort(m.replyDeadline)}까지 답장 ${dchip(m.replyDeadline)}</span>` : ''}
           ${m.replied ? `<span class="pill replied">${ic('check')}답장 완료</span>` : ''}
-          ${m.delegable && !m.delegated && isActive(m) ? `<span class="pill deleg">${ic('hand')}조교 전달</span>` : ''}
+          ${clashPill(m)}
+          ${m.delegable && !m.delegated && isActive(m) && S.settings.useDelegate ? `<span class="pill deleg">${ic('hand')}조교 전달</span>` : ''}
           ${m.delegated ? `<span class="pill replied">${ic('hand')}전달함</span>` : ''}
           ${p && isActive(m) ? `<span class="pill pend">${ic('cal')}미반영 ${p}</span>` : ''}
           ${(m.analysis && (m.analysis.thread || []).length > 1) ? `<span class="pill done">${ic('thread')}스레드 ${m.analysis.thread.length}통</span>` : ''}
@@ -4702,7 +4712,8 @@ function renderSheet(force) {
   const evs = a.events || [], tks = a.tasks || [];
   const itemEv = (e, i) => {
     const date = UI.edits['ev-d-'+i] ?? e.date, tm = UI.edits['ev-h-'+i] ?? e.time, en = UI.edits['ev-e-'+i] ?? e.endTime ?? '';
-    const absent = (UI.edits['ev-a-'+i] ?? (e.absent ? '1' : '')) === '1';
+    const clash = !e.added && isDate(e.date) ? clashesOf([e]) : [];
+    const absent = (UI.edits['ev-a-'+i] ?? (e.absent || clash.length ? '1' : '')) === '1';
     const chips = !e.added && !e.skipped && !absent && isDate(date) ? freeSlots(date, 60).slice(0, 4).map(([s]) => `<button type="button" class="schip sm" data-act="pickTime" data-i="${i}" data-t="${fromMin(s)}">${colorTimes(fromMin(s))}</button>`).join('') : '';
     const st = toMin(tm), cf = !e.added && !absent && isDate(date) && st != null ? conflicts(date, st, toMin(en) > st ? toMin(en) : st + 60) : [];
     const dis = e.added ? 'disabled' : '';
@@ -4714,7 +4725,7 @@ function renderSheet(force) {
         <input class="field" type="time" id="ev-e-${i}" value="${esc(en || '')}" aria-label="끝" ${dis}>
         <select class="field" id="ev-i-${i}" aria-label="중요도" ${dis}>${[['high', '중요'], ['normal', '일반']].map(([v, l]) => `<option value="${v}" ${(UI.edits['ev-i-'+i] ?? (e.important === false ? 'normal' : e.important === true ? 'high' : autoImp(e.title, e.kind))) === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
         <select class="field" id="ev-k-${i}" aria-label="종류" ${dis}>${['회의','행사','마감','학사'].map(k => `<option ${(UI.edits['ev-k-'+i] ?? e.kind) === k ? 'selected' : ''}>${k}</option>`).join('')}</select>
-        <label class="chk abschk"><input type="checkbox" data-act="evAbsent" data-i="${i}" ${absent ? 'checked' : ''} ${dis}>나는 불참</label>
+        <label class="chk abschk"><input type="checkbox" data-act="evAbsent" data-i="${i}" ${absent ? 'checked' : ''} ${dis}>나는 불참</label>${clash.length ? `<span class="pill clash" title="${esc(clash.map(x => (x.why === '출장' ? '출장' : '중요') + ': ' + x.with).join('\n'))}">${ic('clash')}일정 겹침</span>` : ''}
         ${e.location && !simple ? `<input class="field title" id="ev-l-${i}" value="${ev('ev-l-'+i, e.location)}" aria-label="장소" ${dis}>` : ''}
         ${chips && !simple ? `<div class="fullrow"><span class="count">${ic('free')} 이 날 빈 시간</span>${chips}</div>` : ''}
         ${cf.length ? `<div class="fullrow warnline">${ic('alert')} 겹침: ${esc(cf.join(', '))}</div>` : ''}
@@ -4758,6 +4769,7 @@ function renderSheet(force) {
     </div>
     <div class="sheetbody">
       ${askIgnore(m) ? `<div class="ignban"><div>${ic('ban')} <b>나와 상관없는 메일 같습니다.</b> ${esc(m.ignoreReason || '')}</div><div class="row"><button class="btn primary" type="button" data-act="ignoreMail" data-id="${m.id}">${ic('ban')}무시하기</button><button class="btn" type="button" data-act="keepMail" data-id="${m.id}">아니요, 처리할게요</button><label class="chk"><input type="checkbox" checked>비슷한 메일은 다음에도 무시 제안</label></div></div>` : ''}
+      ${(() => { const c = mailClashes(m); return c.length ? `<div class="clashbox">${ic('clash')}<div><b>일정 겹침</b> · 이 메일의 일정이 내 ${[...new Set(c.map(x => x.why))].join('·')} 일정과 겹칩니다. 답장은 기본으로 불참입니다.<ul>${c.map(x => `<li>${esc(fmtShort(x.date))} ${esc(x.time || '종일')} ${esc(x.ev)} ↔ <b>${x.why === '출장' ? '출장' : '중요'}</b> ${esc(x.ks == null ? '종일' : fromMin(x.ks) + (x.ke != null ? '–' + fromMin(x.ke) : ''))} ${esc(x.with)}</li>`).join('')}</ul></div></div>` : ''; })()}
       ${m.analysis && a.myAction ? `<div class="myact">${ic('hand')}<div><b>내가 할 일</b><span>${esc(a.myAction)}</span></div></div>` : ''}
       ${m.analysis ? `<div class="sec"><h4>요약</h4><div class="summary">${esc(m.summary)}
         ${!simple && (a.openIssues || []).length ? `<ul class="issues">${a.openIssues.map(x => `<li>${ic('alert')}<span>${esc(x)}</span></li>`).join('')}</ul>` : ''}</div></div>
@@ -4849,7 +4861,7 @@ function analysisPrompt(raw, cat, atts) {
 ${ctxLine()}
 내가 고른 분류: ${cat}
 ${(S.settings.ignoreHints || []).length ? '전에 내가 "상관없다"고 넘긴 메일들이야(비슷하면 irrelevant로 봐): ' + S.settings.ignoreHints.slice(0, 20).join(' / ') : ''}
-내 빈 시간 (앞으로 2주, 근무시간 안, 불가 시간이랑 기존 일정 뺀 것): ${slotsForPrompt().join(', ') || '없음'}
+${keyLine() ? keyLine() + '\n참석 여부를 묻는 메일인데 그 행사 날짜·시간이 위 중요 일정이나 출장과 겹치면, 답장은 기본으로 불참으로 써 줘(사정상 참석이 어렵다고 정중하게, 겹치는 일정의 구체 내용은 밝히지 말고). myAction에는 무엇과 겹쳐서 불참으로 썼는지 적어 줘. 겹치지 않으면 참석 여부는 [참석 / 불참]으로 비워 둬.\n' : ''}내 빈 시간 (앞으로 2주, 근무시간 안, 불가 시간이랑 기존 일정 뺀 것): ${slotsForPrompt().join(', ') || '없음'}
 회의 시간 잡자거나 가능한 시간 묻는 메일이면 답장 초안에 위 목록에서 2~3개 골라 제안해 줘. 목록에 없는 시간은 된다고 쓰지 마.
 메일 안에 회신·전달로 인용된 이전 메일("-----Original Message-----", "보낸 사람:", "On ... wrote:", ">" 인용, "이어진 메일" 구분선 같은 거)이 있으면 한 스레드로 봐 줘. 시간순으로 다시 정리하고, 이미 합의된 것, 누가 뭘 약속했는지, 아직 답 안 한 질문을 짚어 줘. 기준은 가장 최근 메일이야. 앞에서 이미 끝난 일은 할 일로 다시 만들지 말고, 날짜 모르는 메일은 null로 둬.
 "다음 주 화요일", "이달 말" 같은 말은 그 메일 보낸 날짜 기준으로(모르면 오늘 기준) 실제 날짜(YYYY-MM-DD)로 바꿔 줘. 확정 못 하면 null. 메일에 없는 내용은 지어내지 마.
@@ -4940,6 +4952,50 @@ function sampleErr(e) {
   return '분석 중 연결이 끊겼습니다. 다시 시도해 주세요.';
 }
 
+/* ---------- my important / trip schedule: invitations that clash with it are answered "불참" by default ---------- */
+let _ksMemo = { key: '', out: [] };
+function keySchedule(days) {
+  const from = todayStr(), to = addDays(from, days || 150);
+  const key = [from, S.events.length, S.events.reduce((m, e) => Math.max(m, e._u || 0), 0), G.events.length, G.storedAt, (S.blocks || []).length, (S.marks || []).length, JSON.stringify(S.settings.trip || '')].join('|');
+  if (_ksMemo.key === key) return _ksMemo.out;
+  const out = [], tc = tripCfg(), trips = new Set(tc.on ? tc.icons || [] : []);
+  const push = (date, s, e, title, why) => out.push({ date, s: s == null ? null : s, e: e == null ? null : e, title: String(title || ''), why });
+  for (const e of expandEvents()) {
+    if (e.date < from || e.date > to || absentOfEvent(e)) continue;
+    const trip = trips.has(iconOfEvent(e)), imp = impOfEvent(e) === 'high'; if (!trip && !imp) continue;
+    const t = toMin(e.time), allDay = t == null || e.span;
+    push(e.date, allDay ? null : t, allDay ? null : evEnd(e), e.title, trip ? '출장' : '중요');
+  }
+  for (const g of visibleG()) {
+    if (g.date < from || g.date > to) continue;
+    const st = statusOfG(g); if (st === 'absent' || st === 'cancel') continue;
+    const trip = trips.has(iconOfG(g)), imp = impOfG(g) === 'high'; if (!trip && !imp) continue;
+    push(g.date, g.allDay ? null : toMin(g.time), g.allDay ? null : toMin(g.endTime), g.title, trip ? '출장' : '중요');
+  }
+  for (let d = from; d <= to; d = addDays(d, 1)) {
+    try { for (const b of blocksOn(d)) if (trips.has(iconOfBlock(b))) push(d, b.allDay ? null : b.s, b.allDay ? null : b.e, b.label, '출장'); } catch {}
+    if (trips.size && !out.some(x => x.date === d && x.why === '출장') && tripDay(d)) push(d, null, null, '출장', '출장');
+  }
+  out.sort((a, b) => a.date.localeCompare(b.date) || (a.s ?? -1) - (b.s ?? -1));
+  _ksMemo = { key, out };
+  return out;
+}
+function keyLine() {
+  const k = keySchedule(); if (!k.length) return '';
+  return '내 중요 일정·출장 (앞으로 5개월): ' + k.slice(0, 80).map(x => `${fmtShort(x.date)} ${x.s == null ? '종일' : fromMin(x.s) + (x.e != null ? '–' + fromMin(x.e) : '')} ${x.why === '출장' ? '출장' : '[중요]'} ${x.title}`).join(' ; ');
+}
+// events found in a mail that fall on my important events or trip days
+function clashesOf(evs) {
+  const ks = keySchedule(), out = [];
+  for (const e of evs || []) {
+    if (!isDate(e.date) || e.date < todayStr()) continue;
+    const s = toMin(e.time), en = s == null ? null : (toMin(e.endTime) > s ? toMin(e.endTime) : s + 60);
+    for (const k of ks) if (k.date === e.date && (s == null || k.s == null || (s < (k.e ?? k.s + 60) && k.s < en))) out.push({ ev: e.title, date: e.date, time: e.time || '', with: k.title, why: k.why, ks: k.s, ke: k.e });
+  }
+  return out;
+}
+const mailClashes = m => m && m.analysis && isActive(m) && m.status !== 'done' ? clashesOf(m.analysis.events) : [];
+const clashPill = m => { const c = mailClashes(m); return c.length ? `<span class="pill clash" title="${esc(c.map(x => `${fmtShort(x.date)} ${x.ev} ↔ ${x.why === '출장' ? '출장' : '중요'}: ${x.with}`).join('\n'))}">${ic('clash')}일정 겹침</span>` : ''; };
 function fieldsFrom(a, emailId) {
   // mark items already added from this email (thread re-analysis) so they are not duplicated
   const norm = s => String(s || '').replace(/\s+/g, '');
@@ -4948,7 +5004,7 @@ function fieldsFrom(a, emailId) {
   return {
     ...(a.subject ? { subject: a.subject } : {}), from: a.from, summary: a.summary, priority: a.priority, needsReply: a.needsReply,
     replyDeadline: a.replyDeadline, analysis: { events: evs, tasks: tks, thread: a.thread, openIssues: a.openIssues, attachments: a.attachments, myAction: a.myAction, decisions: a.decisions, highlights: a.highlights }, decisionChoices: null, delegateSel: null,
-    reply: { draft: a.replyDraft }, replyOptions: [], replyChoice: null,
+    reply: { draft: clashesOf(evs).length ? String(a.replyDraft || '').replace(/\[\s*참석\s*[\/·,|]\s*불참\s*\]/g, '불참').replace(/\[\s*불참\s*[\/·,|]\s*참석\s*\]/g, '불참') : a.replyDraft }, replyOptions: [], replyChoice: null,
     relevance: a.relevance, ignoreReason: a.ignoreReason, relevanceDecided: null,
     delegable: a.relevance === 'irrelevant' ? false : a.delegable, delegate: { draft: a.relevance === 'irrelevant' ? '' : a.delegateDraft, items: a.relevance === 'irrelevant' ? [] : a.delegateItems, title: a.delegateTitle, short: '' }
   };
@@ -5149,7 +5205,7 @@ ${ctxLine()}
 ${replyFmt()}
 ${tone ? '이런 방향으로: ' + tone : ''}
 ${decLine(m) ? '내가 정한 것(답장에 넣어 줘): ' + decLine(m) : ''}
-내 빈 시간 (시간 제안할 일 있으면 이 안에서만 골라): ${slotsForPrompt().join(', ') || '없음'}
+${keyLine() ? keyLine() + '\n(참석 여부를 묻는 메일이고 그 행사가 위 일정과 겹치면 기본으로 불참으로 써 줘. 겹치는 일정 내용은 밝히지 말고.)\n' : ''}내 빈 시간 (시간 제안할 일 있으면 이 안에서만 골라): ${slotsForPrompt().join(', ') || '없음'}
 ${note ? '추가로 원하는 거: ' + note : ''}
 ${current ? '지금 초안(이거 바탕으로 고쳐 줘):\n"""\n' + current + '\n"""' : ''}
 
@@ -5989,7 +6045,7 @@ function renderHist() {
 }
 { let k = 'auto'; try { k = localStorage.getItem('qtab') || 'auto'; } catch {} qTab(k); }
 setInterval(() => { if (UI.qtab === 'stat' && !document.hidden) renderStat(); }, 30000);
-if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__dd = { S, add, UNDO, replyFmt, delegFmt, fixNames, snapshot, mergeIn, renderAll, FS, G, parseEdit, normalizeCmd, pickDT, parseCommand };
+if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__dd = { S, add, UNDO, replyFmt, delegFmt, fixNames, keyLine, snapshot, mergeIn, renderAll, FS, G, parseEdit, normalizeCmd, pickDT, parseCommand };
 })();
 </script>
 </body>
