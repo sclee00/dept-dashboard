@@ -726,6 +726,14 @@ label.inl{display:inline-flex;align-items:center;gap:.3rem;font-size:.85rem} lab
 .imrow input[type=color]{width:2.1rem;height:1.8rem;border:1px solid var(--line);border-radius:6px;background:none;padding:0;cursor:pointer}
 .imrow .field{padding:.3rem .45rem}
 .quick{margin-top:0}
+/* bottom row: auto-processing on the left half, the tool buttons as tiles on the right half */
+.qrow{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:1rem;flex:none;align-items:stretch}
+.qrow>.quick{min-width:0}
+.tools.toolgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(9.5rem,1fr));grid-auto-rows:minmax(2.6rem,auto);gap:.5rem;align-content:start;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:.7rem .9rem;overflow:auto;min-width:0}
+.toolgrid>.iconbtn,.toolgrid>.gchip{width:100%;max-width:none;justify-content:center;border-radius:10px;padding:.45rem .6rem;font-size:.88rem;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.toolgrid>.gchip>span:last-child{overflow:hidden;text-overflow:ellipsis}
+.toolgrid>.iconbtn:disabled{opacity:.5}
+@media (max-width:900px){.qrow{grid-template-columns:1fr}}
 .icbtn{border:0;background:none;padding:.15rem;margin:-.15rem;border-radius:6px;cursor:pointer;display:grid;place-items:center;color:inherit}
 .icbtn:hover{background:var(--surface);outline:1px dashed var(--muted)}
 .ipgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(5.2rem,1fr));gap:.35rem;max-height:46vh;overflow:auto}
@@ -781,17 +789,7 @@ label.inl{display:inline-flex;align-items:center;gap:.3rem;font-size:.85rem} lab
       <div class="term"><b id="termLabel">—</b><span id="weekLabel"></span><span>·</span><span class="clock" id="clock">--:--</span></div>
     </div>
     <div class="stats" id="stats"></div>
-    <div class="gutter v hg" data-split="head" role="separator" aria-orientation="vertical" tabindex="0" title="끌어서 왼쪽(현황)·오른쪽(버튼) 너비 조절 · 두 번 누르면 원래대로"></div>
-    <div class="tools">
-      <button class="gchip" id="syncchip" type="button" data-act="sync" data-ok="sync" draggable="true"><span data-ic="drive"></span><span>저장 위치 확인 중</span></button>
-      <button class="gchip" id="gchip" type="button" data-act="gchip" data-ok="gchip" draggable="true"><span data-ic="gcal"></span><span>구글 로그인</span></button>
-      <button class="iconbtn" id="undoBtn" data-act="undo" data-ok="undo" draggable="true" type="button" disabled title="되돌릴 것이 없습니다"><span data-ic="undo"></span><span class="ul">되돌리기</span></button>
-      <button class="iconbtn" id="redoBtn" data-act="redo" data-ok="redo" draggable="true" type="button" hidden aria-label="다시 하기"><span data-ic="redo"></span></button>
-      <button class="iconbtn" data-act="openFinder" data-ok="finder" draggable="true" type="button"><span data-ic="search"></span>빈 시간 찾기</button>
-      <button class="iconbtn" data-act="openBusy" data-ok="busy" draggable="true" type="button"><span data-ic="lock"></span>불가 시간</button>
-      <button class="iconbtn" id="gemBtn" data-act="gemDockOpen" data-ok="gemini" draggable="true" type="button" hidden title="Gemini 창 열기/닫기"><span data-ic="spark"></span>Gemini</button>
-      <button class="iconbtn" data-act="settings" data-ok="settings" draggable="true" type="button"><span data-ic="gear"></span>설정</button>
-    </div>
+    <div class="gutter v hg" data-split="head" hidden role="separator" aria-orientation="vertical" tabindex="0" title="끌어서 왼쪽(현황)·오른쪽(버튼) 너비 조절 · 두 번 누르면 원래대로"></div>
   </header>
 
   <section class="focusbar" id="focus" aria-label="지금 볼 것"></section>
@@ -857,6 +855,7 @@ label.inl{display:inline-flex;align-items:center;gap:.3rem;font-size:.85rem} lab
   </main>
 
   <div class="gutter h" data-split="quick" role="separator" aria-orientation="horizontal" tabindex="0" title="끌어서 높이 조절 · 두 번 누르면 원래대로"></div>
+  <div class="qrow">
   <section class="quick" aria-label="메일 붙여넣기">
     <div class="qhead"><span class="qic" data-ic="inbox"></span><b>자동 처리</b><span class="count">메일을 붙여넣으면 요약·일정·할 일·답장·조교 지시를 만들고, 짧게 명령하면 바로 실행합니다</span><button class="gchip inboxchip" id="inboxChip" type="button" data-act="inboxRun" hidden></button></div>
     <div class="qbody">
@@ -875,6 +874,18 @@ label.inl{display:inline-flex;align-items:center;gap:.3rem;font-size:.85rem} lab
     <input type="file" id="attInput" multiple hidden>
     <div class="status" id="pasteStatus"></div>
   </section>
+      <div class="tools toolgrid" aria-label="도구">
+        <button class="gchip" id="syncchip" type="button" data-act="sync" data-ok="sync" draggable="true"><span data-ic="drive"></span><span>저장 위치 확인 중</span></button>
+        <button class="gchip" id="gchip" type="button" data-act="gchip" data-ok="gchip" draggable="true"><span data-ic="gcal"></span><span>구글 로그인</span></button>
+        <button class="iconbtn" id="undoBtn" data-act="undo" data-ok="undo" draggable="true" type="button" disabled title="되돌릴 것이 없습니다"><span data-ic="undo"></span><span class="ul">되돌리기</span></button>
+        <button class="iconbtn" id="redoBtn" data-act="redo" data-ok="redo" draggable="true" type="button" hidden aria-label="다시 하기"><span data-ic="redo"></span></button>
+        <button class="iconbtn" id="mailBtn" data-act="inboxRun" data-ok="inbox" draggable="true" type="button" title="Thunderbird·전달 메일을 지금 가져오기"><span data-ic="inbox"></span>메일 가져오기</button>
+        <button class="iconbtn" data-act="openFinder" data-ok="finder" draggable="true" type="button"><span data-ic="search"></span>빈 시간 찾기</button>
+        <button class="iconbtn" data-act="openBusy" data-ok="busy" draggable="true" type="button"><span data-ic="lock"></span>불가 시간</button>
+        <button class="iconbtn" id="gemBtn" data-act="gemDockOpen" data-ok="gemini" draggable="true" type="button" hidden title="Gemini 창 열기/닫기"><span data-ic="spark"></span>Gemini</button>
+        <button class="iconbtn" data-act="settings" data-ok="settings" draggable="true" type="button"><span data-ic="gear"></span>설정</button>
+      </div>
+  </div>
 </div>
 
 <div id="sheetRoot"></div>
@@ -884,7 +895,7 @@ label.inl{display:inline-flex;align-items:center;gap:.3rem;font-size:.85rem} lab
 <script>
 (() => {
 const DEFAULTS = { semesterLabel: '2026학년도 2학기', semesterStart: '2026-08-31', signature: '컴퓨터공학과 학과장 드림', assistant: '학과 조교',
-  workStart: '09:00', workEnd: '18:00', workDays: [1, 2, 3, 4, 5], weekly: [], googleShow: true, googleBusy: true, googlePush: false, gCals: null, gPushCal: 'primary' };
+  workStart: '09:00', workEnd: '18:00', workDays: [1, 2, 3, 4, 5], weekly: [], googleShow: true, googleBusy: true, googlePush: false, gAutoPush: true, gCals: null, gPushCal: 'primary' };
 const S = { tasks: [], events: [], emails: [], blocks: [], marks: [], settings: { ...DEFAULTS }, settingsU: 0, deleted: {} };
 const UI = { view: 'weeks', wOff: 0, tf: 'open', mf: 'open', month: null, selDay: null, rail: 'day', dayForm: null, prefill: null, finder: null, bd: null, dlg: null, cap: 9, openId: null, edits: {}, analyzeCtl: null, draftCtl: null, confirmDel: false };
 
@@ -1923,6 +1934,8 @@ function cidProblem(v) {
 const oauthReady = () => !!G.token && Date.now() < G.exp;
 const gasOn = () => !!(S.settings.gasUrl && S.settings.gasKey);
 const gReady = () => gasOn() || oauthReady();
+// new events go to Google Calendar too, unless turned off in settings
+const gAuto = () => S.settings.gAutoPush !== false;
 async function gas(params) {
   const q = new URLSearchParams({ ...params, key: S.settings.gasKey, t: Date.now() });
   let r;
@@ -2614,7 +2627,7 @@ async function applyActions(actions) {
     const doc = { title: a.title, date: a.date, time: a.allDay ? '' : a.time, endTime: a.allDay ? '' : a.endTime, location: '', kind: a.kind || '회의', imp: a.imp, source: 'command', createdAt: nowISO() };
     if (a.repeat) doc.repeat = JSON.parse(JSON.stringify(a.repeat));
     const nid = await add('events', doc);
-    if (S.settings.googlePush === true && gReady()) pushGoogle(doc, nid);
+    if (gAuto() && gReady()) pushGoogle(doc, nid);
     n++; first = first || a.date;
   }
   if (gs.ok) gLoad(true);
@@ -3615,7 +3628,7 @@ function applyLayout() {
   if (LAY.qh && matchMedia('(min-width:1100px)').matches) { r.setProperty('--qh', Math.max(LAY.qh, quickMin()) + 'px'); q && q.classList.add('sized'); } else { r.removeProperty('--qh'); q && q.classList.remove('sized'); }
   if (LAY.sheetw) r.setProperty('--sheetw', LAY.sheetw + 'px'); else r.removeProperty('--sheetw');
   const hd = document.querySelector('header.top');
-  if (LAY.head && hd) { r.setProperty('--hw', LAY.head + 'px'); hd.classList.add('sized'); } else { r.removeProperty('--hw'); hd && hd.classList.remove('sized'); }
+  if (LAY.head && hd && hd.querySelector('.tools')) { r.setProperty('--hw', LAY.head + 'px'); hd.classList.add('sized'); } else { r.removeProperty('--hw'); hd && hd.classList.remove('sized'); }
 }
 // the auto-processing box never gets smaller than its title row + buttons, so nothing spills over its border
 function quickMin() {
@@ -3835,7 +3848,7 @@ function qaFormHtml() {
       <span class="grow"></span><button class="btn small" type="button" data-act="qaCancel">취소</button><button class="btn small primary" type="button" data-act="qaSave">${ic('plus')}추가</button></div></div>`;
 }
 function qaOpen(day, s, e, allDay) {
-  let g = S.settings.googlePush === true; try { const v = localStorage.getItem('qaG'); if (v != null) g = v === '1'; } catch {}
+  const g = gAuto();
   const keep = UI.qa && UI.qa.day === day ? UI.qa : {};
   UI.qa = { day, s, e, allDay: !!allDay, title: keep.title || '', type: keep.type || 'event', imp: keep.imp || 'normal', g };
   renderDay(true); setTimeout(() => { const t = $('qaTitle'); if (t) { t.focus(); const r = $('qadd'); r && r.scrollIntoView({ block: 'nearest' }); } }, 0);
@@ -3850,7 +3863,7 @@ async function qaSave() {
     const kind = /마감|제출|기한/.test(title) ? '마감' : /행사|식|축제|설명회|워크숍/.test(title) ? '행사' : '회의';
     const doc = { title, date: q.day, time: q.allDay ? '' : fromMin(q.s), endTime: q.allDay ? '' : fromMin(Math.min(q.e, 1439)), location: '', kind, imp: q.imp === 'high' ? 'high' : autoImp(title, kind), source: 'quick', createdAt: nowISO() };
     const nid = await add('events', doc);
-    const g = $('qaG') && $('qaG').checked; try { localStorage.setItem('qaG', g ? '1' : '0'); } catch {}
+    const g = $('qaG') && $('qaG').checked;
     if (g) pushGoogle(doc, nid);
   }
   UI.qa = null; renderDay(true); toast(`${title} — 추가했습니다.`);
@@ -4345,7 +4358,7 @@ function dayFormHtml(day) {
       <label>시작<input class="field" type="time" id="fStart" value="${esc(pf.s || '')}"></label>
       <label>끝<input class="field" type="time" id="fEnd" value="${esc(pf.e || '')}"></label>
       <input class="field full" id="fLoc" placeholder="장소(선택)" autocomplete="off">
-      ${gReady() ? `<label class="full chk"><input type="checkbox" id="fG" ${S.settings.googlePush === true ? 'checked' : ''}>구글 캘린더 "${esc(calInfo(S.settings.gPushCal || 'primary').name)}"에도 추가</label>` : ''}
+      ${gReady() ? `<label class="full chk"><input type="checkbox" id="fG" ${gAuto() ? 'checked' : ''}>구글 캘린더 "${esc(calInfo(S.settings.gPushCal || 'primary').name)}"에도 추가</label>` : ''}
       <div class="full status err" id="fWarn"></div>
       <div class="full row" style="justify-content:flex-end"><button class="btn" type="button" data-act="dayForm" data-f="">취소</button><button class="btn primary" type="submit">${ic('plus')}일정 추가</button></div>
     </form>`;
@@ -4792,14 +4805,23 @@ function mailAsText(m) {
   return [`보낸 사람: ${m.from || ''}`, m.forwardedBy && m.forwardedBy !== m.from ? `전달한 사람: ${m.forwardedBy}` : '', m.to ? `받는 사람: ${m.to}` : '', m.cc ? `참조: ${m.cc}` : '', when ? `날짜: ${when}` : '', `제목: ${m.subject || ''}`,
     skipped.length ? `첨부(내용 없이 이름만): ${skipped.join(', ')}` : '', '', String(m.body || '').trim()].filter((x, i) => x || i === 6).join('\n');
 }
+let inboxTimer = null, inboxEvery = -1;
+const inboxSec = () => { const v = Number(S.settings.inboxSec); return Number.isFinite(v) && v >= 0 ? v : 45; };
 async function inboxCheck(manual) {
-  if (!gasOn() || INBOX.off || INBOX.busy) return;
+  if (manual && !gasOn()) { toast('먼저 설정 → 저장·구글에서 Apps Script를 연결해 주세요.'); return; }
+  if (manual && INBOX.off) INBOX.off = false;
+  if (!gasOn() || INBOX.off || INBOX.busy) { if (manual && INBOX.busy) toast('메일을 받는 중입니다.'); return; }
+  const mb = $('mailBtn'); if (manual && mb) { mb.disabled = true; mb.classList.add('busyg'); }
+  try { return await inboxCheck0(manual); } finally { if (mb) { mb.disabled = false; mb.classList.remove('busyg'); } }
+}
+async function inboxCheck0(manual) {
   let j;
   try { j = await gas({ action: 'inboxList' }); }
   catch (e) { if (e && e.code === 'action') INBOX.off = true; if (manual) toast('메일함을 확인하지 못했습니다. ' + ((e && e.message) || '')); return; }
   INBOX.at = Date.now();
   INBOX.items = j.items || [];
-  if (INBOX.items.length) inboxImport();
+  if (INBOX.items.length) await inboxImport();
+  else if (manual) toast('새로 온 메일이 없습니다.');
 }
 function renderInbox() {
   const el = $('inboxChip'); if (!el) return;
@@ -5097,7 +5119,7 @@ async function addFromItem(m, kind, i) {
     if (!time || !(toMin(endTime) > toMin(time))) endTime = time ? fromMin(Math.min(toMin(time) + 60, 1439)) : '';
     const doc = { title, date, time, endTime, location: UI.edits['ev-l-'+i] ?? it.location ?? '', kind: UI.edits['ev-k-'+i] ?? it.kind, imp: UI.edits['ev-i-'+i] ?? (it.important === false ? 'normal' : it.important === true ? 'high' : autoImp(title, it.kind)), emailId: m.id, source: 'email', createdAt: nowISO(), ...((UI.edits['ev-a-'+i] ?? '') === '1' ? { absent: true } : {}) };
     const nid = await add('events', doc);
-    if (S.settings.googlePush === true && gReady()) pushGoogle(doc, nid);
+    if (gAuto() && gReady()) pushGoogle(doc, nid);
   } else {
     const title = (UI.edits['tk-t-'+i] ?? it.title).trim(), due = UI.edits['tk-d-'+i] ?? it.due;
     if (!title) { toast('할 일 내용을 입력해 주세요.'); return false; }
@@ -5332,7 +5354,7 @@ document.addEventListener('click', async ev0 => {
       case 'saveSettings': {
         const fxData = $('fxShort') ? fxReadForm() : null, fontData = $('fontSize') ? fontReadForm() : null, wcData = document.querySelector('.wclist') ? wcReadForm() : null;
         const data = { ...S.settings, semesterLabel: $('sLabel').value.trim() || DEFAULTS.semesterLabel, semesterStart: isDate($('sStart').value) ? $('sStart').value : DEFAULTS.semesterStart, signature: $('sSig').value.trim() || DEFAULTS.signature, assistant: $('sAsst').value.trim() || DEFAULTS.assistant,
-          ...(fxData ? { fx: fxData } : {}), ...(fontData ? { font: fontData } : {}), ...(wcData ? { wordColors: wcData } : {}), cellMode: $('sCellMode') && $('sCellMode').value === 'titles' ? 'titles' : 'icons', googleShow: $('sGShow').checked, googleBusy: $('sGBusy').checked, googlePush: $('sGPush').checked };
+          ...(fxData ? { fx: fxData } : {}), ...(fontData ? { font: fontData } : {}), ...(wcData ? { wordColors: wcData } : {}), cellMode: $('sCellMode') && $('sCellMode').value === 'titles' ? 'titles' : 'icons', googleShow: $('sGShow').checked, googleBusy: $('sGBusy').checked, gAutoPush: $('sGPush').checked };
         if ($('tripOn')) data.trip = tripReadForm();
         if ($('impMode')) { const iv = impFormValues(); const amber = getComputedStyle(document.documentElement).getPropertyValue('--amber').trim(); data.impStyle = { ...iv, color: iv.color.toLowerCase() === amber.toLowerCase() ? '' : iv.color }; }
         { const gu = $('sGasUrl').value.trim(), gk = $('sGasKey').value.trim();
@@ -5341,12 +5363,13 @@ document.addEventListener('click', async ev0 => {
           data.gasUrl = gu; data.gasKey = gk; if (changedGas) { G.cals = []; G.events = []; G.key = ''; G.storedAt = 0; G.changedAt = 0; gCacheClear(); setTimeout(() => { if (gasOn()) signIn(); else renderAll(); }, 50); } }
         if (document.querySelector('input[name=gcal]')) data.gCals = [...document.querySelectorAll('input[name=gcal]:checked')].map(x => x.value);
         if ($('sGPushCal')) data.gPushCal = $('sGPushCal').value;
+        if ($('sInboxSec')) data.inboxSec = Number($('sInboxSec').value);
         const cid = cleanCid($('sCid').value);
         const bad = cid && cidProblem(cid);
         if (bad) { toast(bad); $('sCid').focus(); return; }
         try { if (cid && cid !== (CFG.googleClientId || '')) localStorage.setItem('gClientId', cid); else localStorage.removeItem('gClientId'); } catch {}
         if (cid !== (G.cidUsed || '')) { G.tc = null; G.cidUsed = cid; }
-        UI.fxDraft = null; UI.fontDraft = null; UI.wcDraft = null; await saveSettings(data); $('dlgRoot').innerHTML = ''; UI.dlg = null; toast('설정을 저장했습니다.'); watchGoogle(true); return;
+        UI.fxDraft = null; UI.fontDraft = null; UI.wcDraft = null; await saveSettings(data); $('dlgRoot').innerHTML = ''; UI.dlg = null; toast('설정을 저장했습니다.'); watchGoogle(true); inboxSchedule(); return;
       }
       case 'closeDlg': if (UI.dlg === 'relay') return relayCancel(); if (UI.dlg === 'settings') { applyImpStyle(); if (UI.wcDraft) { UI.wcDraft = null; paintWords(); } if (UI.fontDraft) { UI.fontDraft = null; applyFont(); } if (UI.fxDraft) { UI.fxDraft = null; renderCal(); } } $('dlgRoot').innerHTML = ''; UI.dlg = null; return;
       case 'noop': return;
@@ -5589,7 +5612,8 @@ function openSettings() {
         : `<div class="row"><span class="count">캘린더 목록을 아직 못 읽었습니다.</span><button class="btn small" type="button" data-act="gReloadCals">다시 읽기</button></div>`) : ''}
       <label class="chk"><input type="checkbox" id="sGShow" ${s.googleShow !== false ? 'checked' : ''}>달력에 구글 일정 표시</label>
       <label class="chk"><input type="checkbox" id="sGBusy" ${s.googleBusy !== false ? 'checked' : ''}>구글 일정 시간을 빈 시간에서 빼기</label>
-      <label class="chk"><input type="checkbox" id="sGPush" ${s.googlePush === true ? 'checked' : ''}>새로 만든 일정을 자동으로 구글에도 넣기 (끄면 "구글에 추가"로 골라서 보냄)</label>
+      <label class="chk"><input type="checkbox" id="sGPush" ${s.gAutoPush !== false ? 'checked' : ''}>새로 만든 일정을 자동으로 구글에도 넣기 (끄면 "구글에 추가"로 골라서 보냄)</label>
+      <label>Thunderbird·전달 메일 자동 확인<select class="field" id="sInboxSec"><option value="0" ${inboxSec() === 0 ? 'selected' : ''}>자동 확인 안 함 (버튼으로만)</option><option value="15" ${inboxSec() === 15 ? 'selected' : ''}>15초마다</option><option value="30" ${inboxSec() === 30 ? 'selected' : ''}>30초마다</option><option value="45" ${inboxSec() === 45 ? 'selected' : ''}>45초마다 (기본)</option><option value="60" ${inboxSec() === 60 ? 'selected' : ''}>1분마다</option><option value="120" ${inboxSec() === 120 ? 'selected' : ''}>2분마다</option><option value="300" ${inboxSec() === 300 ? 'selected' : ''}>5분마다</option><option value="600" ${inboxSec() === 600 ? 'selected' : ''}>10분마다</option><option value="1800" ${inboxSec() === 1800 ? 'selected' : ''}>30분마다</option></select></label>
 
       <label>OAuth 클라이언트 ID<input class="field" id="sCid" value="${esc(clientId())}" placeholder="...apps.googleusercontent.com" autocomplete="off"></label>
       ${gReady() ? `<div><button class="btn small" type="button" data-act="signOut">구글 연결 해제</button></div>` : ''}</div>
@@ -5603,7 +5627,7 @@ renderLegend();
 
 UI.selDay = todayStr();
 try { if (localStorage.getItem('calView') === 'month') UI.view = 'month'; } catch {}
-function renderAll() { { const gb = $('gemBtn'); if (gb) gb.hidden = !aiWeb() || !aiFrame(); } try { renderTidyBtn(); } catch {} applyTripStyle(); applyImpStyle(); applyFont(); applyLayout(); renderHeader(); renderTasks(); renderMails(); renderCal(); renderDay(false); renderRail(); renderGChip(); renderSync(); renderSheet(false); }
+function renderAll() { { const gb = $('gemBtn'); if (gb) gb.hidden = !aiWeb() || !aiFrame(); } if (typeof inboxSchedule === 'function' && inboxEvery >= 0) inboxSchedule(); try { renderTidyBtn(); } catch {} applyTripStyle(); applyImpStyle(); applyFont(); applyLayout(); renderHeader(); renderTasks(); renderMails(); renderCal(); renderDay(false); renderRail(); renderGChip(); renderSync(); renderSheet(false); }
 renderAll();
 setInterval(() => { renderHeader(); if (UI.selDay === todayStr()) renderDay(false); }, 60000);
 
@@ -5619,9 +5643,11 @@ $('importFile').addEventListener('change', e => { const f = e.target.files[0]; i
 (function waitGis(n) { if (gisLoaded()) { initTokenClient(); G.cidUsed = clientId(); renderGChip(); } else if (n < 60) setTimeout(() => waitGis(n + 1), 250); })(0);
 fsRestore();
 setTimeout(() => { if (gasOn()) signIn(); }, 400);
-setTimeout(() => inboxCheck(false), 2500);
-setInterval(() => inboxCheck(false), 45000);
-document.addEventListener('visibilitychange', () => { if (!document.hidden) setTimeout(() => inboxCheck(false), 800); });
+setTimeout(() => { if (inboxSec() > 0) inboxCheck(false); }, 2500);
+// how often to look for mail from Thunderbird / forwarding (settings → 저장·구글); 0 = only by the button
+function inboxSchedule() { const sec = inboxSec(); if (sec === inboxEvery && inboxTimer) return; clearInterval(inboxTimer); inboxTimer = null; inboxEvery = sec; if (sec > 0) inboxTimer = setInterval(() => inboxCheck(false), sec * 1000); }
+inboxSchedule();
+document.addEventListener('visibilitychange', () => { if (!document.hidden && inboxSec() > 0) setTimeout(() => inboxCheck(false), 800); });
 setInterval(() => { syncNow(); if (gasOn() && !G.cals.length && G.state !== 'loading') signIn(); else if (gReady()) gLoad(false); else renderAll(); }, 60000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { syncNow(); if (gReady()) gLoad(false); } });
 window.addEventListener('beforeunload', e => { if (DRIVE.dirty && fsReady()) { syncNow(); e.preventDefault(); e.returnValue = ''; } });
