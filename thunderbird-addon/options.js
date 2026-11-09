@@ -28,7 +28,7 @@ const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&am
 const two = n => String(n).padStart(2, '0');
 const when = iso => { if (!iso) return ''; const d = new Date(iso); return `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())} ${two(d.getHours())}:${two(d.getMinutes())}`; };
 const kb = n => !n ? '' : n < 1048576 ? Math.round(n / 1024) + 'KB' : (n / 1048576).toFixed(1) + 'MB';
-const RES = { ok: '보냄', dup: '이미 보낸 메일', fail: '실패' };
+const RES = { ok: '보냄', dup: '이미 보낸 메일', fail: '실패', reply: '답장 창 열림' };
 async function renderLog() {
   const { sendLog = [] } = await browser.storage.local.get('sendLog');
   const q = $('logQ').value.trim().toLowerCase(), f = $('logF').value;

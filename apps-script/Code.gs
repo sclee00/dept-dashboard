@@ -15,6 +15,7 @@
  * 할 수 있는 일: 캘린더 목록, 일정 읽기, 일정 만들기·고치기·지우기 (반복 일정은 이 날만 또는 전체),
  *               일정 설명(메모) 읽기·쓰기, 내 드라이브의 dashboard-data.json 읽기·쓰기 (아이폰 등 폴더 저장이 안 되는 기기용)
  * 버전 4부터 드라이브 권한이 추가되었습니다. 코드를 바꾼 뒤 authorize를 한 번 더 실행해 권한을 허용하세요.
+ * 버전 12: 대시보드에서 "Thunderbird로 답장"을 누르면 Thunderbird 애드온이 원본을 인용한 답장 창을 엽니다 (replyPut / replyTake)
  * 버전 11: 대시보드가 가져간 전달 메일은 지메일에서 지우기(gdel=trash 휴지통 / perm 영구삭제, 영구삭제는 서비스에 Gmail API 추가 필요)
  * 버전 11: 아무 메일 앱에서나 '내아이디+dash@gmail.com'으로 전달하면 대시보드로 (지메일 확인, 5분마다 + 대시보드가 열려 있으면 바로)
  * 버전 10: Gemini 자동 분석 (aiKey로 Gemini API 키를 스크립트 속성에 보관, ai로 질문) — 키는 대시보드·데이터 파일에 남지 않습니다
@@ -43,13 +44,14 @@ function doGet(e) {
   if (p.key !== KEY) return out({ ok: false, error: 'key' });
   try {
     switch (p.action) {
-      case 'ping': return out({ ok: true, email: Session.getEffectiveUser().getEmail(), tz: Session.getScriptTimeZone(), version: 11, forward: dashAddress(), gemini: !!PropertiesService.getScriptProperties().getProperty('GEMINI_KEY'), advanced: typeof Calendar !== 'undefined' });
+      case 'ping': return out({ ok: true, email: Session.getEffectiveUser().getEmail(), tz: Session.getScriptTimeZone(), version: 12, forward: dashAddress(), gemini: !!PropertiesService.getScriptProperties().getProperty('GEMINI_KEY'), advanced: typeof Calendar !== 'undefined' });
       case 'dataGet': return out(Object.assign({ ok: true }, dataGet(p)));
       case 'dataFiles': return out({ ok: true, current: PropertiesService.getScriptProperties().getProperty('DATA_FILE_ID') || '', files: dataFiles() });
       case 'dataUse': return out(Object.assign({ ok: true }, dataUse(p)));
       case 'inboxList': return out({ ok: true, items: inboxList() });
       case 'inboxGet': return out({ ok: true, mail: inboxGet(p.id) });
       case 'inboxDone': return out({ ok: true, done: inboxDone(p.id, p.gdel) });
+      case 'replyTake': return out({ ok: true, items: replyTake() });
       case 'calendars': return out({ ok: true, calendars: listCalendars() });
       case 'events': return out({ ok: true, events: listEvents(p.cal, p.from, p.to) });
       case 'create': return out({ ok: true, event: createEvent(p) });
@@ -72,6 +74,7 @@ function doPost(e) {
     if (b.action === 'mailPut') return out(Object.assign({ ok: true }, mailPut(b.mail)));
     if (b.action === 'aiKey') return out(Object.assign({ ok: true }, aiKey(b)));
     if (b.action === 'ai') return out(Object.assign({ ok: true }, aiAsk(b)));
+    if (b.action === 'replyPut') return out(Object.assign({ ok: true }, replyPut(b)));
     return out({ ok: false, error: 'action' });
   } catch (err) {
     return out({ ok: false, error: 'script', message: String((err && err.message) || err) });
@@ -208,6 +211,26 @@ function inboxList() {
   }
   return list.sort(function (a, b) { return a.at - b.at; });
 }
+/* ---------- replies the dashboard asks Thunderbird to open (kept 15 minutes in the script cache) ---------- */
+function replyQueue(fn) {
+  const lock = LockService.getScriptLock(); lock.waitLock(10000);
+  try {
+    const c = CacheService.getScriptCache();
+    let q = []; try { q = JSON.parse(c.get('REPLYQ') || '[]'); } catch (e) {}
+    q = q.filter(function (x) { return Date.now() - x.at < 15 * 60 * 1000; });
+    const r = fn(q);
+    if (r.q.length) c.put('REPLYQ', JSON.stringify(r.q), 900); else c.remove('REPLYQ');
+    return r.out;
+  } finally { lock.releaseLock(); }
+}
+function replyPut(b) {
+  return replyQueue(function (q) {
+    q.push({ id: Utilities.getUuid(), at: Date.now(), msgId: String(b.msgId || '').slice(0, 300), text: String(b.text || '').slice(0, 20000), subject: String(b.subject || '').slice(0, 300), from: String(b.from || '').slice(0, 300), date: String(b.date || '').slice(0, 40) });
+    return { q: q.slice(-10), out: { queued: true } };
+  });
+}
+function replyTake() { return replyQueue(function (q) { return { q: [], out: q }; }); }
+
 /* ---------- mail forwarded from any app to <me>+dash@gmail.com ---------- */
 const DONE_LABEL = '대시보드/처리됨';
 function dashAddress() { const e = Session.getEffectiveUser().getEmail() || ''; return e.replace(/@/, '+dash@'); }

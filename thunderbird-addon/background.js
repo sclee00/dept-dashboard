@@ -134,4 +134,54 @@ browser.menus.onClicked.addListener(async (info, tab) => {
   send(msgs.length ? msgs : await selectedInTab(tab));
 });
 
+/* ---------- replies the dashboard asks for: open Thunderbird's own reply window (with the quoted original) and put the draft on top ---------- */
+const escHtml = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const draftHtml = t => String(t).replace(/\r\n/g, '\n').split(/\n{2,}/).map(p => `<p>${escHtml(p).replace(/\n/g, '<br>')}</p>`).join('');
+async function findMessage(it) {
+  if (it.msgId) {
+    const id = it.msgId.replace(/^<|>$/g, '');
+    for (const v of [id, '<' + id + '>']) {
+      try { const r = await browser.messages.query({ headerMessageId: v }); const l = (r && r.messages) || []; if (l.length) return l[0]; } catch (e) {}
+    }
+  }
+  if (it.subject) {
+    try { const r = await browser.messages.query({ subject: it.subject.replace(/^\s*(re|fwd?)\s*:\s*/i, '') }); const l = ((r && r.messages) || []).filter(m => !it.from || (m.author || '').includes((it.from.match(/[\w.+-]+@[\w.-]+/) || [''])[0])); if (l.length) return l[l.length - 1]; } catch (e) {}
+  }
+  return null;
+}
+async function openReply(it) {
+  const msg = await findMessage(it);
+  if (!msg) throw new Error('Thunderbird에서 원본 메일을 찾지 못했습니다 (지워졌거나 다른 폴더·계정).');
+  const tab = await browser.compose.beginReply(msg.id, 'replyToSender');
+  if (!it.text) return msg;
+  let d = null;
+  for (let k = 0; k < 20 && !d; k++) { await new Promise(r => setTimeout(r, k ? 250 : 400)); try { d = await browser.compose.getComposeDetails(tab.id); } catch (e) { d = null; } }
+  if (!d) throw new Error('답장 창은 열었지만 내용을 넣지 못했습니다. 대시보드에서 복사해 붙여넣어 주세요.');
+  if (d.isPlainText) await browser.compose.setComposeDetails(tab.id, { plainTextBody: it.text + '\n\n' + (d.plainTextBody || '') });
+  else {
+    const body = d.body || '', mm = body.match(/<body[^>]*>/i), ins = draftHtml(it.text) + '<br>';
+    await browser.compose.setComposeDetails(tab.id, { body: mm ? body.replace(mm[0], mm[0] + ins) : ins + body });
+  }
+  return msg;
+}
+let replyBusy = false;
+async function replyPoll() {
+  if (replyBusy) return; replyBusy = true;
+  try {
+    const s = await settings(); if (!s) return;
+    const r = await fetch(s.gasUrl + '?action=replyTake&key=' + encodeURIComponent(s.gasKey) + '&t=' + Date.now(), { redirect: 'follow', cache: 'no-store' });
+    let j = null; try { j = await r.json(); } catch (e) {}
+    if (!j || !j.ok || !(j.items || []).length) return;
+    const log = [];
+    for (const it of j.items) {
+      const base = { at: new Date().toISOString(), kind: 'reply', subject: 'Re: ' + (it.subject || '(제목 없음)'), from: it.from || '' };
+      try { await openReply(it); log.push({ ...base, result: 'reply' }); }
+      catch (e) { const m = String((e && e.message) || e); log.push({ ...base, result: 'fail', error: m }); notify('답장 창을 열지 못했습니다', (it.subject || '') + '\n' + m); }
+    }
+    await logAdd(log.reverse());
+  } catch (e) {} finally { replyBusy = false; }
+}
+setInterval(replyPoll, 6000);
+setTimeout(replyPoll, 1500);
+
 browser.runtime.onInstalled.addListener(async () => { if (!(await settings())) browser.runtime.openOptionsPage(); });

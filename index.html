@@ -1824,7 +1824,7 @@ function replyBlock(m) {
   const d = fixNames((m.reply && m.reply.draft) || (opts[m.replyChoice ?? 0] || {}).draft || '');
   if (d) return `<div class="mbox draft">
       <div class="row" style="justify-content:space-between"><span>${ic('reply')} <b>답장 초안</b>${m.replyChoice != null && opts[m.replyChoice] ? ` <span class="pill pend">${esc(opts[m.replyChoice].label)}</span>` : ''}</span>
-        <span class="row">${opts.length ? `<button class="btn small" type="button" data-act="clearOpt" data-id="${m.id}">다른 안</button>` : ''}<button class="btn small primary" type="button" data-act="copyReply" data-id="${m.id}">${ic('copy')}복사</button><button class="btn small" type="button" data-act="sendReply" data-id="${m.id}" title="메일 앱(Thunderbird 등)에 받는 사람·제목·내용을 채운 답장 창을 엽니다">${ic('mail')}보내기</button><button class="btn small" type="button" data-act="openMail" data-id="${m.id}">고치기</button></span></div>
+        <span class="row">${opts.length ? `<button class="btn small" type="button" data-act="clearOpt" data-id="${m.id}">다른 안</button>` : ''}<button class="btn small primary" type="button" data-act="copyReply" data-id="${m.id}">${ic('copy')}복사</button><button class="btn small" type="button" data-act="sendReply" data-id="${m.id}" title="${m.via === 'thunderbird' ? 'Thunderbird에서 원본을 인용한 답장 창을 열고 초안을 넣습니다' : '메일 앱에 받는 사람·제목·내용을 채운 답장 창을 엽니다'}">${ic('mail')}보내기</button><button class="btn small" type="button" data-act="openMail" data-id="${m.id}">고치기</button></span></div>
       <div class="dprev">${esc(d)}</div>
     </div>`;
   return `<div class="mbox draft"><div class="row" style="justify-content:space-between"><span>${ic('reply')} <b>답장 필요</b> <span class="count">초안이 아직 없습니다</span></span><button class="btn small primary" type="button" data-act="quickDraft" data-id="${m.id}">${ic('spark')}초안 만들기</button></div></div>`;
@@ -4825,7 +4825,7 @@ function renderSheet(force) {
         <div class="status" id="draftStatus"></div>
         <div class="row" style="margin-top:.3rem">
           <button class="btn primary" type="button" data-act="copyDraft">${ic('copy')}복사</button>
-          <button class="btn" type="button" data-act="sendReply" data-id="${m.id}" title="메일 앱(Thunderbird 등)에 받는 사람·제목·내용을 채운 답장 창을 엽니다">${ic('mail')}메일 앱으로 보내기</button>
+          <button class="btn" type="button" data-act="sendReply" data-id="${m.id}" title="${m.via === 'thunderbird' ? 'Thunderbird에서 원본을 인용한 답장 창을 열고 초안을 넣습니다' : '메일 앱에 받는 사람·제목·내용을 채운 답장 창을 엽니다'}">${ic('mail')}${m.via === 'thunderbird' ? 'Thunderbird로 답장' : '메일 앱으로 보내기'}</button>
           <button class="btn" type="button" data-act="saveDraft">초안 저장</button>
           ${m.replied ? '<button class="btn" type="button" data-act="unreplied">답장 완료 취소</button>' : '<button class="btn" type="button" data-act="replied">답장 보냄으로 표시</button>'}
         </div>
@@ -5619,6 +5619,14 @@ document.addEventListener('click', async ev0 => {
         const ta = $('draft'), d = ta && UI.openId === id ? ta.value : fixNames((mm.reply && mm.reply.draft) || ((mm.replyOptions || [])[mm.replyChoice ?? 0] || {}).draft || '');
         if (!d.trim()) return toast('보낼 답장 내용이 없습니다.');
         try { await navigator.clipboard.writeText(d); } catch {}
+        // mail that came from Thunderbird: ask the add-on to open Thunderbird's own reply (original quoted below)
+        if (mm.msgId && mm.via === 'thunderbird' && gasOn()) {
+          try {
+            await gasPost({ action: 'replyPut', msgId: mm.msgId, text: d, subject: mm.subject || '', from: replyTo(mm) });
+            toast('Thunderbird에 답장 창을 여는 중입니다 (몇 초 걸립니다). 원본이 아래에 붙은 답장 창에 초안이 들어갑니다. 내용은 복사도 해 두었습니다.');
+            return;
+          } catch (e) { toast(e && e.code === 'action' ? '스크립트를 버전 12로 업데이트해야 Thunderbird 답장 창을 열 수 있습니다. 이번에는 메일 앱으로 엽니다.' : 'Thunderbird로 넘기지 못해 메일 앱으로 엽니다.'); }
+        }
         const to = replyTo(mm), subj = 'Re: ' + String(mm.subject || '').replace(/^\s*(re|회신|답장)\s*:\s*/i, '');
         const body = d.length > 1800 ? '' : d;
         // open the mail app through a link (the page stays; no "leave site?" prompt)
