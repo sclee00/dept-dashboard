@@ -5564,6 +5564,20 @@ document.addEventListener('keydown', e => {
   if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('[role="button"][data-act]')) { e.preventDefault(); e.target.click(); return; }
   if (e.key === 'Escape') { if (UI.dlg === 'relay') relayCancel(); else if ($('dlgRoot').innerHTML) { if (UI.dlg === 'settings') { applyImpStyle(); if (UI.wcDraft) { UI.wcDraft = null; paintWords(); } if (UI.fontDraft) { UI.fontDraft = null; applyFont(); } if (UI.fxDraft) { UI.fxDraft = null; renderCal(); } } $('dlgRoot').innerHTML = ''; UI.dlg = null; } else if (UI.openId) closeSheet(); else if (UI.dayForm) { UI.dayForm = null; renderDay(true); } }
   if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && e.target.id === 'rawMail') analyzeNew();
+  // Enter twice in a row (quickly) runs 자동 처리; the first Enter's line break is taken back
+  if (e.target.id === 'rawMail' && !e.isComposing && e.keyCode !== 229) {
+    const t = e.target;
+    if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      const now = Date.now(), pos = t.selectionStart;
+      if (UI.lastEnter && now - UI.lastEnter < 600 && pos === t.selectionEnd && t.value[pos - 1] === '\n') {
+        e.preventDefault(); UI.lastEnter = 0;
+        t.value = t.value.slice(0, pos - 1) + t.value.slice(pos);
+        if (t.value.trim()) analyzeNew();
+        return;
+      }
+      UI.lastEnter = now;
+    } else if (!['Shift', 'Control', 'Alt', 'Meta'].includes(e.key)) UI.lastEnter = 0;
+  }
   if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'z' || e.key === 'Z' || e.key === 'y') && !(e.target.closest && e.target.closest('input,textarea,select,[contenteditable]')) && !UI.dlg) { e.preventDefault(); doUndo(e.key === 'y' || e.shiftKey); }
 });
 $('taskForm').addEventListener('submit', async e => {
