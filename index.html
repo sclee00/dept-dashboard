@@ -57,7 +57,7 @@ header.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:spac
 
 [hidden]{display:none!important}
 .quick{background:var(--surface);border:1px solid var(--accent);border-radius:14px;padding:.7rem .9rem;display:flex;flex-direction:column;gap:.5rem;box-shadow:0 0 0 3px var(--accent-soft)}
-.qhead{display:flex;align-items:center;gap:.45rem;flex-wrap:wrap}
+.qhead{display:flex;align-items:center;gap:.45rem;flex-wrap:wrap;flex:none}
 .qhead b{font-family:var(--display);font-size:1.05rem}
 .qhead .ic{color:var(--accent);width:1.25rem;height:1.25rem}
 .qbody{display:grid;grid-template-columns:minmax(0,1fr) 25rem;gap:.6rem;align-items:start}
@@ -271,17 +271,6 @@ textarea.field{resize:vertical;width:100%;line-height:1.55}
 
 /* sheet */
 .scrim{position:fixed;inset:0;background:rgb(10 14 20 / .45);z-index:20}
-/* Gemini inside the dashboard (needs the Gemini connection extension 1.1+) */
-.gemdock{position:fixed;right:12px;bottom:12px;width:min(400px,calc(100vw - 24px));height:min(560px,calc(100vh - 24px));z-index:70;display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:0 12px 32px rgb(0 0 0 / .25);overflow:hidden}
-.gemdock[hidden]{display:none}
-.gemdock.min{height:auto}
-.gemdock.min iframe{display:none}
-.gemdock.big{width:min(640px,calc(100vw - 24px));height:calc(100vh - 24px)}
-.gemdock header{display:flex;align-items:center;gap:.4rem;padding:.35rem .5rem .35rem .75rem;border-bottom:1px solid var(--line);background:var(--surface-2);font-size:.85rem;font-weight:600}
-.gemdock header .st{flex:1;font-weight:400;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.gemdock header button{border:0;background:none;color:var(--muted);cursor:pointer;font:inherit;padding:.15rem .4rem;border-radius:6px}
-.gemdock header button:hover{background:var(--line);color:var(--ink)}
-.gemdock iframe{flex:1;border:0;width:100%;background:#fff}
 .sheet{position:fixed;top:0;right:0;bottom:0;width:min(46rem,100%);background:var(--surface);border-left:1px solid var(--line);z-index:21;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);padding-right:env(safe-area-inset-right,0px)}
 .sheethead{padding:1rem 1.3rem .8rem;border-bottom:1px solid var(--line);display:flex;gap:1rem;justify-content:space-between;align-items:flex-start}
 .sheethead h2{font-family:var(--display);font-size:1.35rem;margin:0;line-height:1.3;text-wrap:balance;overflow-wrap:anywhere}
@@ -729,6 +718,60 @@ label.inl{display:inline-flex;align-items:center;gap:.3rem;font-size:.85rem} lab
 .imrow input[type=color]{width:2.1rem;height:1.8rem;border:1px solid var(--line);border-radius:6px;background:none;padding:0;cursor:pointer}
 .imrow .field{padding:.3rem .45rem}
 .quick{margin-top:0}
+/* tabs inside the auto-processing box */
+.qtabs{gap:.25rem;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
+.qtab{display:inline-flex;align-items:center;gap:.35rem;border:0;background:none;color:var(--muted);font:inherit;font-weight:600;font-size:.92rem;padding:.3rem .65rem;border-radius:8px;cursor:pointer;white-space:nowrap}
+.qtab .ic{width:1rem;height:1rem}
+.qtab:hover{color:var(--ink);background:var(--surface-2)}
+.qtab[aria-selected="true"]{color:var(--accent);background:var(--accent-soft)}
+.qtab .qn{font-family:var(--mono);font-size:.72rem;font-weight:500;opacity:.8}
+.qtabs .qsp{flex:1}
+/* smaller controls in the bottom row */
+.qctl{gap:.3rem}
+.qctl select.field{padding:.22rem .4rem;font-size:.8rem;height:1.85rem}
+.qctl .btn{padding:.18rem .5rem;font-size:.78rem;min-height:1.75rem}
+.qctl .btn .ic{width:.85rem;height:.85rem}
+.qctl .btn.primary{font-size:.85rem;min-height:2rem}
+.qrow .qbody{grid-template-columns:minmax(0,1fr) 12px var(--qcw,20rem)}
+.quick .btn.small{padding:.15rem .5rem;font-size:.78rem}
+.qtab{font-size:.85rem;padding:.22rem .55rem}
+.qrow .tools.toolgrid{grid-template-columns:repeat(auto-fill,minmax(8rem,1fr));grid-auto-rows:minmax(2rem,auto);gap:.35rem;padding:.55rem .7rem}
+.qrow .toolgrid>.iconbtn,.qrow .toolgrid>.gchip{padding:.25rem .5rem;font-size:.78rem;border-radius:8px}
+.toolgrid .ic{width:.9rem;height:.9rem}
+.qpane{display:flex;flex-direction:column;gap:.5rem;min-height:0}
+.qpane:not(.on){display:none}
+.quick.sized .qpane.on{flex:1 1 auto;overflow:auto}
+/* Gemini stays laid out off screen when its tab is not open, so it keeps working */
+.qgem:not(.on){display:flex;position:fixed;left:-10000px;top:0;width:620px;height:640px;visibility:hidden}
+.qgbar{display:flex;align-items:center;gap:.4rem;flex-wrap:wrap}
+.qgbar .st{flex:1;color:var(--muted);font-size:.82rem;min-width:6rem}
+.qgbox{flex:1 1 auto;min-height:0;height:var(--gemh,420px);border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--surface-2)}
+.quick.sized .qgbox{height:auto}
+.qgbox iframe{border:0;width:100%;height:100%;display:block;background:#fff}
+.qgbox .empty{padding:1rem;color:var(--muted);font-size:.88rem;line-height:1.6}
+.quick.gtall{height:auto!important}
+.quick.gtall .qgbox{height:68vh!important;flex:none}
+.quick.ontop{position:relative;z-index:21}
+.stgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(15rem,1fr));gap:.5rem}
+.stcard{background:var(--surface-2);border-radius:10px;padding:.55rem .7rem;display:flex;flex-direction:column;gap:.25rem;font-size:.84rem;min-width:0}
+.stcard h4{margin:0;font-size:.82rem;color:var(--muted);display:flex;align-items:center;gap:.35rem;font-weight:600}
+.stcard h4 .ic{width:.95rem;height:.95rem}
+.stcard .kv{display:flex;justify-content:space-between;gap:.6rem}
+.stcard .kv>span:first-child{color:var(--muted);white-space:nowrap}
+.stcard .kv>span:last-child{text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.stcard .ok{color:var(--green)} .stcard .warn{color:var(--amber)} .stcard .bad{color:var(--red,#e5484d)}
+.stcard .row{display:flex;gap:.35rem;flex-wrap:wrap;margin-top:.15rem}
+.stlog{grid-column:1/-1}
+.stlog ol{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:.15rem;font-size:.8rem}
+.stlog li{display:flex;gap:.5rem} .stlog li time{font-family:var(--mono);color:var(--muted);flex:none}
+.hlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.35rem}
+.hrow{display:grid;grid-template-columns:3.2rem minmax(0,1fr) auto;gap:.6rem;align-items:center;background:var(--surface-2);border-radius:10px;padding:.4rem .6rem;font-size:.86rem}
+.hrow time{font-family:var(--mono);font-size:.78rem;color:var(--muted)}
+.hrow b{font-weight:600}
+.hrow .hd{display:block;color:var(--muted);font-size:.78rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hrow.redo{opacity:.75;border:1px dashed var(--line);background:none}
+.hhead{display:flex;align-items:center;gap:.5rem;font-size:.8rem;color:var(--muted)}
+.hhead b{color:var(--ink);font-size:.85rem}
 /* bottom row: auto-processing on the left half, the tool buttons as tiles on the right half */
 .qrow{display:grid;grid-template-columns:minmax(0,var(--q1,1fr)) 1rem minmax(0,var(--q2,1fr));gap:0;flex:none;align-items:stretch}
 .qbody{grid-template-columns:minmax(0,1fr) 12px var(--qcw,25rem);gap:0}
@@ -741,7 +784,7 @@ label.inl{display:inline-flex;align-items:center;gap:.3rem;font-size:.85rem} lab
 @media (min-width:701px){.qbody>.gutter{display:block}}
 @media (min-width:901px){.qrow>.gutter{display:block}}
 @media (max-width:900px){.qrow{grid-template-columns:1fr;gap:1rem}}
-@media (max-width:700px){.qbody{grid-template-columns:1fr;gap:.6rem}}
+@media (max-width:700px){.qrow .qbody{grid-template-columns:1fr;gap:.6rem}}
 .icbtn{border:0;background:none;padding:.15rem;margin:-.15rem;border-radius:6px;cursor:pointer;display:grid;place-items:center;color:inherit}
 .icbtn:hover{background:var(--surface);outline:1px dashed var(--muted)}
 .ipgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(5.2rem,1fr));gap:.35rem;max-height:46vh;overflow:auto}
@@ -865,7 +908,14 @@ label.inl{display:inline-flex;align-items:center;gap:.3rem;font-size:.85rem} lab
   <div class="gutter h" data-split="quick" role="separator" aria-orientation="horizontal" tabindex="0" title="끌어서 높이 조절 · 두 번 누르면 원래대로"></div>
   <div class="qrow">
   <section class="quick" aria-label="메일 붙여넣기">
-    <div class="qhead"><span class="qic" data-ic="inbox"></span><b>자동 처리</b><span class="count">메일을 붙여넣으면 요약·일정·할 일·답장·조교 지시를 만들고, 짧게 명령하면 바로 실행합니다</span><button class="gchip inboxchip" id="inboxChip" type="button" data-act="inboxRun" hidden></button></div>
+    <div class="qhead qtabs" role="tablist" aria-label="자동 처리 탭">
+      <button type="button" role="tab" class="qtab" data-act="qTab" data-k="auto" title="메일을 붙여넣으면 요약·일정·할 일·답장·조교 지시를 만들고, 짧게 명령하면 바로 실행합니다"><span data-ic="inbox"></span>자동 처리</button>
+      <button type="button" role="tab" class="qtab" data-act="qTab" data-k="gem"><span data-ic="spark"></span>Gemini</button>
+      <button type="button" role="tab" class="qtab" data-act="qTab" data-k="stat"><span data-ic="check"></span>상태</button>
+      <button type="button" role="tab" class="qtab" data-act="qTab" data-k="hist"><span data-ic="refresh"></span>히스토리<span class="qn" id="histN"></span></button>
+      <span class="qsp"></span><button class="gchip inboxchip" id="inboxChip" type="button" data-act="inboxRun" hidden></button>
+    </div>
+    <div class="qpane" data-qp="auto">
     <div class="qbody">
       <textarea class="field" id="rawMail" rows="3" placeholder="메일을 그대로 붙여넣거나 짧게 명령하세요 (Ctrl+Enter). 예: 매주 화요일 3시에 임원회의 일정 추가 · 금요일까지 예산서 제출 할 일 · 다음주 수요일 오후 출장 불가 · 11월 5일 2시~4시 교육과정위원회"></textarea>
       <div class="gutter v" data-split="qin" role="separator" aria-orientation="vertical" tabindex="0" title="끌어서 입력 칸·버튼 너비 조절 · 두 번 누르면 원래대로"></div>
@@ -882,6 +932,10 @@ label.inl{display:inline-flex;align-items:center;gap:.3rem;font-size:.85rem} lab
     <div class="attlist" id="attList" hidden></div>
     <input type="file" id="attInput" multiple hidden>
     <div class="status" id="pasteStatus"></div>
+    </div>
+    <div class="qpane qgem" data-qp="gem" id="qGem"><div class="qgbar"><span class="st" id="gemDockSt"></span><button class="btn small" type="button" data-act="gemNew">새 대화</button><button class="btn small" type="button" data-act="gemTall" id="gemTallBtn">크게</button><a class="btn small" href="https://gemini.google.com/app" target="_blank" rel="noopener">따로 창으로 열기</a></div><div class="qgbox" id="qGemBox"></div></div>
+    <div class="qpane" data-qp="stat" id="qStat"></div>
+    <div class="qpane" data-qp="hist" id="qHist"></div>
   </section>
   <div class="gutter v" data-split="qrow" role="separator" aria-orientation="vertical" tabindex="0" title="끌어서 자동 처리·버튼 너비 조절 · 두 번 누르면 원래대로"></div>
       <div class="tools toolgrid" aria-label="도구">
@@ -1613,7 +1667,8 @@ function dchip(s) {
   const lab = n < 0 ? `${-n}일 지남` : n === 0 ? '오늘' : `D-${n}`;
   return `<span class="dchip ${cls}" title="${esc(fmtShort(s))}">${lab}</span>`;
 }
-function toast(msg) { const t = $('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast._t); toast._t = setTimeout(() => t.hidden = true, 2600); }
+const TLOG = []; // recent notices, shown in the 상태 tab
+function toast(msg) { TLOG.unshift({ at: Date.now(), msg: String(msg) }); if (TLOG.length > 12) TLOG.pop(); if (typeof UI !== 'undefined' && UI.qtab === 'stat') setTimeout(renderStat, 0); const t = $('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast._t); toast._t = setTimeout(() => t.hidden = true, 2600); }
 const nowISO = () => new Date().toISOString();
 
 /* ---------- header ---------- */
@@ -2768,18 +2823,14 @@ const bridgeVer = () => (document.documentElement.dataset.geminiBridge || '0').s
 const frameOK = () => { const v = bridgeVer(); return v[0] > 1 || (v[0] === 1 && v[1] >= 1); };
 const aiFrame = () => frameOK() && S.settings.gemEmbed !== false && !UI.gemFrameBad;
 const GEM_APP = 'https://gemini.google.com/app', GEM_ORIGIN = 'https://gemini.google.com';
-// the small Gemini window in the corner: open (o=true), keep, or hide (o=false)
+// Gemini sits in the "Gemini" tab of the auto-processing box: o=true shows that tab (and loads Gemini once), o=false goes back
 function gemDock(o) {
-  let d = $('gemDock');
-  if (!d) {
-    d = document.createElement('div'); d.id = 'gemDock'; d.className = 'gemdock'; d.hidden = true;
-    d.innerHTML = `<header><span>Gemini</span><span class="st" id="gemDockSt"></span><button type="button" data-act="gemDockSize" title="크게/작게">⤢</button><button type="button" data-act="gemDockMin" title="접기/펴기">–</button><button type="button" data-act="gemDockClose" title="닫기 (다음에 물을 때 다시 열림)">✕</button></header><iframe id="gemFrame" title="Gemini" allow="clipboard-read; clipboard-write"></iframe>`;
-    document.body.appendChild(d);
-  }
-  if (o === false) { d.hidden = true; return d.querySelector('iframe'); }
-  if (o) { d.hidden = false; d.classList.remove('min'); }
-  const f = d.querySelector('iframe');
-  if (o && !f.getAttribute('src')) f.src = GEM_APP;
+  const box = $('qGemBox'); if (!box) return null;
+  let f = $('gemFrame');
+  if (!f && aiFrame()) { box.innerHTML = '<iframe id="gemFrame" title="Gemini" allow="clipboard-read; clipboard-write"></iframe>'; f = $('gemFrame'); }
+  if (o === false) { if (UI.qtab === 'gem') qTab('auto'); return f; }
+  if (o) qTab('gem');
+  if (o && f && !f.getAttribute('src')) f.src = GEM_APP;
   return f;
 }
 function gemDockStatus(t) { const el = $('gemDockSt'); if (el) el.textContent = t || ''; }
@@ -2794,10 +2845,14 @@ function frameLoad(f, ms) {
   });
 }
 async function frameAsk(prompt, json, setStatus) {
+  const back = UI.qtab && UI.qtab !== 'gem' ? UI.qtab : 'auto';
   const f = gemDock(true);
+  const q = document.querySelector('.quick'); q && q.classList.add('ontop');
+  const done = ok => { q && q.classList.remove('ontop'); if (ok && UI.qtab === 'gem') qTab(back); };
   const say = t => { setStatus(t); gemDockStatus(t); };
   say('Gemini 새 대화를 여는 중');
   const r = await frameLoad(f, 25000);
+  if (!r || !r.signedIn) done(false);
   if (!r) throw { code: 'frame', message: '대시보드 안에 Gemini가 열리지 않았습니다.' };
   if (!r.signedIn) throw { code: 'frame', message: '대시보드 안 Gemini 창이 로그인되어 있지 않습니다 (크롬이 다른 사이트 안의 구글 로그인을 막고 있을 수 있습니다).' };
   say('Gemini가 답하는 중');
@@ -2805,7 +2860,8 @@ async function frameAsk(prompt, json, setStatus) {
     const id = uid();
     const on = e => {
       if (e.source !== f.contentWindow || e.origin !== GEM_ORIGIN || !e.data || e.data.id !== id || e.data.type !== 'gbf-result') return;
-      window.removeEventListener('message', on); gemDockStatus(e.data.error ? '' : '답을 받았습니다');
+      window.removeEventListener('message', on); gemDockStatus(e.data.error ? '' : '답을 받았습니다 ' + hhmm(new Date()));
+      done(!e.data.error);
       if (e.data.error) return reject({ code: e.data.error, message: e.data.message });
       resolve(e.data.text);
     };
@@ -2814,7 +2870,7 @@ async function frameAsk(prompt, json, setStatus) {
   });
 }
 function bridgeAsk(prompt, title, json) {
-  if (aiFrame()) return aiProgress(title, setStatus => frameAsk(prompt, json, setStatus), json, 'Gemini (오른쪽 아래 창)')
+  if (aiFrame()) return aiProgress(title, setStatus => frameAsk(prompt, json, setStatus), json, 'Gemini (Gemini 탭)')
     .catch(e => {
       if (!e || e.code !== 'frame') throw e;
       UI.gemFrameBad = true; gemDock(false);
@@ -2842,7 +2898,7 @@ function aiProgress(title, run, json, who) {
     const close = () => { done = true; clearInterval(tick); if (UI.dlg === 'gem') { UI.dlg = null; $('dlgRoot').innerHTML = ''; } UI.gemCancel = null; };
     UI.gemCancel = () => { if (done) return; close(); reject({ code: 'cancelled', message: '취소했습니다.' }); };
     UI.dlg = 'gem';
-    $('dlgRoot').innerHTML = `<div class="scrim"></div><div class="dlg"${/오른쪽 아래/.test(who || '') ? ' style="place-items:center start;padding-left:max(16px,calc(50vw - 420px))"' : ''}><div class="dlgbox" role="dialog" aria-modal="true" aria-labelledby="dlgT">
+    $('dlgRoot').innerHTML = `<div class="scrim"></div><div class="dlg"${/Gemini 탭/.test(who || '') ? ' style="place-items:center start;padding-left:max(16px,calc(50vw - 420px))"' : ''}><div class="dlgbox" role="dialog" aria-modal="true" aria-labelledby="dlgT">
       <h3 id="dlgT"><span class="spin"></span>${esc(who || 'Gemini')}에서 처리하는 중</h3>
       <div class="count">${esc(title || '')}</div>
       <div class="count" id="gemState"></div>
@@ -2885,7 +2941,7 @@ function aiSettingsHtml(s) {
       <label class="chk"><input type="radio" name="aiMode" value="gemini" data-act="aiMode" ${on ? 'checked' : ''}> Gemini API 자동 (API 키)</label>
       <label class="chk"><input type="radio" name="aiMode" value="copy" data-act="aiMode" ${s.aiMode === 'copy' || (!s.aiMode && !bridgeOn()) ? 'checked' : ''}> 복사해서 AI 창에 붙여넣기</label>
     </div>
-    <span class="count">${bridgeOn() ? `${ic('check')} 이 브라우저에 Gemini 연결 확장(버전 ${esc(document.documentElement.dataset.geminiBridge)})이 있습니다. ${aiFrame() ? '질문하면 대시보드 오른쪽 아래에 Gemini 창이 작게 열려 거기서 답을 받아 옵니다.' : '질문하면 작은 Gemini 창이 따로 열려 거기서 답을 받아 옵니다. 그 창은 닫지 말고 옆에 두세요.'}${frameOK() ? ` <label class="chk" style="display:inline-flex"><input type="checkbox" data-act="gemEmbed" ${S.settings.gemEmbed !== false ? 'checked' : ''}> 대시보드 안에 작게 보이기</label>` : ' (확장을 1.1 이상으로 바꾸면 대시보드 안에 작게 보입니다.)'} <button class="btn small" type="button" data-act="aiTest">${ic('spark')}시험해 보기</button><span class="count" id="aiTestOut"></span>` : `Gemini 웹 자동은 PC 크롬에 확장 프로그램을 한 번 설치해야 합니다: <a href="gemini-bridge.zip" download>확장 프로그램 내려받기</a> → 압축 풀기 → 크롬 주소창에 chrome://extensions → 오른쪽 위 '개발자 모드' 켜기 → '압축해제된 확장 프로그램 로드' → 푼 폴더 선택 → 이 페이지 새로고침.`}</span>
+    <span class="count">${bridgeOn() ? `${ic('check')} 이 브라우저에 Gemini 연결 확장(버전 ${esc(document.documentElement.dataset.geminiBridge)})이 있습니다. ${aiFrame() ? '질문하면 자동 처리 칸의 Gemini 탭에서 답을 받아 옵니다 (일하는 모습이 보입니다).' : '질문하면 작은 Gemini 창이 따로 열려 거기서 답을 받아 옵니다. 그 창은 닫지 말고 옆에 두세요.'}${frameOK() ? ` <label class="chk" style="display:inline-flex"><input type="checkbox" data-act="gemEmbed" ${S.settings.gemEmbed !== false ? 'checked' : ''}> 대시보드 안(Gemini 탭)에서 보이기</label>` : ' (확장을 1.1 이상으로 바꾸면 대시보드 안에 작게 보입니다.)'} <button class="btn small" type="button" data-act="aiTest">${ic('spark')}시험해 보기</button><span class="count" id="aiTestOut"></span>` : `Gemini 웹 자동은 PC 크롬에 확장 프로그램을 한 번 설치해야 합니다: <a href="gemini-bridge.zip" download>확장 프로그램 내려받기</a> → 압축 풀기 → 크롬 주소창에 chrome://extensions → 오른쪽 위 '개발자 모드' 켜기 → '압축해제된 확장 프로그램 로드' → 푼 폴더 선택 → 이 페이지 새로고침.`}</span>
     ${s.aiMode !== 'gemini' ? '' : !gasOn() ? '<span class="count warnline">Gemini API 자동은 "저장·구글" 탭의 Apps Script 연결이 있어야 합니다.</span>' : `
     <span class="count">Gemini API 키는 <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio → API 키</a>에서 만들 수 있습니다. 키는 내 Apps Script 안에만 보관되고 이 화면·데이터 파일에는 남지 않습니다.</span>
     <div class="row" style="flex-wrap:wrap"><input class="field" id="aiKeyIn" type="password" autocomplete="off" placeholder="${s.aiKeySet ? '키 설정됨 — 바꾸려면 새 키를 넣으세요' : 'Gemini API 키 (AIza…)'}" style="flex:1;min-width:14rem">
@@ -2922,7 +2978,7 @@ const UNDO_LABEL = {
   delRule: '아이콘 규칙 삭제', skipOcc: '반복 일정 한 번 빼기', edSave: '일정 편집', bdSave: '불가 시간 설정', saveSettings: '설정 변경', imSave: '아이콘 색·이름',
   pushG: '구글에 추가', fEvent: '일정 추가', fBlock: '불가 시간 추가', taskForm: '할 일 추가', importData: '파일 가져오기'
 };
-const UNDO_SKIP = new Set(['gemCancel', 'gemEmbed', 'gemDockMin', 'gemDockSize', 'gemDockClose', 'gemDockOpen', 'aiKeySave', 'aiKeyClear', 'aiTest', 'aiMode', 'aiModelSel', 'relayClip', 'stOpen', 'tidyOpen', 'tidyDel', 'tidyTime', 'tidyMerge', 'inboxRun', 'analyzeMail', 'tgShow', 'tgHide', 'phoneLink', 'gDel', 'fltImp', 'fltIcons', 'fltTog', 'fltClear', 'fltClose', 'cmdToAI', 'cmdPick', 'cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
+const UNDO_SKIP = new Set(['gemCancel', 'gemEmbed', 'gemDockOpen', 'qTab', 'gemNew', 'gemTall', 'histUndo', 'histRedo', 'stPing', 'pushAllG', 'aiKeySave', 'aiKeyClear', 'aiTest', 'aiMode', 'aiModelSel', 'relayClip', 'stOpen', 'tidyOpen', 'tidyDel', 'tidyTime', 'tidyMerge', 'inboxRun', 'analyzeMail', 'tgShow', 'tgHide', 'phoneLink', 'gDel', 'fltImp', 'fltIcons', 'fltTog', 'fltClear', 'fltClose', 'cmdToAI', 'cmdPick', 'cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
 function undoSnap() {
   const o = { settings: JSON.parse(JSON.stringify(S.settings)) };
   for (const c of COLS) o[c] = JSON.parse(JSON.stringify(S[c]));
@@ -2966,6 +3022,20 @@ async function syncUndoToGoogle(touched) {
   if (fixed) gLoad(true);
   return { fixed, left };
 }
+// undo (or redo) n steps at once, from the 히스토리 tab
+async function undoSteps(n, redo) {
+  UNDO.pending = null;
+  const from = redo ? UNDO.redo : UNDO.stack, to = redo ? UNDO.stack : UNDO.redo;
+  n = Math.min(n, from.length); if (!n) return;
+  const steps = from.slice(-n).reverse();
+  const ok = await gAsk({ title: redo ? '다시 하기' : '되돌리기', icon: 'refresh', rows: steps.map(x => [hhmm(new Date(x.at)), x.label]), note: redo ? `이 ${n}개 작업을 다시 합니다.` : `가장 최근 것부터 이 ${n}개 작업을 되돌립니다. 구글 캘린더에 이미 들어간 일정은 바뀐 시간·제목은 되돌리고, 새로 넣은 일정은 직접 지워야 합니다.`, choices: [{ v: 'go', label: redo ? `${n}개 다시 하기` : `${n}개 되돌리기`, primary: true }] });
+  if (ok !== 'go') return;
+  let touched = [];
+  for (let k = 0; k < n; k++) { const step = from.pop(); to.push({ label: step.label, at: Date.now(), snap: undoSnap() }); touched = touched.concat(restoreSnap(step.snap)); }
+  renderUndo();
+  const g = await syncUndoToGoogle(touched);
+  toast(`${redo ? '다시 했습니다' : '되돌렸습니다'}: ${n}개${g.fixed ? ' · 구글 캘린더도 되돌렸습니다' : ''}${g.left ? ` · 이미 구글에 들어간 일정 ${g.left}개는 구글 캘린더에서 지워 주세요` : ''}`);
+}
 async function doUndo(redo) {
   UNDO.pending = null;
   const from = redo ? UNDO.redo : UNDO.stack, to = redo ? UNDO.stack : UNDO.redo;
@@ -2985,6 +3055,7 @@ function renderUndo() {
   u.title = last ? `되돌리기: ${last.label} (Ctrl+Z)` : '되돌릴 것이 없습니다';
   u.querySelector('.ul').textContent = last ? `되돌리기 · ${last.label}` : '되돌리기';
   r.hidden = !nx; r.title = nx ? `다시 하기: ${nx.label} (Ctrl+Shift+Z)` : '';
+  renderHist();
 }
 
 /* the paid API mode was removed: hard commands go to the Claude chat prompt instead */
@@ -5327,11 +5398,15 @@ document.addEventListener('click', async ev0 => {
       case 'relayApply': return relayApply();
       case 'aiMode': if (el.value === 'gemini' && !S.settings.aiKeySet) toast('먼저 Gemini API 키를 넣고 "키 저장·확인"을 눌러 주세요.'); if (el.value === 'web' && !bridgeOn()) toast('먼저 Gemini 연결 확장 프로그램을 설치해 주세요.'); await saveSettings({ ...S.settings, aiMode: ['web', 'gemini'].includes(el.value) ? el.value : 'copy' }); if (UI.dlg === 'settings') openSettings(); return;
       case 'gemCancel': return UI.gemCancel && UI.gemCancel();
-      case 'gemEmbed': UI.gemFrameBad = false; if (!el.checked) gemDock(false); await saveSettings({ ...S.settings, gemEmbed: el.checked }); if (UI.dlg === 'settings') openSettings(); return;
-      case 'gemDockMin': { const d = $('gemDock'); if (d) d.classList.toggle('min'); return; }
-      case 'gemDockSize': { const d = $('gemDock'); if (d) { d.classList.remove('min'); d.classList.toggle('big'); } return; }
-      case 'gemDockClose': gemDock(false); return;
-      case 'gemDockOpen': { const d = $('gemDock'); if (d && !d.hidden) { gemDock(false); return; } gemDock(true); return; }
+      case 'gemEmbed': UI.gemFrameBad = false; if (!el.checked) { gemDock(false); const ff = $('gemFrame'); if (ff) ff.remove(); } await saveSettings({ ...S.settings, gemEmbed: el.checked }); if (UI.dlg === 'settings') openSettings(); return;
+      case 'gemDockOpen': if (UI.qtab === 'gem') qTab('auto'); else gemDock(true); return;
+      case 'qTab': qTab(el.dataset.k); return;
+      case 'gemNew': { const f = gemDock(true); if (f) f.src = GEM_APP; return; }
+      case 'gemTall': { const q = document.querySelector('.quick'); q.classList.toggle('gtall'); el.textContent = q.classList.contains('gtall') ? '작게' : '크게'; if (q.classList.contains('gtall')) q.scrollIntoView({ block: 'nearest' }); return; }
+      case 'histUndo': return undoSteps(+el.dataset.n, false);
+      case 'histRedo': return undoSteps(+el.dataset.n, true);
+      case 'stPing': UI.ping = null; UI.pingAt = 0; return statPing(true);
+      case 'pushAllG': return pushAllG();
       case 'aiKeySave': return aiKeySave(false);
       case 'aiKeyClear': return aiKeySave(true);
       case 'aiTest': { const o = $('aiTestOut'); if (o) o.textContent = '…'; try { const t = await (aiWeb() ? bridgeAsk : geminiAsk)('연결 시험이야. 딴말 말고 "연결됨" 한 단어로만 답해 줘', '연결 시험', false); toast('Gemini 답: ' + String(t).trim().slice(0, 60)); } catch (e) { toast('시험 실패: ' + ((e && e.message) || '')); } if (UI.dlg !== 'settings') openSettings(); return; }
@@ -5647,7 +5722,7 @@ renderLegend();
 
 UI.selDay = todayStr();
 try { if (localStorage.getItem('calView') === 'month') UI.view = 'month'; } catch {}
-function renderAll() { { const gb = $('gemBtn'); if (gb) gb.hidden = !aiWeb() || !aiFrame(); } if (typeof inboxSchedule === 'function' && inboxEvery >= 0) inboxSchedule(); try { renderTidyBtn(); } catch {} applyTripStyle(); applyImpStyle(); applyFont(); applyLayout(); renderHeader(); renderTasks(); renderMails(); renderCal(); renderDay(false); renderRail(); renderGChip(); renderSync(); renderSheet(false); }
+function renderAll() { { const gb = $('gemBtn'); if (gb) gb.hidden = !aiWeb() || !aiFrame(); } if (UI.qtab === 'stat') renderStat(); if (UI.qtab === 'gem') renderGemPane(); if (typeof inboxSchedule === 'function' && inboxEvery >= 0) inboxSchedule(); try { renderTidyBtn(); } catch {} applyTripStyle(); applyImpStyle(); applyFont(); applyLayout(); renderHeader(); renderTasks(); renderMails(); renderCal(); renderDay(false); renderRail(); renderGChip(); renderSync(); renderSheet(false); }
 renderAll();
 setInterval(() => { renderHeader(); if (UI.selDay === todayStr()) renderDay(false); }, 60000);
 
@@ -5694,6 +5769,98 @@ try {
     .observe(document.body, { childList: true, subtree: true, characterData: true });
   glWalk(document.body);
 } catch {}
+/* ---------- tabs of the auto-processing box: 자동 처리 · Gemini · 상태 · 히스토리 ---------- */
+function qTab(k) {
+  if (!['auto', 'gem', 'stat', 'hist'].includes(k)) k = 'auto';
+  UI.qtab = k; try { localStorage.setItem('qtab', k); } catch {}
+  document.querySelectorAll('.qtab').forEach(b => b.setAttribute('aria-selected', String(b.dataset.k === k)));
+  document.querySelectorAll('.qpane').forEach(p => p.classList.toggle('on', p.dataset.qp === k));
+  if (k !== 'gem') { const q = document.querySelector('.quick'); q && q.classList.remove('gtall'); const tb = $('gemTallBtn'); if (tb) tb.textContent = '크게'; }
+  if (k === 'gem') renderGemPane();
+  if (k === 'stat') { renderStat(); statPing(false); }
+  if (k === 'hist') renderHist();
+  if (k === 'auto') { const t = $('rawMail'); if (t && document.activeElement && document.activeElement.classList.contains('qtab')) t.focus(); }
+}
+function renderGemPane() {
+  const box = $('qGemBox'); if (!box) return;
+  if (aiFrame() && aiWeb()) { const f = $('gemFrame') || gemDock(); if (f && !f.getAttribute('src') && UI.qtab === 'gem') f.src = GEM_APP; return; }
+  if ($('gemFrame')) return;
+  const v = document.documentElement.dataset.geminiBridge;
+  box.innerHTML = `<div class="empty">${!v ? 'Gemini를 여기에 띄우려면 PC 크롬에 "Gemini 연결" 확장(1.1 이상)을 설치해야 합니다. 설정 → 기본 → AI에 설치 방법이 있습니다.'
+    : !frameOK() ? `지금 확장은 ${esc(v)} 버전입니다. 1.1 이상으로 바꾸면 Gemini가 이 탭에 뜹니다. (확장 zip을 받아 같은 폴더에 덮어쓰고, chrome://extensions에서 새로고침)`
+    : !aiWeb() ? '설정 → 기본 → AI가 "Gemini 웹" 방식이 아니어서 이 탭을 쓰지 않습니다.'
+    : S.settings.gemEmbed === false ? '설정에서 "대시보드 안(Gemini 탭)에서 보이기"가 꺼져 있습니다.'
+    : 'Gemini가 대시보드 안에서 로그인되지 않아 따로 창으로 쓰는 중입니다. 새로고침하면 다시 시도합니다.'}</div>`;
+}
+const hhmm = d => pad(d.getHours()) + ':' + pad(d.getMinutes());
+const agoT = t => { if (!t) return '—'; const m = Math.round((Date.now() - t) / 60000); return m < 1 ? '방금' : m < 60 ? m + '분 전' : hhmm(new Date(t)); };
+async function statPing(force) {
+  if (!gasOn() || UI.pinging || (!force && UI.pingAt && Date.now() - UI.pingAt < 300000)) return;
+  UI.pinging = true;
+  try { UI.ping = await gas({ action: 'ping' }); } catch (e) { UI.ping = { ok: false, message: (e && e.message) || '연결 실패' }; }
+  UI.pinging = false; UI.pingAt = Date.now(); if (UI.qtab === 'stat') renderStat();
+}
+const unsentG = () => S.events.filter(e => !e.googleId && !e.googleSent && !repComplex(e) && (e.repeat || !isDate(e.date) || e.date >= todayStr()));
+async function pushAllG() {
+  const list = unsentG(); if (!list.length) return toast('구글에 보낼 일정이 없습니다.');
+  if (!gReady()) return toast('먼저 구글 캘린더를 연결해 주세요.');
+  const ok = await gAsk({ title: '구글 캘린더로 보내기', icon: 'gcal', rows: list.map(e => [`${e.date ? fmtShort(e.date) : '반복'} ${e.time || '종일'}`, e.title]), note: `아직 구글에 없는 일정 ${list.length}개를 구글 캘린더에 넣습니다. 이미 구글에 직접 만든 같은 일정이 있으면 겹칠 수 있습니다.`, choices: [{ v: 'go', label: `${list.length}개 보내기`, primary: true }] });
+  if (ok !== 'go') return;
+  for (const e of list) await pushGoogle(e, e.id);
+}
+function renderStat() {
+  const el = $('qStat'); if (!el) return;
+  const kv = (k, v, cls) => `<div class="kv"><span>${k}</span><span class="${cls || ''}" title="${esc(String(v).replace(/<[^>]+>/g, ''))}">${v}</span></div>`;
+  const card = (icon, t, body) => `<div class="stcard"><h4>${ic(icon)}${t}</h4>${body}</div>`;
+  const chip = $('syncchip'), syncTxt = chip ? chip.textContent.trim() : '';
+  const today = todayStr();
+  const pend = UNDO.stack.length;
+  const ping = UI.ping;
+  const unsent = unsentG().length;
+  const unan = S.emails.filter(m => m.unanalyzed && m.status !== 'done').length;
+  const open = S.emails.filter(m => m.status === 'open').length;
+  let size = 0; try { size = JSON.stringify(snapshot()).length; } catch {}
+  const v = document.documentElement.dataset.geminiBridge;
+  const sec = inboxSec();
+  el.innerHTML = `<div class="stgrid">
+    ${card('drive', '저장', kv('상태', esc(syncTxt || '—'), /실패|깨져|안 됨|필요/.test(syncTxt) ? 'warn' : 'ok') + kv('마지막 저장', DRIVE.last ? agoT(DRIVE.last) : '—') + kv('저장 안 된 변경', DRIVE.dirty ? '있음 (곧 저장)' : '없음', DRIVE.dirty ? 'warn' : '') + kv('데이터 크기', size ? (size / 1024).toFixed(0) + ' KB' : '—'))}
+    ${card('gcal', '구글 캘린더', kv('연결', gReady() ? (G.state === 'error' ? '오류' : '연결됨') : '안 됨', gReady() && G.state !== 'error' ? 'ok' : 'warn') + kv('불러온 일정', `${G.events.length}건 · 캘린더 ${G.cals.length}개`) + kv('마지막 불러오기', G.storedAt ? agoT(G.storedAt) : '—') + kv('새 일정 자동으로 구글에', gAuto() ? '켜짐' : '꺼짐', gAuto() ? 'ok' : 'warn') + kv('아직 구글에 없는 일정', unsent ? unsent + '개' : '없음', unsent ? 'warn' : '') + (unsent && gReady() ? `<div class="row"><button class="btn small" type="button" data-act="pushAllG">구글로 모두 보내기</button></div>` : ''))}
+    ${card('link', 'Apps Script', (!gasOn() ? kv('연결', '안 됨', 'warn') : !ping ? kv('연결', UI.pinging ? '확인 중…' : '확인 전') : ping.ok === false ? kv('연결', esc(ping.message || '실패'), 'bad') : kv('연결', esc(ping.email || '연결됨'), 'ok') + kv('스크립트 버전', ping.version || '—', (ping.version || 0) >= 11 ? 'ok' : 'warn') + kv('전달 주소', esc(ping.forward || '—')) + kv('Gemini API 키', ping.gemini ? '있음' : '없음 (웹 방식이면 필요 없음)')) + (gasOn() ? `<div class="row"><button class="btn small" type="button" data-act="stPing">다시 확인</button></div>` : ''))}
+    ${card('inbox', '메일 (Thunderbird·전달)', kv('마지막 확인', INBOX.at ? agoT(INBOX.at) : '—') + kv('자동 확인', sec ? (sec < 60 ? sec + '초마다' : sec / 60 + '분마다') : '꺼짐 (버튼으로만)') + kv('분석 전 메일', unan ? unan + '개' : '없음', unan ? 'warn' : '') + kv('처리 중 메일', open + '개') + `<div class="row"><button class="btn small" type="button" data-act="inboxRun">메일 가져오기</button></div>`)}
+    ${card('spark', 'AI', kv('방식', aiWeb() ? 'Gemini 웹' : aiAuto() ? 'Gemini API' : '복사·붙여넣기') + kv('연결 확장', v ? v + ' 버전' : '없음', v ? (frameOK() ? 'ok' : 'warn') : '') + kv('Gemini 화면', aiWeb() ? (aiFrame() ? 'Gemini 탭 안' : '따로 창') : '—'))}
+    ${card('list', '데이터', kv('오늘 이후 일정', S.events.filter(e => e.repeat || e.date >= today).length + '개') + kv('남은 할 일', S.tasks.filter(t => !t.done).length + '개') + kv('메일', S.emails.length + '개') + kv('되돌릴 수 있는 작업', pend + '개'))}
+    <div class="stcard stlog"><h4>${ic('alert')}최근 알림</h4>${TLOG.length ? `<ol>${TLOG.slice(0, 8).map(x => `<li><time>${hhmm(new Date(x.at))}</time><span>${esc(x.msg)}</span></li>`).join('')}</ol>` : '<div class="count">아직 없습니다.</div>'}</div>
+  </div>`;
+}
+const HCOL = { events: '일정', tasks: '할 일', emails: '메일', blocks: '불가 시간', marks: '표시' };
+function histDiff(before, after) {
+  const out = [];
+  for (const c of COLS) {
+    const A = new Map((before[c] || []).map(x => [x.id, x])), B = new Map((after[c] || []).map(x => [x.id, x]));
+    const nm = x => String(x.title || x.subject || x.name || '').slice(0, 24);
+    const add = [], del = [], mod = [];
+    for (const [id, x] of B) { const o = A.get(id); if (!o) add.push(nm(x)); else if (JSON.stringify({ ...o, _u: 0 }) !== JSON.stringify({ ...x, _u: 0 })) mod.push(nm(x)); }
+    for (const [id, x] of A) if (!B.has(id)) del.push(nm(x));
+    const L = HCOL[c] || c, show = a => a.filter(Boolean).slice(0, 2).join(', ') + (a.length > 2 ? ` 외 ${a.length - 2}` : '');
+    if (add.length) out.push(`${L} 추가 ${show(add) || add.length + '개'}`);
+    if (mod.length) out.push(`${L} 수정 ${show(mod) || mod.length + '개'}`);
+    if (del.length) out.push(`${L} 삭제 ${show(del) || del.length + '개'}`);
+  }
+  if (before.settings && after.settings && JSON.stringify(before.settings) !== JSON.stringify(after.settings)) out.push('설정 변경');
+  return out.join(' · ');
+}
+function renderHist() {
+  const n = $('histN'); if (n) n.textContent = UNDO.stack.length ? ' ' + UNDO.stack.length : '';
+  const el = $('qHist'); if (!el || UI.qtab !== 'hist') return;
+  const st = UNDO.stack, rd = UNDO.redo;
+  const cur = undoSnap();
+  const rows = st.map((x, i) => ({ x, i, d: histDiff(x.snap, i === st.length - 1 ? cur : st[i + 1].snap) })).reverse();
+  el.innerHTML = `<div class="hhead"><b>이번에 한 작업</b><span>최근 ${UNDO.max}개까지 · 새로고침하면 지워집니다 · 버튼을 누르면 그 작업까지 되돌립니다</span></div>
+    ${rows.length ? `<ol class="hlist">${rows.map((r, k) => `<li class="hrow"><time>${hhmm(new Date(r.x.at))}</time><span><b>${esc(r.x.label)}</b><span class="hd">${esc(r.d || '바뀐 것 없음')}</span></span><button class="btn small" type="button" data-act="histUndo" data-n="${k + 1}" title="${k ? `최근 ${k + 1}개 작업을 되돌립니다` : '이 작업을 되돌립니다'}">${k ? `여기까지 되돌리기 (${k + 1})` : '되돌리기'}</button></li>`).join('')}</ol>` : '<div class="count">아직 되돌릴 작업이 없습니다.</div>'}
+    ${rd.length ? `<div class="hhead"><b>되돌린 작업</b><span>다시 할 수 있습니다</span></div><ol class="hlist">${rd.slice().reverse().map((x, k) => `<li class="hrow redo"><time>${hhmm(new Date(x.at))}</time><span><b>${esc(x.label)}</b></span><button class="btn small" type="button" data-act="histRedo" data-n="${k + 1}">${k ? `여기까지 다시 하기 (${k + 1})` : '다시 하기'}</button></li>`).join('')}</ol>` : ''}`;
+}
+{ let k = 'auto'; try { k = localStorage.getItem('qtab') || 'auto'; } catch {} qTab(k); }
+setInterval(() => { if (UI.qtab === 'stat' && !document.hidden) renderStat(); }, 30000);
 if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__dd = { S, add, UNDO, snapshot, mergeIn, renderAll, FS, G, parseEdit, normalizeCmd, pickDT, parseCommand };
 })();
 </script>
