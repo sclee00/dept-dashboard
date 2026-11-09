@@ -2915,21 +2915,21 @@ function cmdContext() {
   return `대시보드 일정 (번호는 [ ] 안):\n${evs.join('\n') || '- 없음'}\n\n구글 캘린더 일정:\n${gs.join('\n') || '- 없음 또는 연결 안 됨'}\n\n남은 할 일:\n${ts.join('\n') || '- 없음'}\n\n앞으로 2주 빈 시간:\n${sl.map(x => '- ' + x).join('\n') || '- 계산 못 함'}`;
 }
 function commandPrompt(text) {
-  return `당신은 한국 대학교 컴퓨터공학과 학과장의 일정 비서입니다. 학과장이 대시보드에 말하듯 명령했습니다. 명령을 대시보드가 실행할 동작 목록으로 바꾸세요.
+  return `나 컴공과 학과장인데, 대시보드에 일정 명령을 하나 적었어. 이걸 대시보드가 바로 실행할 수 있게 동작 목록으로 바꿔 줘.
 ${ctxLine()}
-요일 번호: 일0 월1 화2 수3 목4 금5 토6. "3시"처럼 오전/오후가 없으면 근무시간 기준으로 1~7시는 오후로 보세요.
-"빈 시간에", "가능한 시간에"처럼 시간을 맡기면 아래 빈 시간 목록에서 고르세요.
+요일 번호는 일0 월1 화2 수3 목4 금5 토6이야. "3시"처럼 오전/오후 없이 쓰면 근무시간 기준이라 1~7시는 오후로 보면 돼.
+"빈 시간에", "가능한 시간에"처럼 시간을 맡기면 아래 빈 시간 목록에서 골라 줘.
 
 ${cmdContext()}
 
-아래 형식의 JSON 객체 하나로만 답하세요.
-{"actions": [동작, ...], "note": "학과장에게 알릴 말 (확인할 점, 질문에 대한 답, 없으면 null)"}
+답은 아래 형식 JSON 객체 하나로만 줘. 다른 말은 붙이지 말고.
+{"actions": [동작, ...], "note": "나한테 알려 줄 말 (확인할 점, 질문에 대한 답, 없으면 null)"}
 
 동작 종류
 1) 새로 만들기: {"type": "event | task | block", "title": "짧은 제목", "date": "YYYY-MM-DD 또는 null (반복이면 첫 날짜, 모르면 null)", "time": "HH:MM 또는 null", "endTime": "HH:MM 또는 null", "allDay": true/false, "repeat": 반복 또는 null, "due": "할 일 기한 YYYY-MM-DD 또는 null", "kind": "회의 | 행사 | 마감 | 학사", "important": true/false}
-   event는 일정, task는 할 일, block은 학과장이 안 되는 시간(불가 시간).
+   event는 일정, task는 할 일, block은 내가 안 되는 시간(불가 시간).
 2) 기존 항목 고치기: {"type": "update", "ref": "위 목록의 번호 (예: e:abc, t:xyz, g:...)", 바뀌는 필드만: "title", "date", "time", "endTime", "allDay", "due", "important", "repeat"}
-3) 지우기: {"type": "delete", "ref": "e:… 또는 t:… 또는 g:…"} — 구글 캘린더 일정(g:)도 지울 수 있습니다 (실행 전에 사용자에게 확인합니다).
+3) 지우기: {"type": "delete", "ref": "e:… 또는 t:… 또는 g:…"} — 구글 캘린더 일정(g:)도 지울 수 있어 (실행 전에 내가 한 번 더 확인해).
 4) 반복 일정에서 하루만 빼기: {"type": "skip", "ref": "e:…", "date": "YYYY-MM-DD"}
 5) 할 일 완료: {"type": "done", "ref": "t:…"}
 
@@ -2939,15 +2939,15 @@ ${cmdContext()}
 - 격주 금요일: {"freq":"weekly","days":[5],"interval":2}
 - 매월 마지막 주 화요일: {"freq":"monthly","days":[2],"nth":[-1]}
 - 매월 첫째·셋째 월요일: {"freq":"monthly","days":[1],"nth":[1,3]}
-- 조건이 갈리는 반복은 일정을 나눠 만드세요. 예) "매월 마지막 주만 화요일 9시, 나머지 주는 수요일 3시 회의" →
+- 조건이 갈리는 반복은 일정을 나눠서 만들어. 예) "매월 마지막 주만 화요일 9시, 나머지 주는 수요일 3시 회의" →
   ① {"type":"event","title":"회의","time":"09:00","repeat":{"freq":"monthly","days":[2],"nth":[-1]}}
   ② {"type":"event","title":"회의","time":"15:00","repeat":{"freq":"weekly","days":[3],"skipIfWeekHas":{"day":2,"nth":-1}}}
   (skipIfWeekHas: 그 달의 마지막 화요일이 들어 있는 주(월~일)에는 ②가 생기지 않음)
-- 기존 반복 일정을 이렇게 바꾸라면 update로 repeat을 통째로 새로 주거나, 지우고(delete) 새로 만드세요.
+- 기존 반복 일정을 이렇게 바꾸라고 하면 update로 repeat을 통째로 새로 주거나, 지우고(delete) 새로 만들어.
 
-중복 정리: "중복된 일정 지워줘"처럼 말하면 제목이 같거나 거의 같고 날짜·시간이 같은 일정끼리 묶어, 하나(중요 표시나 구글 연결이 있는 쪽)만 남기고 나머지를 delete 하세요. 구글 일정끼리의 중복은 지울 수 없으니 note에 목록으로 알려 주세요.
-일정에 대한 질문("다음 주 빈 시간 언제야?", "이번 달 회의 몇 개야?")이면 actions는 빈 배열, note에 답을 쓰세요.
-목록에 없는 항목은 지어내지 말고, 어느 항목인지 애매하면 동작을 만들지 말고 note에 물어볼 점을 쓰세요.
+"중복된 일정 지워줘" 같은 말이면 제목이 같거나 거의 같고 날짜·시간도 같은 것끼리 묶어서, 하나(중요 표시나 구글 연결 있는 쪽)만 남기고 나머지는 delete 해. 구글 일정끼리 겹친 건 못 지우니까 note에 목록으로 알려 주고.
+"다음 주 빈 시간 언제야?", "이번 달 회의 몇 개야?" 같은 질문이면 actions는 빈 배열로 두고 note에 답해 줘.
+목록에 없는 건 지어내지 마. 어느 항목인지 애매하면 동작은 만들지 말고 note에 뭘 확인해야 하는지 물어봐.
 
 명령: ${text}`;
 }
@@ -3286,11 +3286,11 @@ function attPromptBlock(list) {
   let budget = ATT_PROMPT_MAX;
   const parts = atts.map((a, i) => {
     const t = (a.text || '').slice(0, Math.max(0, Math.min(ATT_FILE_MAX, budget))); budget -= t.length;
-    return `[첨부 ${i + 1}] ${a.name} (${ATT_KO[a.kind] || '파일'}${a.note ? ' · ' + a.note : ''})${t ? `\n"""\n${t}${(a.cut || t.length < (a.text || '').length) ? '\n… (뒤는 생략)' : ''}\n"""` : '\n(내용을 읽지 못함 — 파일 이름과 메일 본문으로만 판단하세요)'}`;
+    return `[첨부 ${i + 1}] ${a.name} (${ATT_KO[a.kind] || '파일'}${a.note ? ' · ' + a.note : ''})${t ? `\n"""\n${t}${(a.cut || t.length < (a.text || '').length) ? '\n… (뒤는 생략)' : ''}\n"""` : '\n(내용을 못 읽었어 — 파일 이름이랑 메일 본문만 보고 판단해 줘)'}`;
   });
-  return `\n\n첨부파일 ${atts.length}개. 브라우저에서 글자만 뽑은 것이라 표 모양이나 서식은 일부 빠졌습니다. 엑셀은 "N행: 칸 | 칸" 형태이고, 셀에 색이 칠해진 행은 [노란색 표시]처럼 적혀 있습니다.\n${parts.join('\n\n')}`;
+  return `\n\n첨부파일 ${atts.length}개야. 브라우저에서 글자만 뽑은 거라 표 모양이나 서식은 좀 빠졌어. 엑셀은 "N행: 칸 | 칸" 꼴이고, 색칠된 행은 [노란색 표시]처럼 적혀 있어.\n${parts.join('\n\n')}`;
 }
-const ATT_RULES = `첨부파일이 있으면 내용까지 읽고 반영하세요: 첨부 안의 날짜·마감·대상 목록·제출 양식을 events/tasks/답장/조교 지시에 쓰고, 조교 지시에는 어떤 첨부를 어떻게 처리할지(예: 엑셀의 노란색 행 검토) 구체적으로 쓰세요. "attachments" 항목에 첨부마다 한 줄 요약을 넣으세요.`;
+const ATT_RULES = `첨부파일도 내용까지 읽고 반영해 줘. 첨부 안의 날짜·마감·대상 목록·제출 양식은 events/tasks/답장/조교 지시에 쓰고, 조교 지시에는 어떤 첨부를 어떻게 처리할지(예: 엑셀의 노란색 행 검토) 구체적으로 적어 줘. "attachments"에는 첨부마다 한 줄 요약.`;
 
 /* ---------- icon display rules: look of a chip by what kind of item it is ---------- */
 const FX_TRAITS = [
@@ -4603,16 +4603,17 @@ function closeSheet() { if (UI.draftCtl) UI.draftCtl.abort(); UI.openId = null; 
 /* ---------- Claude prompts ---------- */
 function ctxLine() { const d = new Date(); return `오늘 날짜: ${ymd(d)} (${WD[d.getDay()]}요일). 현재 학기: ${S.settings.semesterLabel}.`; }
 function analysisPrompt(raw, cat, atts) {
-  return `당신은 한국 대학교 컴퓨터공학과 학과장의 업무 비서입니다. 학과장이 붙여넣은 이메일을 분석하세요.
+  return `나 컴공과 학과장이야. 받은 메일 하나 분석 좀 해 줘.
 ${ctxLine()}
-학과장이 직접 고른 분류: ${cat}
-${(S.settings.ignoreHints || []).length ? '학과장이 전에 "상관없다"며 무시한 메일(비슷하면 irrelevant로 보세요): ' + S.settings.ignoreHints.slice(0, 20).join(' / ') : ''}
-학과장의 비어 있는 시간 (앞으로 2주, 근무시간 안, 불가 시간과 기존 일정 제외): ${slotsForPrompt().join(', ') || '없음'}
-회의 시간을 잡거나 가능한 시간을 묻는 메일이면, 답장 초안에서 위 목록 가운데 2~3개를 골라 제안하세요. 목록에 없는 시간은 가능하다고 쓰지 마세요.
-이메일 스레드 처리: 붙여넣은 글에 회신·전달로 인용된 이전 메일("-----Original Message-----", "보낸 사람:", "On ... wrote:", ">" 인용, "이어진 메일" 구분선 등)이 있으면 하나의 스레드로 보세요. 시간순으로 재구성하고, 이미 합의·확정된 것, 누가 무엇을 약속했는지, 아직 답하지 않은 질문을 파악하세요. 분석의 기준은 가장 최근 메일이며, 이전 메일에서 이미 처리된 일은 할 일로 다시 만들지 마세요. 각 메일의 날짜가 없으면 null로 두세요.
-"다음 주 화요일", "이달 말" 같은 상대적 날짜는 각 메일이 보낸 날짜를 기준으로(모르면 오늘을 기준으로) 실제 날짜(YYYY-MM-DD)로 바꾸세요. 날짜를 확정할 수 없으면 null로 두세요. 메일에 없는 내용은 지어내지 마세요.
+내가 고른 분류: ${cat}
+${(S.settings.ignoreHints || []).length ? '전에 내가 "상관없다"고 넘긴 메일들이야(비슷하면 irrelevant로 봐): ' + S.settings.ignoreHints.slice(0, 20).join(' / ') : ''}
+내 빈 시간 (앞으로 2주, 근무시간 안, 불가 시간이랑 기존 일정 뺀 것): ${slotsForPrompt().join(', ') || '없음'}
+회의 시간 잡자거나 가능한 시간 묻는 메일이면 답장 초안에 위 목록에서 2~3개 골라 제안해 줘. 목록에 없는 시간은 된다고 쓰지 마.
+메일 안에 회신·전달로 인용된 이전 메일("-----Original Message-----", "보낸 사람:", "On ... wrote:", ">" 인용, "이어진 메일" 구분선 같은 거)이 있으면 한 스레드로 봐 줘. 시간순으로 다시 정리하고, 이미 합의된 것, 누가 뭘 약속했는지, 아직 답 안 한 질문을 짚어 줘. 기준은 가장 최근 메일이야. 앞에서 이미 끝난 일은 할 일로 다시 만들지 말고, 날짜 모르는 메일은 null로 둬.
+"다음 주 화요일", "이달 말" 같은 말은 그 메일 보낸 날짜 기준으로(모르면 오늘 기준) 실제 날짜(YYYY-MM-DD)로 바꿔 줘. 확정 못 하면 null. 메일에 없는 내용은 지어내지 마.
+나한테 하는 말은 반말이어도 되는데, 답장 초안이랑 조교 지시 메일은 실제로 보낼 거니까 평소처럼 예의 바르게 써 줘.
 
-아래 형식의 JSON 객체 하나로만 답하세요.
+답은 아래 형식 JSON 객체 하나로만 줘. 다른 말은 붙이지 말고.
 {
   "subject": "메일 제목. 없으면 내용을 대표하는 짧은 제목",
   "from": "보낸 사람 이름과 소속. 모르면 빈 문자열",
@@ -4637,20 +4638,20 @@ ${(S.settings.ignoreHints || []).length ? '학과장이 전에 "상관없다"며
   "decisions": [{"question": "학과장이 정해야 할 것 (질문 한 줄)", "options": [{"label": "선택지 (짧게)", "detail": "고르면 어떻게 되는지 한 줄"}], "recommend": 추천 선택지 번호(0부터) 또는 null, "why": "추천 이유 한 줄 또는 null"}],
   "highlights": [{"text": "원문에서 글자 그대로 옮긴 짧은 구절", "type": "deadline | request | decision | date | attachment | warning"}]
 }
-forHead: 학과장이 직접 참석·결정·제출·확인해야 하는 일정과 할 일만 true. 조교·행정실·다른 부서가 실무로 처리하는 것, 참고용 일정은 false (화면에서 기본으로 숨깁니다).
-myAction: 학과장 입장에서 무엇을 언제까지 해야 하는지 한두 줄. 할 일이 없으면 "확인만 하면 됩니다"처럼 쓰세요.
-decisions: 학과장이 골라야 답장·지시를 마무리할 수 있는 결정만 0~4개. 선택지는 서로 겹치지 않게 2~4개, 객관식으로.
-delegateItems: 조교 업무 지시를 개조식 한 줄씩 쪼갠 것(3~8개). 꼭 필요한 항목은 essential true, 넣을지 학과장이 판단할 만한 항목은 false.
-highlights: 원문에서 학과장이 눈여겨볼 구절(마감·기한, 요청·회신 요구, 결정이 필요한 부분, 날짜·시간, 첨부 언급, 주의·필수 사항) 최대 20개. text는 원문과 글자 하나까지 같아야 합니다.
-업무 지시 메일 규칙: 첫 줄에 "제목: ..."을 쓰고 빈 줄 뒤 본문. 본문은 배경 한 문장 → 할 일을 개조식(-)으로, 각 줄에 산출물·기한 → 학과장 확인이 필요한 지점 → 완료 보고 방식 한 줄. 전체 15줄 이내로 짧게. 조교가 원메일을 따로 보지 않아도 일할 수 있게 구체적으로 쓰되, 학과장이 결정할 사항은 [대괄호]로 남기세요. 서명은 "학과장".
-일정 중요도(important): 학과장이 직접 참석·결정해야 하는 일정, 본부·외부 기관의 공식 일정, 채용·입시·평가·예산·마감처럼 놓치면 문제가 되는 일정은 true, 참고용·선택 참석·홍보성 일정은 false.
-관련성 판단: 학과장이 직접 처리하거나 알아야 할 일이 없는 메일(학회·세미나·저널·출판사 홍보, 원고 모집, 광고, 단체 배포 뉴스레터, 다른 학과·다른 대상용 안내 등)은 relevance를 irrelevant로 하고 needsReply는 false, replyMode는 none, events·tasks는 빈 배열로 두세요. 학과장이 발표자·위원·심사자로 지정된 학회 메일이나 학과 교수·학생에게 전달해야 할 내용은 relevant입니다.
-답장 방식: 답장이 필요하고 답할 내용이 메일과 맥락에서 분명하면 replyMode를 draft로 하고 replyDraft에 전문을 쓰세요. 답의 방향이 학과장의 결정에 달려 있으면(참석 여부, 수락·거절, 승인 여부, 여러 안 중 선택, 금액·인원 결정 등) replyMode를 options로 하고 replyOptions에 서로 다른 방향 2~4개를 각각 완성된 답장 전문으로 쓰세요. 이때 replyDraft는 null입니다. 답장이 필요 없으면 none.
-답장 초안 규칙: 받는 사람에 맞는 인사 → 요청에 대한 답 → 확인·요청 사항 → 맺음말. 학과장이 아직 정하지 않은 사실(참석 여부, 승인 여부, 구체적 수치)은 [대괄호]로 비워 두세요. 마지막 줄 서명은 "${S.settings.signature}".
-제출·회신 마감은 events(종류 "마감")와 tasks 양쪽에 넣지 말고, 학과장이 직접 해야 하는 일은 tasks에, 참석하거나 기억해야 할 날짜는 events에 넣으세요.
+forHead: 내가 직접 참석·결정·제출·확인해야 하는 일정이랑 할 일만 true. 조교·행정실·다른 부서가 실무로 하는 거나 참고용 일정은 false (화면에서 기본으로 숨겨).
+myAction: 내가 뭘 언제까지 해야 하는지 한두 줄로. 할 게 없으면 "확인만 하면 됨"처럼.
+decisions: 내가 골라야 답장·지시를 마무리할 수 있는 결정만 0~4개. 선택지는 안 겹치게 2~4개, 객관식으로.
+delegateItems: 조교 지시를 개조식으로 한 줄씩 쪼갠 것(3~8개). 꼭 필요한 건 essential true, 넣을지 내가 판단할 만한 건 false.
+highlights: 원문에서 내가 눈여겨볼 구절(마감·기한, 요청·회신 요구, 결정할 부분, 날짜·시간, 첨부 언급, 주의·필수 사항) 최대 20개. text는 원문이랑 글자 하나까지 똑같아야 해.
+조교 지시 메일은 첫 줄에 "제목: ...", 빈 줄, 그다음 본문. 본문은 배경 한 문장 → 할 일 개조식(-), 줄마다 산출물·기한 → 내 확인이 필요한 지점 → 완료 보고 방식 한 줄. 전체 15줄 안으로 짧게. 조교가 원메일 안 봐도 일할 수 있게 구체적으로 쓰고, 내가 정할 건 [대괄호]로 남겨 둬. 서명은 "학과장".
+important: 내가 직접 참석·결정해야 하는 일정, 본부·외부 기관 공식 일정, 채용·입시·평가·예산·마감처럼 놓치면 곤란한 건 true. 참고용·선택 참석·홍보성은 false.
+관련성: 내가 처리하거나 알아야 할 게 없는 메일(학회·세미나·저널·출판사 홍보, 원고 모집, 광고, 단체 뉴스레터, 다른 학과나 다른 대상 안내 같은 거)은 relevance를 irrelevant로, needsReply는 false, replyMode는 none, events·tasks는 빈 배열로. 내가 발표자·위원·심사자로 지정된 학회 메일이나 학과 교수·학생한테 전달할 내용이면 relevant야.
+답장 방식: 답장이 필요하고 뭐라고 답할지 분명하면 replyMode는 draft, replyDraft에 전문. 답이 내 결정에 달려 있으면(참석 여부, 수락·거절, 승인, 여러 안 중 선택, 금액·인원 같은 거) replyMode는 options로 하고 replyOptions에 방향이 다른 답장 2~4개를 각각 완성된 전문으로 써 줘. 이때 replyDraft는 null. 답장이 필요 없으면 none.
+답장 초안은 받는 사람에 맞는 인사 → 요청에 대한 답 → 확인·요청 사항 → 맺음말 순서로. 내가 아직 안 정한 것(참석 여부, 승인 여부, 구체적인 숫자)은 [대괄호]로 비워 두고, 마지막 줄 서명은 "${S.settings.signature}".
+제출·회신 마감을 events(종류 "마감")랑 tasks 양쪽에 다 넣지는 마. 내가 직접 해야 하는 일은 tasks에, 참석하거나 기억할 날짜는 events에.
 
 ${(atts || []).length ? ATT_RULES + ' 형식: "attachments": [{"name": "파일 이름", "gist": "한 줄 요약"}]\n' : ''}
-이메일:
+메일:
 """
 ${raw.slice(0, 24000)}
 """${attPromptBlock(atts)}`;
@@ -4854,13 +4855,13 @@ async function writeDelegate(m) {
   const ta = $('dlgDraft'), st = $('delegStatus');
   const note = ($('delegNote').value || '').trim(), current = ta.value.trim();
   const a = m.analysis || {};
-  const prompt = `당신은 한국 대학교 컴퓨터공학과 학과장의 비서입니다. 학과장이 ${S.settings.assistant}에게 보낼 업무 지시 메일을 쓰세요. 설명 없이 메일만 출력합니다.
-${ctxLine()}${(m.attachments || []).length ? `\n이 메일의 첨부파일(조교에게 함께 전달함): ${m.attachments.map(x => x.name).join(', ')}. 지시에서 파일 이름으로 가리키고 무엇을 확인·작성할지 쓰세요.` : ''}
-형식: 첫 줄 "제목: ...", 빈 줄, 본문. 본문은 배경 한 문장 → 할 일을 개조식(-)으로, 각 줄에 산출물·기한 → 학과장 확인이 필요한 지점 → 완료 보고 방식 한 줄. 전체 15줄 이내로 짧게. 조교가 원메일을 따로 보지 않아도 일할 수 있게 구체적으로. 학과장이 정할 사항은 [대괄호]. 서명은 "학과장".
-스레드라면 이전 메일에서 이미 처리된 일은 빼고, 가장 최근 메일 기준으로 남은 일만 지시하세요.
-${note ? '학과장의 추가 지시: ' + note : ''}
-${decLine(m) ? '학과장이 정한 사항(지시에 반영하세요): ' + decLine(m) : ''}
-${current ? '현재 초안(이를 바탕으로 고쳐 쓰세요):\n"""\n' + current + '\n"""' : ''}
+  const prompt = `나 컴공과 학과장인데, ${S.settings.assistant}한테 보낼 업무 지시 메일 좀 써 줘. 설명은 빼고 메일만 줘. 메일 자체는 조교한테 보내는 거니까 평소 업무 메일처럼 예의 있게.
+${ctxLine()}${(m.attachments || []).length ? `\n원메일 첨부파일(조교한테 같이 넘길 거야): ${m.attachments.map(x => x.name).join(', ')}. 지시에서 파일 이름으로 짚어 주고 뭘 확인·작성할지 써 줘.` : ''}
+형식: 첫 줄 "제목: ...", 빈 줄, 본문. 본문은 배경 한 문장 → 할 일 개조식(-), 줄마다 산출물·기한 → 내 확인이 필요한 지점 → 완료 보고 방식 한 줄. 전체 15줄 안으로 짧게. 조교가 원메일 안 봐도 일할 수 있게 구체적으로. 내가 정할 건 [대괄호]. 서명은 "학과장".
+스레드면 앞에서 이미 끝난 일은 빼고, 가장 최근 메일 기준으로 남은 일만 시켜 줘.
+${note ? '추가로 원하는 거: ' + note : ''}
+${decLine(m) ? '내가 정한 것(지시에 넣어 줘): ' + decLine(m) : ''}
+${current ? '지금 초안(이거 바탕으로 고쳐 줘):\n"""\n' + current + '\n"""' : ''}
 ${(a.openIssues || []).length ? '미해결 쟁점: ' + a.openIssues.join(' / ') : ''}
 ${(a.tasks || []).length ? '추출된 할 일: ' + a.tasks.map(t => t.title + (t.due ? '(' + t.due + ')' : '')).join(' / ') : ''}
 
@@ -4888,15 +4889,14 @@ async function redraft(m, tone) {
   const ta = $('draft'), st = $('draftStatus');
   const note = ($('draftNote').value || '').trim();
   const current = ta.value.trim();
-  const prompt = `당신은 한국 대학교 컴퓨터공학과 학과장의 답장 작성을 돕습니다.
+  const prompt = `나 컴공과 학과장인데, 아래 받은 메일에 내 이름으로 보낼 답장 좀 써 줘. 설명이나 머리말 없이 답장 본문만 줘. 답장은 실제로 보낼 거니까 받는 사람한테 맞게 예의 바르게.
 ${ctxLine()}
-아래 받은 메일에 대한 학과장 명의의 한국어 답장 전문만 쓰세요. 설명이나 머리말 없이 본문만 출력합니다.
-규칙: 인사 → 요청에 대한 답 → 확인·요청 사항 → 맺음말. 학과장이 정하지 않은 사실은 [대괄호]로 비워 두세요. 마지막 줄 서명은 "${S.settings.signature}".
-${tone ? '작성 방향: ' + tone : ''}
-${decLine(m) ? '학과장이 정한 사항(답장에 반영하세요): ' + decLine(m) : ''}
-학과장의 비어 있는 시간 (시간을 제안해야 할 때만 이 안에서 고르세요): ${slotsForPrompt().join(', ') || '없음'}
-${note ? '학과장의 추가 지시: ' + note : ''}
-${current ? '현재 초안(이를 바탕으로 고쳐 쓰세요):\n"""\n' + current + '\n"""' : ''}
+순서는 인사 → 요청에 대한 답 → 확인·요청 사항 → 맺음말. 내가 아직 안 정한 건 [대괄호]로 비워 두고, 마지막 줄 서명은 "${S.settings.signature}".
+${tone ? '이런 방향으로: ' + tone : ''}
+${decLine(m) ? '내가 정한 것(답장에 넣어 줘): ' + decLine(m) : ''}
+내 빈 시간 (시간 제안할 일 있으면 이 안에서만 골라): ${slotsForPrompt().join(', ') || '없음'}
+${note ? '추가로 원하는 거: ' + note : ''}
+${current ? '지금 초안(이거 바탕으로 고쳐 줘):\n"""\n' + current + '\n"""' : ''}
 
 받은 메일 (분류: ${m.category}):
 """
@@ -4924,17 +4924,16 @@ async function genPrompts(m) {
   const st = $('promptStatus');
   const ask = (($('askNote') || {}).value || '').trim() || '이 메일에 어떻게 대응하면 좋을지 제안해 줘';
   st.className = 'status'; st.textContent = '프롬프트 후보를 만드는 중…';
-  const prompt = `당신은 한국 대학교 컴퓨터공학과 학과장의 비서입니다. 학과장이 아래 메일에 대해 "${ask}"라고 요청했습니다.
-직접 답하거나 대응안을 제시하지 마세요. 대신 학과장이 ChatGPT 같은 다른 AI에게 그대로 붙여넣어 쓸 프롬프트 후보를 3~5개 만드세요.
+  const prompt = `나 컴공과 학과장이야. 아래 메일을 두고 "${ask}" 하고 싶은데, 네가 바로 답하거나 대응안을 내지는 말고, 내가 다른 AI(ChatGPT 같은 거)한테 그대로 붙여넣을 프롬프트 후보를 3~5개 만들어 줘.
 ${ctxLine()}
 
-규칙:
-- 각 프롬프트는 서로 다른 관점이어야 합니다. 예: 국내외 대학 사례 조사, 관련 법령·학칙·교육부 지침 확인, 대응 방안 비교(장단점·리스크), 문서·공문 초안, 이해관계자별 커뮤니케이션 전략. 요청 내용에 맞는 관점만 고르세요.
-- 각 프롬프트는 메일을 보지 못한 AI도 이해하도록 배경을 스스로 담아야 합니다: 질문자의 역할(국내 4년제 대학 컴퓨터공학과 학과장), 상황 요약, 핵심 쟁점, 제약(기한·예산·규정), 원하는 결과물의 형식과 분량, 출처나 근거를 밝혀 달라는 요청.
-- 개인정보 보호: 사람 이름, 학번, 이메일 주소, 전화번호는 "학생 A", "교무처 담당자"처럼 역할로 바꾸세요. 대학 이름도 "본교"로 쓰세요.
-- 한국어로 쓰고, 각 프롬프트는 300~900자 정도로 하세요.
+이렇게 해 줘:
+- 프롬프트마다 관점이 달라야 해. 예를 들면 국내외 대학 사례 조사, 관련 법령·학칙·교육부 지침 확인, 대응 방안 비교(장단점·리스크), 문서·공문 초안, 이해관계자별 소통 전략 같은 거. 요청에 맞는 관점만 골라.
+- 메일을 못 본 AI도 알아듣게 배경을 프롬프트 안에 다 담아 줘: 묻는 사람 역할(국내 4년제 대학 컴퓨터공학과 학과장), 상황 요약, 핵심 쟁점, 제약(기한·예산·규정), 원하는 결과물 형식과 분량, 출처나 근거 밝혀 달라는 말.
+- 개인정보는 빼 줘. 사람 이름, 학번, 이메일, 전화번호는 "학생 A", "교무처 담당자"처럼 역할로 바꾸고, 대학 이름은 "본교"로.
+- 한국어로, 하나당 300~900자 정도.
 
-아래 형식의 JSON 배열로만 답하세요.
+답은 아래 형식 JSON 배열로만 줘. 다른 말은 붙이지 말고.
 [{"angle": "관점 이름(짧게)", "why": "이 프롬프트가 무엇을 얻게 해 주는지 한 문장", "prompt": "붙여넣을 프롬프트 전문"}]
 
 메일 (분류: ${m.category}):
@@ -5220,7 +5219,7 @@ document.addEventListener('click', async ev0 => {
       case 'gemCancel': return UI.gemCancel && UI.gemCancel();
       case 'aiKeySave': return aiKeySave(false);
       case 'aiKeyClear': return aiKeySave(true);
-      case 'aiTest': { const o = $('aiTestOut'); if (o) o.textContent = '…'; try { const t = await (aiWeb() ? bridgeAsk : geminiAsk)('한 단어로만 답하세요: "연결됨"', '연결 시험', false); toast('Gemini 답: ' + String(t).trim().slice(0, 60)); } catch (e) { toast('시험 실패: ' + ((e && e.message) || '')); } if (UI.dlg !== 'settings') openSettings(); return; }
+      case 'aiTest': { const o = $('aiTestOut'); if (o) o.textContent = '…'; try { const t = await (aiWeb() ? bridgeAsk : geminiAsk)('연결 시험이야. 딴말 말고 "연결됨" 한 단어로만 답해 줘', '연결 시험', false); toast('Gemini 답: ' + String(t).trim().slice(0, 60)); } catch (e) { toast('시험 실패: ' + ((e && e.message) || '')); } if (UI.dlg !== 'settings') openSettings(); return; }
       case 'relayClip': return relayFromClipboard(true);
       case 'relayCancel': return relayCancel();
       case 'relayAlt': { const t = UI.relay && UI.relay.alt && UI.relay.alt.text; relayCancel(); if (t) setTimeout(() => openChatPrompt(t), 0); return; }
