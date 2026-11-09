@@ -1803,6 +1803,14 @@ async function autoDone(id, msg) {
   toast(`${msg ? msg + ' ' : ''}모두 반영해서 처리 완료로 옮겼습니다.`);
   closeSheet(); return true;
 }
+// an invitation I answer "불참" (or that clashes with an important event / trip) is added as 불참
+const NO_GO = /불참|참석(이|하기|은)?\s*(어려울|어렵|힘들|곤란)|참석하지\s*못|참석이\s*불가|참석\s*불가|가기\s*어려울/;
+const draftSaysAbsent = m => NO_GO.test(fixNames((m.reply && m.reply.draft) || ''));
+function itemAbsent(m, e, i) {
+  const v = UI.edits['ev-a-' + i];
+  if (v != null) return v === '1';
+  return !!(e.absent || (!e.added && isDate(e.date) && (clashesOf([e]).length || draftSaysAbsent(m))));
+}
 function pendingCount(m) {
   const a = m.analysis || {};
   return (a.events || []).filter(e => !e.added && !e.skipped).length + (a.tasks || []).filter(e => !e.added && !e.skipped).length;
@@ -2208,7 +2216,8 @@ function renderGChip() {
 async function pushGoogle(doc, id, calId, quiet) {
   if (repComplex(doc)) { if (!quiet) toast('이 반복 규칙은 구글로 자동으로 보낼 수 없습니다. 날짜를 눌러 일정 옆 "구글에 추가" 링크로 넣어 주세요.'); return; }
   if (!gReady()) { toast('구글에 로그인한 뒤 "구글로" 버튼으로 다시 보내세요.'); return; }
-  const body = { summary: doc.title, description: (doc.memo && doc.memo.text) || '' };
+  const gTitle = withSt(doc.title, statusOfE(doc));
+  const body = { summary: gTitle, description: (doc.memo && doc.memo.text) || '' };
   if (doc.location) body.location = doc.location;
   if (toMin(doc.time) != null) {
     const en = fromMin(Math.min(evEnd(doc), 1439));
@@ -2221,7 +2230,7 @@ async function pushGoogle(doc, id, calId, quiet) {
   try {
     const target = calId || S.settings.gPushCal || 'primary';
     if (gasOn()) {
-      const j = await gas({ action: 'create', cal: target, title: doc.title, date: doc.date, time: toMin(doc.time) != null ? doc.time : '', endTime: toMin(doc.time) != null ? fromMin(Math.min(evEnd(doc), 1439)) : '', endDate: doc.endDate || '', location: doc.location || '', description: body.description, days: repDays(doc) ? repDays(doc).join(',') : '', until: repDays(doc) && isDate(doc.repeat.until) ? doc.repeat.until : '' });
+      const j = await gas({ action: 'create', cal: target, title: gTitle, date: doc.date, time: toMin(doc.time) != null ? doc.time : '', endTime: toMin(doc.time) != null ? fromMin(Math.min(evEnd(doc), 1439)) : '', endDate: doc.endDate || '', location: doc.location || '', description: body.description, days: repDays(doc) ? repDays(doc).join(',') : '', until: repDays(doc) && isDate(doc.repeat.until) ? doc.repeat.until : '' });
       await patch('events', id, { googleId: String((j.event && j.event.id) || 'pushed'), googleCal: target });
       if (!quiet) { toast(`구글 캘린더 "${calInfo(target).name}"에 추가했습니다.`); gLoad(true); }
       return true;
@@ -4413,7 +4422,7 @@ function cellItems(day) {
   const items = [], grp = (k, d) => ICON_GROUP[k] || d;
   for (const e of expandEvents().filter(e => e.date === day)) {
     const due = e.kind === '마감', timed = !e.span && toMin(e.time) != null, k = iconOfEvent(e), dk = (e.occ ? 'r:' : 'e:') + e.id;
-    items.push({ o: due ? 0 : timed ? 20 + toMin(e.time) / 1440 : 10, ic: k, kc: grp(k, 'kc-' + (e.kind || '학사')), tm: timed ? e.time : '', nm: e.title, tx: (impOfEvent(e) === 'high' ? '[중요] ' : '') + e.title + (e.googleId ? ' (구글에도 있음)' : ''), cls: (due ? 'hot' : (e.googleId || e.googleSent) ? 'synced' : '') + (statusOfE(e) ? stCls(statusOfE(e)) : impOfEvent(e) === 'high' ? ' imp' : ''), dk, tr: itemTraits({ kind: 'event', absent: absentOfEvent(e), timed, s: toMin(e.time), e: timed ? evEnd(e) : 0, days: e.span && isDate(e.endDate) ? Math.round((parse(e.endDate) - parse(e.date)) / 86400000) + 1 : 1, recur: !!(e.occ || repDays(e)) }) });
+    items.push({ o: due ? 0 : timed ? 20 + toMin(e.time) / 1440 : 10, ic: k, kc: grp(k, 'kc-' + (e.kind || '학사')), tm: timed ? e.time : '', nm: withSt(e.title, statusOfE(e)), tx: (impOfEvent(e) === 'high' ? '[중요] ' : '') + withSt(e.title, statusOfE(e)) + (e.googleId ? ' (구글에도 있음)' : ''), cls: (due ? 'hot' : (e.googleId || e.googleSent) ? 'synced' : '') + (statusOfE(e) ? stCls(statusOfE(e)) : impOfEvent(e) === 'high' ? ' imp' : ''), dk, tr: itemTraits({ kind: 'event', absent: absentOfEvent(e), timed, s: toMin(e.time), e: timed ? evEnd(e) : 0, days: e.span && isDate(e.endDate) ? Math.round((parse(e.endDate) - parse(e.date)) / 86400000) + 1 : 1, recur: !!(e.occ || repDays(e)) }) });
   }
   for (const t of S.tasks.filter(t => !t.done && t.due === day)) {
     const k = iconOfTask(t);
@@ -4421,8 +4430,8 @@ function cellItems(day) {
   }
   for (const m of S.emails.filter(m => needsReplyNow(m) && m.replyDeadline === day))
     items.push({ o: 2, ic: 'reply', nm: '답장 · ' + (m.subject || ''), tx: '답장 기한 · ' + (m.subject || ''), cls: 'warn' });
-  for (const g of gAllDayOn(day)) { const k = iconOfG(g); items.push({ o: 9, ic: k, kc: grp(k, 'kc-g'), nm: g.title, tx: `${impOfG(g) === 'high' ? '[중요] ' : ''}${g.title} (구글 · ${g.calName || ''})`, cls: 'g' + (g.free ? ' dim' : '') + (statusOfG(g) ? stCls(statusOfG(g)) : impOfG(g) === 'high' ? ' imp' : ''), gc: g.color, dk: 'g:' + gKey(g), tr: itemTraits({ kind: 'google', absent: absentOfG(g), timed: false, days: g.endDate && g.endDate > g.date ? Math.round((parse(g.endDate) - parse(g.date)) / 86400000) + 1 : 1, recur: g.recurring }) }); }
-  for (const g of gOn(day)) { const k = iconOfG(g); items.push({ o: 20 + g.s / 1440, ic: k, kc: grp(k, 'kc-g'), tm: g.time, nm: g.title, tx: `${impOfG(g) === 'high' ? '[중요] ' : ''}${g.title} (구글 · ${g.calName || ''})`, cls: 'g' + (g.free ? ' dim' : '') + (statusOfG(g) ? stCls(statusOfG(g)) : impOfG(g) === 'high' ? ' imp' : ''), gc: g.color, dk: 'g:' + gKey(g), tr: itemTraits({ kind: 'google', absent: absentOfG(g), timed: true, s: g.s, e: g.e, recur: g.recurring }) }); }
+  for (const g of gAllDayOn(day)) { const k = iconOfG(g); items.push({ o: 9, ic: k, kc: grp(k, 'kc-g'), nm: withSt(g.title, statusOfG(g)), tx: `${impOfG(g) === 'high' ? '[중요] ' : ''}${withSt(g.title, statusOfG(g))} (구글 · ${g.calName || ''})`, cls: 'g' + (g.free ? ' dim' : '') + (statusOfG(g) ? stCls(statusOfG(g)) : impOfG(g) === 'high' ? ' imp' : ''), gc: g.color, dk: 'g:' + gKey(g), tr: itemTraits({ kind: 'google', absent: absentOfG(g), timed: false, days: g.endDate && g.endDate > g.date ? Math.round((parse(g.endDate) - parse(g.date)) / 86400000) + 1 : 1, recur: g.recurring }) }); }
+  for (const g of gOn(day)) { const k = iconOfG(g); items.push({ o: 20 + g.s / 1440, ic: k, kc: grp(k, 'kc-g'), tm: g.time, nm: withSt(g.title, statusOfG(g)), tx: `${impOfG(g) === 'high' ? '[중요] ' : ''}${withSt(g.title, statusOfG(g))} (구글 · ${g.calName || ''})`, cls: 'g' + (g.free ? ' dim' : '') + (statusOfG(g) ? stCls(statusOfG(g)) : impOfG(g) === 'high' ? ' imp' : ''), gc: g.color, dk: 'g:' + gKey(g), tr: itemTraits({ kind: 'google', absent: absentOfG(g), timed: true, s: g.s, e: g.e, recur: g.recurring }) }); }
   if (day >= todayStr()) for (const b of [...blocksOn(day), ...weeklyOn(day)]) {
     const k = iconOfBlock(b);
     items.push({ o: 40 + b.s / 1440, ic: k, tm: b.allDay ? '종일' : fromMin(b.s) + '–' + fromMin(b.e), nm: b.label, tx: '불가 · ' + b.label, cls: 'busy', tr: itemTraits({ kind: 'busy' }) });
@@ -4728,7 +4737,7 @@ function renderSheet(force) {
   const itemEv = (e, i) => {
     const date = UI.edits['ev-d-'+i] ?? e.date, tm = UI.edits['ev-h-'+i] ?? e.time, en = UI.edits['ev-e-'+i] ?? e.endTime ?? '';
     const clash = !e.added && isDate(e.date) ? clashesOf([e]) : [];
-    const absent = (UI.edits['ev-a-'+i] ?? (e.absent || clash.length ? '1' : '')) === '1';
+    const absent = itemAbsent(m, e, i);
     const chips = !e.added && !e.skipped && !absent && isDate(date) ? freeSlots(date, 60).slice(0, 4).map(([s]) => `<button type="button" class="schip sm" data-act="pickTime" data-i="${i}" data-t="${fromMin(s)}">${colorTimes(fromMin(s))}</button>`).join('') : '';
     const st = toMin(tm), cf = !e.added && !absent && isDate(date) && st != null ? conflicts(date, st, toMin(en) > st ? toMin(en) : st + 60) : [];
     const dis = e.added ? 'disabled' : '';
@@ -4740,7 +4749,8 @@ function renderSheet(force) {
         <input class="field" type="time" id="ev-e-${i}" value="${esc(en || '')}" aria-label="끝" ${dis}>
         <select class="field" id="ev-i-${i}" aria-label="중요도" ${dis}>${[['high', '중요'], ['normal', '일반']].map(([v, l]) => `<option value="${v}" ${(UI.edits['ev-i-'+i] ?? (e.important === false ? 'normal' : e.important === true ? 'high' : autoImp(e.title, e.kind))) === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
         <select class="field" id="ev-k-${i}" aria-label="종류" ${dis}>${['회의','행사','마감','학사'].map(k => `<option ${(UI.edits['ev-k-'+i] ?? e.kind) === k ? 'selected' : ''}>${k}</option>`).join('')}</select>
-        <label class="chk abschk"><input type="checkbox" data-act="evAbsent" data-i="${i}" ${absent ? 'checked' : ''} ${dis}>나는 불참</label>${clash.length ? `<span class="pill clash" title="${esc(clash.map(x => (x.why === '출장' ? '출장' : '중요') + ': ' + x.with).join('\n'))}">${ic('clash')}일정 겹침</span>` : ''}
+        ${e.added ? (() => { const lk = S.events.find(x => x.emailId === m.id && String(x.title).replace(/\s+/g, '') === String(e.title).replace(/\s+/g, '')); const st = lk && statusOfE(lk); return st ? `<span class="tag st st-${st}">${ST_KO[st]}으로 추가됨</span>` : '<span class="tag">추가됨</span>'; })() : ''}
+        <label class="chk abschk" ${e.added ? 'hidden' : ''}><input type="checkbox" data-act="evAbsent" data-i="${i}" ${absent ? 'checked' : ''} ${dis}>나는 불참</label>${clash.length ? `<span class="pill clash" title="${esc(clash.map(x => (x.why === '출장' ? '출장' : '중요') + ': ' + x.with).join('\n'))}">${ic('clash')}일정 겹침</span>` : ''}
         ${e.location && !simple ? `<input class="field title" id="ev-l-${i}" value="${ev('ev-l-'+i, e.location)}" aria-label="장소" ${dis}>` : ''}
         ${chips && !simple ? `<div class="fullrow"><span class="count">${ic('free')} 이 날 빈 시간</span>${chips}</div>` : ''}
         ${cf.length ? `<div class="fullrow warnline">${ic('alert')} 겹침: ${esc(cf.join(', '))}</div>` : ''}
@@ -5354,7 +5364,7 @@ async function addFromItem(m, kind, i) {
     const time = UI.edits['ev-h-'+i] ?? it.time ?? '';
     let endTime = UI.edits['ev-e-'+i] ?? it.endTime ?? '';
     if (!time || !(toMin(endTime) > toMin(time))) endTime = time ? fromMin(Math.min(toMin(time) + 60, 1439)) : '';
-    const doc = { title, date, time, endTime, location: UI.edits['ev-l-'+i] ?? it.location ?? '', kind: UI.edits['ev-k-'+i] ?? it.kind, imp: UI.edits['ev-i-'+i] ?? (it.important === false ? 'normal' : it.important === true ? 'high' : autoImp(title, it.kind)), emailId: m.id, source: 'email', createdAt: nowISO(), ...((UI.edits['ev-a-'+i] ?? '') === '1' ? { absent: true } : {}) };
+    const doc = { title, date, time, endTime, location: UI.edits['ev-l-'+i] ?? it.location ?? '', kind: UI.edits['ev-k-'+i] ?? it.kind, imp: UI.edits['ev-i-'+i] ?? (it.important === false ? 'normal' : it.important === true ? 'high' : autoImp(title, it.kind)), emailId: m.id, source: 'email', createdAt: nowISO(), ...(itemAbsent(m, it, i) ? { absent: true, status: 'absent' } : {}) };
     const nid = await add('events', doc);
     if (gAuto() && gReady()) pushGoogle(doc, nid);
   } else {
