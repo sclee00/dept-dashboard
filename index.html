@@ -2977,6 +2977,8 @@ function geminiAsk(prompt, title, json, images) {
 // automatic first; if it cannot (no key, limit reached, network), the copy-and-paste window opens instead
 const imgOK = () => { const v = bridgeVer(); return v[0] > 1 || (v[0] === 1 && v[1] >= 2); }; // 1.2.1+ uses Gemini's own file input
 async function aiRun(prompt, opts, json) {
+  // whatever happens, the answer must stay machine-readable
+  if (json) prompt += '\n\n(꼭 지켜) 어떤 경우에도 설명이나 안내 없이 위 형식의 JSON 하나로만 답해 줘. 할 수 없거나 찾을 게 없으면 형식은 그대로 두고 비어 있는 값과 함께 note(또는 summary)에 이유를 한 줄로 적어.';
   const images = opts.images || [], title = opts.title || (json ? 'AI 분석' : 'AI에게 답 받기');
   let why = '', pre = '';
   if (aiWeb() && (!images.length || imgOK())) {
@@ -3160,6 +3162,7 @@ function commandPrompt(text, nImg) {
 - 같은 날 여러 편(가는 편·오는 편)이면 각각 따로 만들어. 출장·여행 일정이면 notes에 그렇게 적어 줘.
 - 초대장·포스터·공문 캡처면 행사 이름·날짜·시간·장소를 일정으로.
 - 그림에 날짜가 없거나 흐리면 지어내지 말고 note에 물어봐.
+- 그림이 일정과 관계없는 화면(프로그램 화면, 오류 창 등)이면 actions는 빈 배열로 두고 note에 "일정이 없는 그림: (무슨 그림인지)"라고만 적어.
 ` : '대시보드에 일정 명령을 하나 적었어. 이걸 대시보드가 바로 실행할 수 있게 동작 목록으로 바꿔 줘.'}${roleLine()}
 ${ctxLine()}
 요일 번호는 일0 월1 화2 수3 목4 금5 토6이야. "3시"처럼 오전/오후 없이 쓰면 근무시간 기준이라 1~7시는 오후로 보면 돼.
