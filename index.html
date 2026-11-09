@@ -945,7 +945,8 @@ label.inl{display:inline-flex;align-items:center;gap:.3rem;font-size:.85rem} lab
         <select class="field" id="threadOf" aria-label="이어지는 메일" hidden><option value="">새 메일로 등록</option></select>
         <button class="btn small" type="button" data-act="attPick" title="메일에 딸린 파일(엑셀·한글·PDF·워드 등)을 같이 넣으면 내용까지 읽어 분석합니다. 이 칸에 끌어다 놓아도 됩니다" style="justify-content:center"><span data-ic="doc"></span>첨부파일 넣기</button>
         <button class="btn small" type="button" data-act="toChat" hidden title="입력한 명령을 Claude 대화창에 붙여넣을 프롬프트로 만듭니다" style="justify-content:center"><span data-ic="copy"></span>Claude에게 시킬 프롬프트 만들기</button>
-        <div class="row"><button class="btn" type="button" data-act="cancelAnalyze" id="stopBtn" hidden>중지</button><button class="btn primary grow" type="button" data-act="analyze" id="analyzeBtn"><span data-ic="spark"></span>자동 처리</button></div>
+        <div class="row"><button class="btn" type="button" data-act="cancelAnalyze" id="stopBtn" hidden>중지</button><button class="btn primary grow" type="button" data-act="analyze" id="analyzeBtn" title="AI 없이 대시보드가 바로 처리합니다 (엔터 두 번 · Ctrl+Enter)"><span data-ic="check"></span>바로 처리</button></div>
+        <button class="btn" type="button" data-act="analyzeAI" id="analyzeAIBtn" title="Gemini에게 맡깁니다 (메일 분석, 그림, 복잡한 명령) · Ctrl+Shift+Enter" style="justify-content:center"><span data-ic="spark"></span>AI로 처리</button>
       </div>
     </div>
     <div class="attlist" id="attList" hidden></div>
@@ -5154,24 +5155,44 @@ async function imagesFrom(list) {
   for (const x of list.slice(0, 6)) { try { const d = await shrinkImage(x.file); out.push({ name: (x.name || 'image').replace(/\.\w+$/, '') + '.jpg', mime: 'image/jpeg', b64: d.split(',')[1] }); } catch {} }
   return out;
 }
-async function analyzeNew() {
+// mode 'local': the dashboard handles it alone (commands, registering a mail) · 'ai': hand it to Gemini
+async function analyzeNew(mode) {
+  mode = mode === 'ai' ? 'ai' : 'local';
   const text = $('rawMail').value.trim();
   const st = $('pasteStatus');
+  const aiHint = why => { st.className = 'status'; st.innerHTML = `<div class="cmdbox"><div class="cmdnote"><span>${esc(why)}</span></div><div class="row"><button class="btn small primary" type="button" data-act="analyzeAI">${ic('spark')}AI로 처리</button></div></div>`; };
   if (!text && !UI.att.length) { st.className = 'status err'; st.textContent = '메일을 붙여넣거나 명령을 적어 주세요.'; return; }
   // pictures (screenshots of tickets, posters…): find events in them
   const imgAtts = UI.att.filter(x => /^image\//.test((x.file && x.file.type) || '') || /\.(png|jpe?g|webp|gif|heic)$/i.test(x.name || ''));
   if (imgAtts.length && imgAtts.length === UI.att.length && (!text || text.length < 200)) {
+    if (mode === 'local') return aiHint('그림에서 일정을 읽는 것은 AI가 해야 합니다.');
     const images = await imagesFrom(imgAtts);
     UI.att = []; renderAttList(); $('rawMail').value = '';
     return runCommandAI(text, images);
   }
+  // things the dashboard already knows how to do by itself (each one still asks before changing anything)
+  if (!UI.att.length && mode === 'local' && text.length < 80) {
+    const t = text.replace(/\s+/g, '');
+    const done = msg => { $('rawMail').value = ''; st.className = 'status'; st.textContent = msg; };
+    if (/(중복|겹치|겹친|같은일정|일정정리|정리해)/.test(t)) {
+      const n = tidyGroups().length;
+      if (!n) return done('겹치거나 중복된 일정이 없습니다.');
+      openTidy(); return done(`겹치거나 중복된 일정 ${n}묶음을 찾았습니다. 창에서 지우기·시간 바꾸기·합치기를 고른 뒤 실행하세요.`);
+    }
+    if (/빈시간|비는시간|시간(이)?(되|비|나)는|언제(시간|가능|비)/.test(t)) { UI.dlg = 'finder'; openFinder(null); return done('빈 시간 찾기를 열었습니다.'); }
+    if (/^(불가시간|안되는시간)(보여|열어|설정|관리)?/.test(t)) { UI.dlg = 'busy'; openBusy(); return done('불가 시간 창을 열었습니다.'); }
+    const dm = t.match(/^(오늘|내일|모레)(일정|뭐|할일)?(있어|알려|보여|뭐야|확인)?/);
+    if (dm && !/추가|넣어|등록|잡아|바꿔|옮겨|지워|삭제|취소/.test(t)) { const day = addDays(todayStr(), { 오늘: 0, 내일: 1, 모레: 2 }[dm[1]]); UI.selDay = day; UI.rail = 'day'; renderCal(); renderDay(true); renderRail(); return done(`${fmtShort(day)} 일정을 오른쪽에 펼쳤습니다.`); }
+  }
   if (!UI.att.length && looksLikeCommand(text) && !$('threadOf').value) {
+    if (mode === 'ai') return runCommandAI(text);
     const fixed = normalizeCmd(text); UI.cmdFixed = fixed !== text.replace(/\s+/g, ' ').trim() ? fixed : '';
     const ed = parseEdit(fixed);
     if (ed && runEdit(fixed, ed)) return;
     const r = parseCommand(fixed);
     if (r.sure) renderCmdPreview([r], text, false);
-    else runCommandAI(text);
+    else if (r.title && (r.date || r.repeat || r.due) && !(r.notes || []).some(n => /찾지 못해/.test(n))) renderCmdPreview([r], text, false, '이렇게 이해했는데 확실하지 않습니다. 다르면 아래 "다르게 이해했어요 · AI에게 맡기기"를 누르세요.');
+    else aiHint('대시보드가 혼자서는 이해하지 못한 명령입니다.');
     return;
   }
   if (text.length < 10 && !UI.att.length) { st.className = 'status err'; st.textContent = '메일 내용을 붙여넣어 주세요.'; return; }
@@ -5186,7 +5207,7 @@ async function analyzeNew() {
   st.className = 'status'; st.textContent = prev ? '이전 메일과 합친 스레드 분석 프롬프트를 만들었습니다. AI 창에서 진행해 주세요.' : 'AI 창이 열렸습니다. 프롬프트를 복사해 Claude나 ChatGPT에 붙여넣고, 답을 다시 붙여넣어 주세요.';
   $('analyzeBtn').disabled = true; $('stopBtn').hidden = false;
   let a = null, errMsg = '';
-  if (sample) {
+  if (sample && mode === 'ai') {
     UI.analyzeCtl = new AbortController();
     try { a = cleanAnalysis(await sample.json(analysisPrompt(raw, prev ? prev.category : cat, allAtts), { title: '메일 분석 · ' + ((text.split('\n').find(l => l.trim()) || (atts[0] && atts[0].name) || '')).slice(0, 40) + (atts.length ? ` · 첨부 ${atts.length}` : '') })); }
     catch (e) { errMsg = sampleErr(e); if (e && e.code === 'cancelled') { done(); st.textContent = errMsg; return; } }
@@ -5202,7 +5223,7 @@ async function analyzeNew() {
       const doc = { raw, category: cat, createdAt: nowISO(), status: 'open', replied: false, ...(im.msgId ? { msgId: im.msgId, via: 'thunderbird' } : {}),
         subject: (im.subject || text.split('\n').find(l => l.trim()) || (atts[0] && atts[0].name) || '(제목 없음)').slice(0, 80), from: im.from || '', summary: '', priority: 'mid', attachments: attRecord(atts),
         needsReply: false, replyDeadline: null, analysis: null, reply: { draft: '' }, delegate: { draft: '' } };
-      id = await add('emails', a ? { ...doc, ...fieldsFrom(a, '') } : doc);
+      id = await add('emails', a ? { ...doc, ...fieldsFrom(a, '') } : { ...doc, unanalyzed: true });
     }
     $('rawMail').value = ''; $('threadOf').value = '';
     if (atts.length) {
@@ -5210,7 +5231,7 @@ async function analyzeNew() {
       saveAttFiles(id, atts).then(ok => { const mm = S.emails.find(x => x.id === id); if (!mm) return; const done = new Map(atts.filter(x => x.saved).map(x => [x.name, x.stored])); if (done.size) patch('emails', id, { attachments: (mm.attachments || []).map(x => done.has(x.name) ? { ...x, saved: true, stored: done.get(x.name) } : x) }); if (!ok) toast(fsReady() ? '첨부파일 일부를 저장 폴더에 보관하지 못했습니다.' : '첨부파일 내용은 저장했지만, 저장 폴더가 연결되지 않아 원본 파일은 보관하지 못했습니다.'); });
     }
     st.className = errMsg ? 'status err' : 'status';
-    st.textContent = errMsg || `${a.relevance === 'irrelevant' ? '상관없는 메일로 보입니다. 무시할지 확인해 주세요' : `${prev ? '스레드를 갱신했습니다' : '등록했습니다'}. 일정 ${a.events.length}건, 할 일 ${a.tasks.length}건${a.replyOptions.length ? `, 답장 옵션 ${a.replyOptions.length}개` : a.replyDraft ? ', 답장 초안' : ''}${a.delegable ? ', 조교 지시 메일' : ''}`}.`;
+    st.textContent = errMsg || (!a ? '메일로 등록했습니다 (분석 전). AI 분석은 메일 화면의 "지금 분석"이나 "AI로 처리"로 할 수 있습니다.' : '') || `${a.relevance === 'irrelevant' ? '상관없는 메일로 보입니다. 무시할지 확인해 주세요' : `${prev ? '스레드를 갱신했습니다' : '등록했습니다'}. 일정 ${a.events.length}건, 할 일 ${a.tasks.length}건${a.replyOptions.length ? `, 답장 옵션 ${a.replyOptions.length}개` : a.replyDraft ? ', 답장 초안' : ''}${a.delegable ? ', 조교 지시 메일' : ''}`}.`;
     UI.mf = 'open'; UI.rail = 'mail'; syncTabs(); renderAll();
     openSheet(id);
   } catch (e) { dbErr(e); st.textContent = ''; }
@@ -5433,7 +5454,8 @@ document.addEventListener('click', async ev0 => {
   const m = UI.openId ? S.emails.find(x => x.id === UI.openId) : null;
   try {
     switch (act) {
-      case 'analyze': return analyzeNew();
+      case 'analyze': return analyzeNew('local');
+      case 'analyzeAI': return analyzeNew('ai');
       case 'cancelAnalyze': UI.analyzeCtl && UI.analyzeCtl.abort(); return;
       case 'toggleTask': { const t = S.tasks.find(x => x.id === id); if (t) await patch('tasks', id, { done: !t.done, doneAt: !t.done ? nowISO() : '' }); return; }
       case 'delTask': return del('tasks', id);
@@ -5811,7 +5833,7 @@ document.addEventListener('drop', e => { if (e.dataTransfer && e.dataTransfer.fi
 document.addEventListener('keydown', e => {
   if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('[role="button"][data-act]')) { e.preventDefault(); e.target.click(); return; }
   if (e.key === 'Escape') { if (UI.dlg === 'relay') relayCancel(); else if ($('dlgRoot').innerHTML) { if (UI.dlg === 'settings') { applyImpStyle(); if (UI.wcDraft) { UI.wcDraft = null; paintWords(); } if (UI.fontDraft) { UI.fontDraft = null; applyFont(); } if (UI.fxDraft) { UI.fxDraft = null; renderCal(); } } $('dlgRoot').innerHTML = ''; UI.dlg = null; } else if (UI.openId) closeSheet(); else if (UI.dayForm) { UI.dayForm = null; renderDay(true); } }
-  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && e.target.id === 'rawMail') analyzeNew();
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && e.target.id === 'rawMail') analyzeNew(e.shiftKey ? 'ai' : 'local');
   // Enter twice in a row (quickly) runs 자동 처리; the first Enter's line break is taken back
   if (e.target.id === 'rawMail' && !e.isComposing && e.keyCode !== 229) {
     const t = e.target;
@@ -5820,7 +5842,7 @@ document.addEventListener('keydown', e => {
       if (UI.lastEnter && now - UI.lastEnter < 600 && pos === t.selectionEnd && t.value[pos - 1] === '\n') {
         e.preventDefault(); UI.lastEnter = 0;
         t.value = t.value.slice(0, pos - 1) + t.value.slice(pos);
-        if (t.value.trim()) analyzeNew();
+        if (t.value.trim()) analyzeNew('local');
         return;
       }
       UI.lastEnter = now;
