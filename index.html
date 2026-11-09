@@ -606,6 +606,9 @@ body.resizing{user-select:none} body.rs-col,body.rs-col *{cursor:col-resize!impo
 .tt .gst{margin-right:.35rem;vertical-align:1px;padding:.05rem .25rem}
 .gst{display:inline-flex;align-items:center;gap:1px;border:1px solid var(--line);background:transparent;border-radius:6px;padding:.12rem .3rem;color:var(--muted);cursor:pointer;text-decoration:none;font:inherit;font-size:.78rem}
 .gst .ic{width:.95rem;height:.95rem}
+.gst .glg{display:inline-grid;width:.85rem;height:.85rem;margin-right:1px} .gst .glg svg{width:100%;height:100%}
+.gst .glg+.ic{width:.8rem;height:.8rem;stroke-width:2.6}
+.gst.on.gin{border-color:var(--k-g);color:var(--k-g)}
 .gst i{font-style:normal;font-weight:700;font-size:.8rem;line-height:1}
 .gst.on{border-color:var(--green);color:var(--green);cursor:default}
 .gst.add{border-style:dashed;opacity:.8} .gst.add:hover{opacity:1;border-color:var(--k-g);color:var(--k-g)}
@@ -727,13 +730,18 @@ label.inl{display:inline-flex;align-items:center;gap:.3rem;font-size:.85rem} lab
 .imrow .field{padding:.3rem .45rem}
 .quick{margin-top:0}
 /* bottom row: auto-processing on the left half, the tool buttons as tiles on the right half */
-.qrow{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:1rem;flex:none;align-items:stretch}
+.qrow{display:grid;grid-template-columns:minmax(0,var(--q1,1fr)) 1rem minmax(0,var(--q2,1fr));gap:0;flex:none;align-items:stretch}
+.qbody{grid-template-columns:minmax(0,1fr) 12px var(--qcw,25rem);gap:0}
+.qbody>.gutter{align-self:stretch;min-height:3rem}
 .qrow>.quick{min-width:0}
 .tools.toolgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(9.5rem,1fr));grid-auto-rows:minmax(2.6rem,auto);gap:.5rem;align-content:start;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:.7rem .9rem;overflow:auto;min-width:0}
 .toolgrid>.iconbtn,.toolgrid>.gchip{width:100%;max-width:none;justify-content:center;border-radius:10px;padding:.45rem .6rem;font-size:.88rem;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .toolgrid>.gchip>span:last-child{overflow:hidden;text-overflow:ellipsis}
 .toolgrid>.iconbtn:disabled{opacity:.5}
-@media (max-width:900px){.qrow{grid-template-columns:1fr}}
+@media (min-width:701px){.qbody>.gutter{display:block}}
+@media (min-width:901px){.qrow>.gutter{display:block}}
+@media (max-width:900px){.qrow{grid-template-columns:1fr;gap:1rem}}
+@media (max-width:700px){.qbody{grid-template-columns:1fr;gap:.6rem}}
 .icbtn{border:0;background:none;padding:.15rem;margin:-.15rem;border-radius:6px;cursor:pointer;display:grid;place-items:center;color:inherit}
 .icbtn:hover{background:var(--surface);outline:1px dashed var(--muted)}
 .ipgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(5.2rem,1fr));gap:.35rem;max-height:46vh;overflow:auto}
@@ -860,6 +868,7 @@ label.inl{display:inline-flex;align-items:center;gap:.3rem;font-size:.85rem} lab
     <div class="qhead"><span class="qic" data-ic="inbox"></span><b>자동 처리</b><span class="count">메일을 붙여넣으면 요약·일정·할 일·답장·조교 지시를 만들고, 짧게 명령하면 바로 실행합니다</span><button class="gchip inboxchip" id="inboxChip" type="button" data-act="inboxRun" hidden></button></div>
     <div class="qbody">
       <textarea class="field" id="rawMail" rows="3" placeholder="메일을 그대로 붙여넣거나 짧게 명령하세요 (Ctrl+Enter). 예: 매주 화요일 3시에 임원회의 일정 추가 · 금요일까지 예산서 제출 할 일 · 다음주 수요일 오후 출장 불가 · 11월 5일 2시~4시 교육과정위원회"></textarea>
+      <div class="gutter v" data-split="qin" role="separator" aria-orientation="vertical" tabindex="0" title="끌어서 입력 칸·버튼 너비 조절 · 두 번 누르면 원래대로"></div>
       <div class="qctl">
         <select class="field" id="mailCat" aria-label="분류">
           <option>대학본부·행정</option><option>교원</option><option>학생</option><option>외부기관</option><option>기타</option>
@@ -874,6 +883,7 @@ label.inl{display:inline-flex;align-items:center;gap:.3rem;font-size:.85rem} lab
     <input type="file" id="attInput" multiple hidden>
     <div class="status" id="pasteStatus"></div>
   </section>
+  <div class="gutter v" data-split="qrow" role="separator" aria-orientation="vertical" tabindex="0" title="끌어서 자동 처리·버튼 너비 조절 · 두 번 누르면 원래대로"></div>
       <div class="tools toolgrid" aria-label="도구">
         <button class="gchip" id="syncchip" type="button" data-act="sync" data-ok="sync" draggable="true"><span data-ic="drive"></span><span>저장 위치 확인 중</span></button>
         <button class="gchip" id="gchip" type="button" data-act="gchip" data-ok="gchip" draggable="true"><span data-ic="gcal"></span><span>구글 로그인</span></button>
@@ -896,6 +906,7 @@ label.inl{display:inline-flex;align-items:center;gap:.3rem;font-size:.85rem} lab
 (() => {
 const DEFAULTS = { semesterLabel: '2026학년도 2학기', semesterStart: '2026-08-31', signature: '컴퓨터공학과 학과장 드림', assistant: '학과 조교',
   workStart: '09:00', workEnd: '18:00', workDays: [1, 2, 3, 4, 5], weekly: [], googleShow: true, googleBusy: true, googlePush: false, gAutoPush: true, gCals: null, gPushCal: 'primary' };
+const G_LOGO = '<svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>';
 const S = { tasks: [], events: [], emails: [], blocks: [], marks: [], settings: { ...DEFAULTS }, settingsU: 0, deleted: {} };
 const UI = { view: 'weeks', wOff: 0, tf: 'open', mf: 'open', month: null, selDay: null, rail: 'day', dayForm: null, prefill: null, finder: null, bd: null, dlg: null, cap: 9, openId: null, edits: {}, analyzeCtl: null, draftCtl: null, confirmDel: false };
 
@@ -907,6 +918,8 @@ const IP = {
   dash:'<path d="M6 12h12"/>',
   alert:'<path d="M12 3 2 20h20L12 3z"/><path d="M12 10v4M12 17.3v.01"/>',
   clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  gout:'<path d="M7 17 17 7"/><path d="M9 7h8v8"/>',
+  gin:'<path d="M17 7 7 17"/><path d="M15 17H7V9"/>',
   mail:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
   reply:'<path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 6 6v4"/>',
   check:'<path d="m5 12 5 5 9-10"/>',
@@ -3624,8 +3637,9 @@ document.addEventListener('dragend', () => {
 let LAY = {}; try { LAY = JSON.parse(localStorage.getItem('dashLayout') || '{}') || {}; } catch {}
 function applyLayout() {
   const r = document.documentElement.style, q = document.querySelector('.quick');
-  for (const [k, a, b] of [['board', '--c1', '--c2'], ['rail', '--r1', '--r2']]) { if (LAY[k]) { r.setProperty(a, LAY[k][0] + 'fr'); r.setProperty(b, LAY[k][1] + 'fr'); } else { r.removeProperty(a); r.removeProperty(b); } }
+  for (const [k, a, b] of [['board', '--c1', '--c2'], ['rail', '--r1', '--r2'], ['qrow', '--q1', '--q2']]) { if (LAY[k]) { r.setProperty(a, LAY[k][0] + 'fr'); r.setProperty(b, LAY[k][1] + 'fr'); } else { r.removeProperty(a); r.removeProperty(b); } }
   if (LAY.qh && matchMedia('(min-width:1100px)').matches) { r.setProperty('--qh', Math.max(LAY.qh, quickMin()) + 'px'); q && q.classList.add('sized'); } else { r.removeProperty('--qh'); q && q.classList.remove('sized'); }
+  if (LAY.qin) r.setProperty('--qcw', LAY.qin + 'px'); else r.removeProperty('--qcw');
   if (LAY.sheetw) r.setProperty('--sheetw', LAY.sheetw + 'px'); else r.removeProperty('--sheetw');
   const hd = document.querySelector('header.top');
   if (LAY.head && hd && hd.querySelector('.tools')) { r.setProperty('--hw', LAY.head + 'px'); hd.classList.add('sized'); } else { r.removeProperty('--hw'); hd && hd.classList.remove('sized'); }
@@ -3643,6 +3657,8 @@ function splitSizes(kind) {
   if (kind === 'rail') return [w([$('pane-day'), $('pane-tasks')].find(x => x && !x.hidden)), w($('pane-mail'))];
   if (kind === 'quick') return [document.querySelector('.quick').getBoundingClientRect().height];
   if (kind === 'sheet') return [w(document.querySelector('.sheet'))];
+  if (kind === 'qrow') return [w(document.querySelector('.qrow>.quick')), w(document.querySelector('.qrow>.toolgrid'))];
+  if (kind === 'qin') return [w($('rawMail')), w(document.querySelector('.qctl'))];
   if (kind === 'head') return [w($('stats')), w(document.querySelector('header.top .tools'))];
   return [0];
 }
@@ -3650,6 +3666,8 @@ function setSplit(kind, [a, b], dx, dy) {
   if (kind === 'board' || kind === 'rail') { const min = kind === 'board' ? 320 : 240, x = Math.max(min, Math.min(a + b - min, a + dx)); LAY[kind] = [Math.round(x), Math.round(a + b - x)]; }
   if (kind === 'quick') LAY.qh = Math.round(Math.max(quickMin(), Math.min(window.innerHeight * 0.6, a - dy)));
   if (kind === 'head') { const x = Math.max(60, Math.min(a + b - 60, a + dx)); LAY.head = Math.round(x); }
+  if (kind === 'qrow') { const x = Math.max(300, Math.min(a + b - 150, a + dx)); LAY.qrow = [Math.round(x), Math.round(a + b - x)]; }
+  if (kind === 'qin') LAY.qin = Math.round(Math.max(200, Math.min(a + b - 140, b - dx)));
   if (kind === 'sheet') LAY.sheetw = Math.round(Math.max(380, Math.min(window.innerWidth - 40, a - dx)));
   applyLayout(); const g = $('cal'); if (g) fitIcons(g);
 }
@@ -4338,10 +4356,12 @@ function srow({ t, icon, kc, title, sub, cls, acts, tag, fixed, iconAct, memoKey
   const tHtml = tp.length === 2 ? `<span class="t t2"><b>${colorTimes(tp[0])}</b><span>${colorTimes(tp[1])}</span></span>` : `<span class="t">${colorTimes(t || '')}</span>`;
   return `<div class="srow ${cls || ''}">${tHtml}${icHtml}<span class="tt">${gs || ''}${esc(title)}${tag || ''}${sub ? `<span class="sub3">${sub}</span>` : ''}</span><span class="acts">${acts || ''}</span></div>` + (memoKey ? memoPanel(memoKey) : '');
 }
+// Google logo + arrow: gout = sent from the dashboard to Google, gin = brought in from Google
+const gMark = dir => `<span class="glg" data-nogl>${G_LOGO}</span>${ic(dir)}`;
 function gSyncIcon(e) {
-  return e.googleId ? `<span class="gst on" title="구글 캘린더와 연결됨">${ic('gcal')}<i>✓</i></span>`
-    : gReady() && !repComplex(e) ? `<button class="gst add" type="button" data-act="pushG1" data-id="${e.id}" title="구글 캘린더에 없습니다 · 누르면 추가">${ic('gcal')}<i>+</i></button>`
-    : `<a class="gst ${e.googleSent ? 'sent' : 'add'}" href="${esc(gTemplateUrl(e))}" target="_blank" rel="noopener" data-act="gTpl" data-id="${e.id}" title="${e.googleSent ? '구글 캘린더 화면으로 보냈습니다 (저장했는지 확인하세요) · 누르면 다시 열기' : '구글 캘린더에 없습니다 · 누르면 구글 일정 만들기 화면이 열립니다'}">${ic('gcal')}<i>${e.googleSent ? '?' : '+'}</i></a>`;
+  return e.googleId ? `<span class="gst on" title="대시보드에서 만들어 구글 캘린더로 보낸 일정 (연결됨)">${gMark('gout')}</span>`
+    : gReady() && !repComplex(e) ? `<button class="gst add" type="button" data-act="pushG1" data-id="${e.id}" title="구글 캘린더에 없습니다 · 누르면 구글로 보내기">${gMark('gout')}<i>+</i></button>`
+    : `<a class="gst ${e.googleSent ? 'sent' : 'add'}" href="${esc(gTemplateUrl(e))}" target="_blank" rel="noopener" data-act="gTpl" data-id="${e.id}" title="${e.googleSent ? '구글 캘린더 화면으로 보냈습니다 (저장했는지 확인하세요) · 누르면 다시 열기' : '구글 캘린더에 없습니다 · 누르면 구글 일정 만들기 화면이 열립니다'}">${gMark('gout')}<i>${e.googleSent ? '?' : '+'}</i></a>`;
 }
 function eventActs(e) {
   const imp = `<button class="x" type="button" data-act="edOpen" data-kind="e" data-id="${e.id}" title="날짜·시간 편집" aria-label="편집">${ic('pen')}</button>` + impBtn(impOfEvent(e) === 'high', 'impT', `data-id="${e.id}"`) + statusBtn(statusOfE(e), `data-kind="e" data-id="${e.id}" data-date="${e.occ ? e.date : ''}"`);
@@ -4388,7 +4408,7 @@ function renderDay(force) {
   for (const m of S.emails.filter(m => needsReplyNow(m) && m.replyDeadline === day))
     ad.push(srow({ t: '답장 기한', icon: 'reply', kc: 'kc-reply', title: m.subject, cls: 'warn', acts: `<button class="btn small" type="button" data-act="openMail" data-id="${m.id}">열기</button>` }));
   for (const g of gAllDayOn(day))
-    ad.push(srow({ t: '종일', icon: iconOfG(g), kc: iconKc(iconOfG(g), 'kc-g'), fixed: true, iconAct: `data-act="ipOpen" data-kind="g" data-id="${esc(gKey(g))}"`, memoKey: gKey(g), gs: `<span class="gst on" title="구글 캘린더 일정">${ic('gcal')}<i>✓</i></span>`, title: g.title, sub: '구글 캘린더' + (g.calName ? ' · ' + esc(String(g.calName).replace(/@.*$/, '')) : '') + (g.free ? ' · 바쁨 아님' : ''), cls: statusOfG(g) ? stCls(statusOfG(g)) : impOfG(g) === 'high' ? 'improw' : '', acts: `<button class="x" type="button" data-act="edOpen" data-kind="g" data-id="${esc(gKey(g))}" title="편집" aria-label="편집">${ic('pen')}</button>` + impBtn(impOfG(g) === 'high', 'impG', `data-k="${esc(gKey(g))}"`) + statusBtn(statusOfG(g), `data-kind="g" data-id="${esc(gKey(g))}"`) + `<button class="x" type="button" data-act="gDel" data-k="${esc(gKey(g))}" title="구글 캘린더에서 삭제 (확인 후)" aria-label="구글 캘린더에서 삭제">✕</button>` + (g.link ? `<a class="ext" href="${esc(g.link)}" target="_blank" rel="noopener">${ic('ext')}</a>` : '') }));
+    ad.push(srow({ t: '종일', icon: iconOfG(g), kc: iconKc(iconOfG(g), 'kc-g'), fixed: true, iconAct: `data-act="ipOpen" data-kind="g" data-id="${esc(gKey(g))}"`, memoKey: gKey(g), gs: `<span class="gst on gin" title="구글 캘린더에서 가져온 일정">${gMark('gin')}</span>`, title: g.title, sub: '구글 캘린더' + (g.calName ? ' · ' + esc(String(g.calName).replace(/@.*$/, '')) : '') + (g.free ? ' · 바쁨 아님' : ''), cls: statusOfG(g) ? stCls(statusOfG(g)) : impOfG(g) === 'high' ? 'improw' : '', acts: `<button class="x" type="button" data-act="edOpen" data-kind="g" data-id="${esc(gKey(g))}" title="편집" aria-label="편집">${ic('pen')}</button>` + impBtn(impOfG(g) === 'high', 'impG', `data-k="${esc(gKey(g))}"`) + statusBtn(statusOfG(g), `data-kind="g" data-id="${esc(gKey(g))}"`) + `<button class="x" type="button" data-act="gDel" data-k="${esc(gKey(g))}" title="구글 캘린더에서 삭제 (확인 후)" aria-label="구글 캘린더에서 삭제">✕</button>` + (g.link ? `<a class="ext" href="${esc(g.link)}" target="_blank" rel="noopener">${ic('ext')}</a>` : '') }));
   for (const b of blocksOn(day).filter(b => b.allDay))
     ad.push(srow({ t: '종일', icon: iconOfBlock(b), fixed: true, iconAct: `data-act="ipOpen" data-kind="b" data-id="${b.id}"`, title: b.label, sub: '불가 시간', cls: 'busy', acts: `<button class="x" type="button" data-act="delBlock" data-id="${b.id}" aria-label="삭제">✕</button>` }));
 
@@ -4396,7 +4416,7 @@ function renderDay(force) {
   for (const b of weeklyOn(day)) timed.push({ s: b.s, h: srow({ t: `${fromMin(b.s)}–${fromMin(b.e)}`, icon: iconOfBlock(b), fixed: true, iconAct: b.id ? `data-act="ipOpen" data-kind="w" data-id="${esc(b.id)}"` : '', title: b.label, sub: '매주 반복 불가 시간', cls: 'busy', acts: `<button class="btn small" type="button" data-act="openBusy">편집</button>`, tag: b.example ? ' <span class="tag ex">예시</span>' : '' }) });
   for (const b of blocksOn(day).filter(b => !b.allDay)) timed.push({ s: b.s, h: srow({ t: `${fromMin(b.s)}–${fromMin(b.e)}`, icon: iconOfBlock(b), fixed: true, iconAct: `data-act="ipOpen" data-kind="b" data-id="${b.id}"`, title: b.label, sub: '불가 시간', cls: 'busy', acts: `<button class="x" type="button" data-act="delBlock" data-id="${b.id}" aria-label="삭제">✕</button>`, tag: b.example ? ' <span class="tag ex">예시</span>' : '' }) });
   for (const x of localTimedOn(day)) { const e = x.ev; timed.push({ s: x.s, h: srow({ t: `${fromMin(x.s)}–${fromMin(x.e)}`, icon: iconOfEvent(e), kc: iconKc(iconOfEvent(e), 'kc-' + (e.kind || '회의')), fixed: true, iconAct: `data-act="ipOpen" data-kind="e" data-id="${e.id}"`, memoKey: 'e:' + e.id, gs: gSyncIcon(e), title: e.title, sub: esc([repText(e), e.location, e.emailId ? '메일에서 추가' : ''].filter(Boolean).join(' · ')), cls: (e.kind === '마감' ? 'hot' : '') + (statusOfE(e) ? stCls(statusOfE(e)) : impOfEvent(e) === 'high' ? ' improw' : ''), acts: eventActs(e), tag: (statusOfE(e) ? ` <span class="tag st st-${statusOfE(e)}">${ST_KO[statusOfE(e)]}</span>` : '') + (e.example ? ' <span class="tag ex">예시</span>' : '') }) }); }
-  for (const g of gOn(day)) timed.push({ s: g.s, h: srow({ t: `${g.time}–${g.endTime}`, icon: iconOfG(g), kc: iconKc(iconOfG(g), 'kc-g'), fixed: true, iconAct: `data-act="ipOpen" data-kind="g" data-id="${esc(gKey(g))}"`, memoKey: gKey(g), gs: `<span class="gst on" title="구글 캘린더 일정">${ic('gcal')}<i>✓</i></span>`, title: g.title, sub: '구글 캘린더' + (g.calName ? ' · ' + esc(String(g.calName).replace(/@.*$/, '')) : '') + (g.free ? ' · 바쁨 아님' : '') + (g.loc ? ' · ' + esc(g.loc) : ''), cls: statusOfG(g) ? stCls(statusOfG(g)) : impOfG(g) === 'high' ? 'improw' : '', acts: `<button class="x" type="button" data-act="edOpen" data-kind="g" data-id="${esc(gKey(g))}" title="편집" aria-label="편집">${ic('pen')}</button>` + impBtn(impOfG(g) === 'high', 'impG', `data-k="${esc(gKey(g))}"`) + statusBtn(statusOfG(g), `data-kind="g" data-id="${esc(gKey(g))}"`) + `<button class="x" type="button" data-act="gDel" data-k="${esc(gKey(g))}" title="구글 캘린더에서 삭제 (확인 후)" aria-label="구글 캘린더에서 삭제">✕</button>` + (g.link ? `<a class="ext" href="${esc(g.link)}" target="_blank" rel="noopener" title="구글 캘린더에서 열기">${ic('ext')}</a>` : '') }) });
+  for (const g of gOn(day)) timed.push({ s: g.s, h: srow({ t: `${g.time}–${g.endTime}`, icon: iconOfG(g), kc: iconKc(iconOfG(g), 'kc-g'), fixed: true, iconAct: `data-act="ipOpen" data-kind="g" data-id="${esc(gKey(g))}"`, memoKey: gKey(g), gs: `<span class="gst on gin" title="구글 캘린더에서 가져온 일정">${gMark('gin')}</span>`, title: g.title, sub: '구글 캘린더' + (g.calName ? ' · ' + esc(String(g.calName).replace(/@.*$/, '')) : '') + (g.free ? ' · 바쁨 아님' : '') + (g.loc ? ' · ' + esc(g.loc) : ''), cls: statusOfG(g) ? stCls(statusOfG(g)) : impOfG(g) === 'high' ? 'improw' : '', acts: `<button class="x" type="button" data-act="edOpen" data-kind="g" data-id="${esc(gKey(g))}" title="편집" aria-label="편집">${ic('pen')}</button>` + impBtn(impOfG(g) === 'high', 'impG', `data-k="${esc(gKey(g))}"`) + statusBtn(statusOfG(g), `data-kind="g" data-id="${esc(gKey(g))}"`) + `<button class="x" type="button" data-act="gDel" data-k="${esc(gKey(g))}" title="구글 캘린더에서 삭제 (확인 후)" aria-label="구글 캘린더에서 삭제">✕</button>` + (g.link ? `<a class="ext" href="${esc(g.link)}" target="_blank" rel="noopener" title="구글 캘린더에서 열기">${ic('ext')}</a>` : '') }) });
   for (const [s, e] of freeSlots(day, 30)) timed.push({ s: s + 0.5, h: `<button type="button" class="srow freeslot" data-act="slotAdd" data-s="${s}" data-e="${e}"><span class="t">${colorTimes(fromMin(s) + '–' + fromMin(e))}</span>${ic('free')}<span class="tt">빈 시간 · ${durKo(e - s)}<span class="sub3">눌러서 이 시간에 일정 넣기</span></span><span class="acts"></span></button>` });
   timed.sort((a, b) => a.s - b.s);
 
@@ -5652,7 +5672,6 @@ setInterval(() => { syncNow(); if (gasOn() && !G.cals.length && G.state !== 'loa
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { syncNow(); if (gReady()) gLoad(false); } });
 window.addEventListener('beforeunload', e => { if (DRIVE.dirty && fsReady()) { syncNow(); e.preventDefault(); e.returnValue = ''; } });
 /* ---------- the word "구글" on screen is shown as the Google logo (the word stays for copy and screen readers) ---------- */
-const G_LOGO = '<svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>';
 const GL_SKIP = 'pre,textarea,input,select,option,script,style,.raw,.glw,[data-nogl],[contenteditable]';
 function glWalk(root) {
   if (!root || !root.nodeType) return;
