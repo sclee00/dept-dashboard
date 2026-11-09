@@ -2805,9 +2805,9 @@ function parseLoose(t) {
   for (const x of tries) { try { return JSON.parse(repairJson(dec(x))); } catch {} }
   throw new Error('json');
 }
-function relay({ title, prompt, json, alt, why, images }) {
+function relay({ title, prompt, json, alt, why, images, pre }) {
   if (UI.relay) UI.relay.reject({ code: 'cancelled' });
-  return new Promise((resolve, reject) => { UI.relay = { title, prompt, json, alt, why, images: images || [], resolve, reject, mode: 'manual' }; UI.dlg = 'relay'; renderRelay(); });
+  return new Promise((resolve, reject) => { UI.relay = { title, prompt, json, alt, why, pre: pre || '', images: images || [], resolve, reject, mode: 'manual' }; UI.dlg = 'relay'; renderRelay(); });
 }
 function renderRelay() {
   const r = UI.relay; if (!r) return;
@@ -2825,7 +2825,7 @@ function renderRelay() {
       <details style="margin-top:.4rem"><summary class="count" style="cursor:pointer">프롬프트 보기</summary><pre class="ptext" id="relayPrompt">${esc(r.prompt)}</pre></details></div></div>
     <div class="rstep"><b>2</b><div>AI가 답하면 답 아래의 <b>복사 버튼</b>을 누르고 이 창으로 돌아오세요. ${r.json ? '복사한 답을 알아서 읽어 바로 적용합니다.' : '복사한 답이 아래 칸에 들어가면 확인하고 적용을 누르세요.'}
       <div class="row" style="margin-top:.45rem"><button class="btn small" type="button" data-act="relayClip">${ic('copy')}복사한 답 가져오기</button><span class="count" id="relayClipNote">돌아왔는데 그대로면 이 버튼을 누르세요 (처음 한 번 클립보드 허용을 묻습니다)</span></div>
-      <textarea class="field" id="relayOut" rows="6" style="margin-top:.45rem" placeholder="또는 AI의 답을 여기에 붙여넣으세요"></textarea>
+      <textarea class="field" id="relayOut" rows="6" style="margin-top:.45rem" placeholder="또는 AI의 답을 여기에 붙여넣으세요">${esc(r.pre || '')}</textarea>
       <div class="status err" id="relayErr"></div></div></div>
     <div class="row" style="justify-content:space-between">${r.alt ? `<button class="btn small" type="button" data-act="relayAlt" title="구글 캘린더가 연결된 Claude 대화창이 구글 캘린더에 직접 넣습니다">${ic('gcal', 'kc-g')}${esc(r.alt.label)}</button>` : '<span></span>'}<span class="row"><button class="btn" type="button" data-act="relayCancel">취소</button><button class="btn primary" type="button" data-act="relayApply">${ic('check')}적용</button></span></div>
   </div></div>`;
@@ -2900,6 +2900,7 @@ function frameLoad(f, ms) {
     f.src = GEM_APP;
   });
 }
+const glog = t => { TLOG.unshift({ at: Date.now(), msg: 'Gemini · ' + t }); if (TLOG.length > 20) TLOG.pop(); if (UI.qtab === 'stat') renderStat(); };
 async function frameAsk(prompt, json, setStatus, images) {
   const back = UI.qtab && UI.qtab !== 'gem' ? UI.qtab : 'auto';
   const f = gemDock(true);
@@ -2908,6 +2909,7 @@ async function frameAsk(prompt, json, setStatus, images) {
   const say = t => { setStatus(t); gemDockStatus(t); };
   say('Gemini 새 대화를 여는 중');
   const r = await frameLoad(f, 25000);
+  glog(!r ? '대시보드 안 Gemini가 25초 안에 준비되지 않음 (확장 1.1 이상이 이 크롬에 있는지 확인)' : r.signedIn ? `대시보드 안 Gemini 준비됨 (확장 ${r.version || '?'})` : '대시보드 안 Gemini가 로그인 안 됨');
   if (!r || !r.signedIn) done(false);
   if (!r) throw { code: 'frame', message: '대시보드 안에 Gemini가 열리지 않았습니다.' };
   if (!r.signedIn) throw { code: 'frame', message: '대시보드 안 Gemini 창이 로그인되어 있지 않습니다 (크롬이 다른 사이트 안의 구글 로그인을 막고 있을 수 있습니다).' };
@@ -2915,6 +2917,7 @@ async function frameAsk(prompt, json, setStatus, images) {
   return new Promise((resolve, reject) => {
     const id = uid();
     const on = e => {
+      if (e.source === f.contentWindow && e.origin === GEM_ORIGIN && e.data && e.data.id === id && e.data.type === 'gbf-status') { say('Gemini: ' + e.data.text); glog(e.data.text); return; }
       if (e.source !== f.contentWindow || e.origin !== GEM_ORIGIN || !e.data || e.data.id !== id || e.data.type !== 'gbf-result') return;
       window.removeEventListener('message', on); gemDockStatus(e.data.error ? '' : '답을 받았습니다 ' + hhmm(new Date()));
       done(!e.data.error);
@@ -2926,6 +2929,7 @@ async function frameAsk(prompt, json, setStatus, images) {
   });
 }
 function bridgeAsk(prompt, title, json, images) {
+  glog(`질문 시작 · 확장 ${document.documentElement.dataset.geminiBridge || '없음'} · ${aiFrame() ? 'Gemini 탭' : '따로 창'}${images && images.length ? ' · 그림 ' + images.length + '장' : ''}${UI.gemFrameBad ? ' (Gemini 탭이 앞서 실패해 따로 창 사용)' : ''}`);
   if (aiFrame()) return aiProgress(title, setStatus => frameAsk(prompt, json, setStatus, images), json, 'Gemini (Gemini 탭)')
     .catch(e => {
       if (!e || e.code !== 'frame') throw e;
@@ -2974,17 +2978,18 @@ function geminiAsk(prompt, title, json, images) {
 const imgOK = () => { const v = bridgeVer(); return v[0] > 1 || (v[0] === 1 && v[1] >= 2); }; // 1.2.1+ uses Gemini's own file input
 async function aiRun(prompt, opts, json) {
   const images = opts.images || [], title = opts.title || (json ? 'AI 분석' : 'AI에게 답 받기');
-  let why = '';
+  let why = '', pre = '';
   if (aiWeb() && (!images.length || imgOK())) {
     try { return await bridgeAsk(prompt, opts.title, json, images); }
-    catch (e) { if (e && e.code === 'cancelled') throw e; why = 'Gemini 웹 자동 처리 실패: ' + ((e && e.message) || '알 수 없는 오류'); }
+    catch (e) { if (e && e.code === 'cancelled') throw e; why = 'Gemini 웹 자동 처리 실패: ' + ((e && e.message) || '알 수 없는 오류'); if (e && e.text) { pre = e.text; why += ' Gemini의 답을 아래 칸에 넣어 두었습니다. 고칠 곳이 있으면 고친 뒤 [적용]을 누르세요.'; glog('받은 답(JSON 아님): ' + String(e.text).slice(0, 160)); } }
   } else if (aiWeb() && images.length) why = '그림을 Gemini에 자동으로 넣으려면 Gemini 연결 확장을 1.2 이상으로 바꿔야 합니다.';
   if (aiAuto()) {
     try { return await geminiAsk(prompt, opts.title, json, images); }
     catch (e) { if (e && e.code === 'cancelled') throw e; why = 'Gemini API 실패: ' + ((e && e.message) || ''); }
   }
   if (!why && !bridgeOn()) why = '이 브라우저에서 Gemini 연결 확장이 보이지 않아 복사 방식으로 엽니다 (PC 크롬에 확장을 설치하면 자동으로 처리됩니다).';
-  return relay({ title, prompt, json, why, images });
+  glog('복사 창으로 넘김: ' + (why || '자동 처리 방식이 꺼져 있음'));
+  return relay({ title, prompt, json, why, images, pre });
 }
 function aiSettingsHtml(s) {
   const on = s.aiMode === 'gemini', models = s.aiModels || [];
@@ -6108,7 +6113,7 @@ function renderStat() {
     ${card('inbox', '메일 (Thunderbird·전달)', kv('마지막 확인', INBOX.at ? agoT(INBOX.at) : '—') + kv('자동 확인', sec ? (sec < 60 ? sec + '초마다' : sec / 60 + '분마다') : '꺼짐 (버튼으로만)') + kv('분석 전 메일', unan ? unan + '개' : '없음', unan ? 'warn' : '') + kv('처리 중 메일', open + '개') + `<div class="row"><button class="btn small" type="button" data-act="inboxRun">메일 가져오기</button></div>`)}
     ${card('spark', 'AI', kv('방식', aiWeb() ? 'Gemini 웹' : aiAuto() ? 'Gemini API' : '복사·붙여넣기') + kv('연결 확장', v ? v + ' 버전' : '없음', v ? (frameOK() ? 'ok' : 'warn') : '') + kv('Gemini 화면', aiWeb() ? (aiFrame() ? 'Gemini 탭 안' : '따로 창') : '—'))}
     ${card('list', '데이터', kv('오늘 이후 일정', S.events.filter(e => e.repeat || e.date >= today).length + '개') + kv('남은 할 일', S.tasks.filter(t => !t.done).length + '개') + kv('메일', S.emails.length + '개') + kv('되돌릴 수 있는 작업', pend + '개'))}
-    <div class="stcard stlog"><h4>${ic('alert')}최근 알림</h4>${TLOG.length ? `<ol>${TLOG.slice(0, 8).map(x => `<li><time>${hhmm(new Date(x.at))}</time><span>${esc(x.msg)}</span></li>`).join('')}</ol>` : '<div class="count">아직 없습니다.</div>'}</div>
+    <div class="stcard stlog"><h4>${ic('alert')}최근 알림</h4>${TLOG.length ? `<ol>${TLOG.slice(0, 14).map(x => `<li><time>${hhmm(new Date(x.at))}</time><span>${esc(x.msg)}</span></li>`).join('')}</ol>` : '<div class="count">아직 없습니다.</div>'}</div>
   </div>`;
 }
 const HCOL = { events: '일정', tasks: '할 일', emails: '메일', blocks: '불가 시간', marks: '표시' };

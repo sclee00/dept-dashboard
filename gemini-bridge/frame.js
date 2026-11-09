@@ -15,6 +15,8 @@
     const { id, prompt, json, images } = e.data;
     if (busy) return window.parent.postMessage({ type: 'gbf-result', id, error: 'busy', message: 'Gemini가 아직 앞 질문에 답하는 중입니다.' }, e.origin);
     busy = true;
+    window.__gbStatus = t => { try { window.parent.postMessage({ type: 'gbf-status', id, text: t }, e.origin); } catch (x) {} };
+    window.__gbStatus('질문 받음');
     let r;
     try { r = await runInGemini(String(prompt || ''), !!json, 240000, images || []); } catch (x) { r = { error: 'bridge', message: String((x && x.message) || x) }; }
     busy = false;
