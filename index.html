@@ -6183,6 +6183,16 @@ function renderHist() {
     ${rd.length ? `<div class="hhead"><b>되돌린 작업</b><span>다시 할 수 있습니다</span></div><ol class="hlist">${rd.slice().reverse().map((x, k) => `<li class="hrow redo"><time>${hhmm(new Date(x.at))}</time><span><b>${esc(x.label)}</b><span class="hd">${esc(histDiff(x.d))}</span></span><button class="btn small" type="button" data-act="histRedo" data-n="${k + 1}">${k ? `여기까지 다시 하기 (${k + 1})` : '다시 하기'}</button></li>`).join('')}</ol>` : ''}`;
 }
 { let k = 'auto'; try { k = localStorage.getItem('qtab') || 'auto'; } catch {} qTab(k); }
+// when 자동 처리 shows its result (preview, answer, message), bring it into view
+try {
+  const ps = $('pasteStatus');
+  new MutationObserver(() => { if (!ps.textContent.trim()) return; if (UI.qtab !== 'auto') qTab('auto'); clearTimeout(ps._sc); ps._sc = setTimeout(() => {
+    const pane = ps.closest('.qpane'); if (pane && pane.scrollHeight > pane.clientHeight) pane.scrollTop = pane.scrollHeight;
+    const q = ps.closest('.quick'); if (q && q.scrollHeight > q.clientHeight) q.scrollTop = q.scrollHeight;
+    const r = ps.getBoundingClientRect(); if (r.bottom > innerHeight || r.top < 0) ps.scrollIntoView({ block: 'nearest' });
+  }, 60); })
+    .observe(ps, { childList: true, subtree: true, characterData: true });
+} catch {}
 setInterval(() => { if (UI.qtab === 'stat' && !document.hidden) renderStat(); }, 30000);
 if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__dd = { S, add, UNDO, replyFmt, delegFmt, fixNames, keyLine, snapshot, mergeIn, renderAll, FS, G, parseEdit, normalizeCmd, pickDT, parseCommand };
 })();
