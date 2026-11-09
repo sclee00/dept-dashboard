@@ -1,6 +1,6 @@
 {
-  "name": "학과장실 대시보드",
-  "short_name": "학과장실",
+  "name": "업무 대시보드",
+  "short_name": "대시보드",
   "scope": "./",
   "display": "standalone",
   "background_color": "#06080B",

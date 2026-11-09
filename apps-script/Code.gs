@@ -15,6 +15,7 @@
  * 할 수 있는 일: 캘린더 목록, 일정 읽기, 일정 만들기·고치기·지우기 (반복 일정은 이 날만 또는 전체),
  *               일정 설명(메모) 읽기·쓰기, 내 드라이브의 dashboard-data.json 읽기·쓰기 (아이폰 등 폴더 저장이 안 되는 기기용)
  * 버전 4부터 드라이브 권한이 추가되었습니다. 코드를 바꾼 뒤 authorize를 한 번 더 실행해 권한을 허용하세요.
+ * 버전 13: Gemini API로 그림(캡처)도 함께 보냄 (ai: images)
  * 버전 12: 대시보드에서 "Thunderbird로 답장"을 누르면 Thunderbird 애드온이 원본을 인용한 답장 창을 엽니다 (replyPut / replyTake)
  * 버전 11: 대시보드가 가져간 전달 메일은 지메일에서 지우기(gdel=trash 휴지통 / perm 영구삭제, 영구삭제는 서비스에 Gmail API 추가 필요)
  * 버전 11: 아무 메일 앱에서나 '내아이디+dash@gmail.com'으로 전달하면 대시보드로 (지메일 확인, 5분마다 + 대시보드가 열려 있으면 바로)
@@ -44,7 +45,7 @@ function doGet(e) {
   if (p.key !== KEY) return out({ ok: false, error: 'key' });
   try {
     switch (p.action) {
-      case 'ping': return out({ ok: true, email: Session.getEffectiveUser().getEmail(), tz: Session.getScriptTimeZone(), version: 12, forward: dashAddress(), gemini: !!PropertiesService.getScriptProperties().getProperty('GEMINI_KEY'), advanced: typeof Calendar !== 'undefined' });
+      case 'ping': return out({ ok: true, email: Session.getEffectiveUser().getEmail(), tz: Session.getScriptTimeZone(), version: 13, forward: dashAddress(), gemini: !!PropertiesService.getScriptProperties().getProperty('GEMINI_KEY'), advanced: typeof Calendar !== 'undefined' });
       case 'dataGet': return out(Object.assign({ ok: true }, dataGet(p)));
       case 'dataFiles': return out({ ok: true, current: PropertiesService.getScriptProperties().getProperty('DATA_FILE_ID') || '', files: dataFiles() });
       case 'dataUse': return out(Object.assign({ ok: true }, dataUse(p)));
@@ -107,7 +108,10 @@ function aiKey(b) {
 }
 function aiAsk(b) {
   const model = String(b.model || 'gemini-2.5-flash').replace(/[^\w.\-]/g, '');
-  const body = { contents: [{ role: 'user', parts: [{ text: String(b.prompt || '') }] }], generationConfig: { temperature: 0.3 } };
+  const parts = [];
+  (Array.isArray(b.images) ? b.images : []).slice(0, 6).forEach(function (im) { if (im && im.b64) parts.push({ inline_data: { mime_type: String(im.mime || 'image/jpeg'), data: String(im.b64) } }); });
+  parts.push({ text: String(b.prompt || '') });
+  const body = { contents: [{ role: 'user', parts: parts }], generationConfig: { temperature: 0.3 } };
   if (b.json) body.generationConfig.responseMimeType = 'application/json';
   const j = gemFetch('models/' + model + ':generateContent', body);
   const c = (j.candidates || [])[0];

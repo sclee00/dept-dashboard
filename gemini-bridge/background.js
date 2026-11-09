@@ -1,4 +1,4 @@
-/* 학과장실 대시보드 · Gemini 연결: one small Gemini window, one question at a time, a new chat for each */
+/* 업무 대시보드 · Gemini 연결: one small Gemini window, one question at a time, a new chat for each */
 const GEMINI = 'https://gemini.google.com/app';
 let queue = Promise.resolve();
 
@@ -24,13 +24,13 @@ function loaded(tabId, ms) {
 
 importScripts('run.js');
 
-async function ask(prompt, json, status) {
+async function ask(prompt, json, status, images) {
   const tabId = await geminiTab();
   status('Gemini 새 대화를 여는 중');
   await chrome.tabs.update(tabId, { url: GEMINI });   // a fresh chat every time
   await loaded(tabId, 30000);
   status('Gemini가 답하는 중');
-  const [r] = await chrome.scripting.executeScript({ target: { tabId }, func: runInGemini, args: [prompt, json, 240000] });
+  const [r] = await chrome.scripting.executeScript({ target: { tabId }, func: runInGemini, args: [prompt, json, 240000, images || []] });
   return (r && r.result) || { error: 'bridge', message: 'Gemini 창에서 결과를 받지 못했습니다.' };
 }
 
@@ -39,7 +39,7 @@ chrome.runtime.onConnect.addListener(port => {
   port.onMessage.addListener(m => {
     if (m.type !== 'ask') return;
     const status = text => { try { port.postMessage({ type: 'status', text }); } catch (e) {} };
-    queue = queue.then(() => ask(m.prompt, m.json, status)
+    queue = queue.then(() => ask(m.prompt, m.json, status, m.images)
       .then(result => { try { port.postMessage({ type: 'result', result }); } catch (e) {} })
       .catch(e => { try { port.postMessage({ type: 'result', result: { error: 'bridge', message: String((e && e.message) || e) } }); } catch (x) {} }));
   });

@@ -7,14 +7,14 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="학과장실">
+<meta name="apple-mobile-web-app-title" content="업무 대시보드">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237FA2FF' stroke-width='2'%3E%3Crect x='3' y='5' width='18' height='16' rx='2'/%3E%3Cpath d='M3 10h18M8 3v4M16 3v4'/%3E%3C/svg%3E">
 <script src="config.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<title>학과장실 대시보드</title>
+<title>업무 대시보드</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hahmlet:wght@500;700&family=IBM+Plex+Sans+KR:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
@@ -853,7 +853,7 @@ label.inl{display:inline-flex;align-items:center;gap:.3rem;font-size:.85rem} lab
 <div class="app">
   <header class="top">
     <div>
-      <div class="eyebrow">컴퓨터공학과 학과장실</div>
+      <div class="eyebrow" id="eyebrow">업무 대시보드</div>
       <div class="today" id="todayLabel">—</div>
       <div class="term"><b id="termLabel">—</b><span id="weekLabel"></span><span>·</span><span class="clock" id="clock">--:--</span></div>
     </div>
@@ -976,8 +976,8 @@ label.inl{display:inline-flex;align-items:center;gap:.3rem;font-size:.85rem} lab
 
 <script>
 (() => {
-const DEFAULTS = { semesterLabel: '2026학년도 2학기', semesterStart: '2026-08-31', signature: '컴퓨터공학과 학과장 드림', assistant: '학과 조교', useDelegate: false,
-  mf: { name: '', title: '컴퓨터공학과 학과장', greet: '안녕하세요. {직함} {이름}입니다.', close: '감사합니다.', tone: 'formal', len: 'normal', rules: '', style: '- 결론·답은 "~할 것 같습니다", "~하기 어려울 것 같습니다"처럼 부드럽게 쓴다. "~하게 되었음을 알려드립니다", "~임을 알려드립니다" 같은 통보체는 쓰지 않는다.\n- "~건 확인하였습니다", "메일 잘 받았습니다"처럼 받은 내용을 되풀이하는 문장은 쓰지 않고 바로 용건을 쓴다.\n- 같은 뜻의 문장을 두 번 쓰지 않는다.', dGreet: '{조교}님, 수고 많으십니다.', dSig: '학과장', dTone: 'polite', dRules: '' },
+const DEFAULTS = { semesterLabel: '2026학년도 2학기', semesterStart: '2026-08-31', signature: '{이름} 드림', assistant: '학과 조교', useDelegate: false,
+  mf: { name: '', title: '', greet: '안녕하세요. {이름}입니다.', close: '감사합니다.', tone: 'formal', len: 'normal', rules: '', style: '- 결론·답은 "~할 것 같습니다", "~하기 어려울 것 같습니다"처럼 부드럽게 쓴다. "~하게 되었음을 알려드립니다", "~임을 알려드립니다" 같은 통보체는 쓰지 않는다.\n- "~건 확인하였습니다", "메일 잘 받았습니다"처럼 받은 내용을 되풀이하는 문장은 쓰지 않고 바로 용건을 쓴다.\n- 같은 뜻의 문장을 두 번 쓰지 않는다.', dGreet: '{조교}님, 수고 많으십니다.', dSig: '{이름}', dTone: 'polite', dRules: '' },
   workStart: '09:00', workEnd: '18:00', workDays: [1, 2, 3, 4, 5], weekly: [], googleShow: true, googleBusy: true, googlePush: false, gAutoPush: true, gCals: null, gPushCal: 'primary' };
 const G_LOGO = '<svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>';
 const S = { tasks: [], events: [], emails: [], blocks: [], marks: [], settings: { ...DEFAULTS }, settingsU: 0, deleted: {} };
@@ -2298,7 +2298,7 @@ async function gsSend(btn) {
 
 /* ---------- storage: browser cache + Google Drive file ---------- */
 const COLS = ['tasks', 'events', 'emails', 'blocks', 'marks'];
-const FOLDER_NAME = '학과장실 대시보드', FILE_NAME = 'dashboard-data.json';
+const FOLDER_NAME = '업무 대시보드', FILE_NAME = 'dashboard-data.json';
 const DRIVE = { folderId: null, fileId: null, remoteMod: null, dirty: false, saving: false, again: false, state: 'local', last: 0, timer: null };
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 const isObj = v => v && typeof v === 'object' && !Array.isArray(v);
@@ -2363,7 +2363,7 @@ async function fsPick() {
   try {
     const h = await window.showDirectoryPicker({ id: 'deptdash', mode: 'readwrite', startIn: 'documents' });
     if (/^backup$/i.test(h.name)) {
-      const v = await gAsk({ title: '"backup" 폴더를 고르셨습니다', icon: 'drive', note: 'backup은 하루 한 번 날짜별 사본을 모아 두는 폴더입니다. 보통은 그 위의 <b>학과장실 대시보드</b> 폴더를 골라야 휴대폰·다른 PC와 같은 파일을 씁니다.',
+      const v = await gAsk({ title: '"backup" 폴더를 고르셨습니다', icon: 'drive', note: 'backup은 하루 한 번 날짜별 사본을 모아 두는 폴더입니다. 보통은 그 위의 <b>업무 대시보드</b> 폴더를 골라야 휴대폰·다른 PC와 같은 파일을 씁니다.',
         choices: [{ v: 'again', label: '다시 고르기', primary: true }, { v: 'use', label: '그래도 이 폴더 사용' }] });
       if (v === 'again') return fsPick();
       if (!v) return;
@@ -2483,7 +2483,7 @@ function phoneLinkHtml() {
   const p = DRIVE.phone;
   if (!fsReady()) return `<div id="phoneLinkBox"></div>`;
   const msg = !p ? '확인 중…'
-    : p.warn === 'nofolder' ? `<span class="warnline">PC 저장 폴더(<b>${esc(p.want)}</b>)가 구글 드라이브에서 아직 보이지 않습니다. 방금 고른 폴더라면 드라이브 앱이 올리는 데 1~2분 걸릴 수 있어 잠시 뒤 다시 확인합니다.${/^backup\//i.test(p.want) ? ' 지금 고른 곳은 날짜별 사본을 두는 <b>backup</b> 폴더입니다. "폴더 바꾸기"로 그 위의 학과장실 대시보드 폴더를 고르세요.' : " 구글 드라이브 데스크톱 앱의 '내 드라이브' 안 폴더여야 휴대폰과 같이 씁니다."}${p.where ? ` 지금 휴대폰은 <b>${esc(p.where)}</b>를 씁니다.` : ''}</span>`
+    : p.warn === 'nofolder' ? `<span class="warnline">PC 저장 폴더(<b>${esc(p.want)}</b>)가 구글 드라이브에서 아직 보이지 않습니다. 방금 고른 폴더라면 드라이브 앱이 올리는 데 1~2분 걸릴 수 있어 잠시 뒤 다시 확인합니다.${/^backup\//i.test(p.want) ? ' 지금 고른 곳은 날짜별 사본을 두는 <b>backup</b> 폴더입니다. "폴더 바꾸기"로 그 위의 대시보드 폴더를 고르세요.' : " 구글 드라이브 데스크톱 앱의 '내 드라이브' 안 폴더여야 휴대폰과 같이 씁니다."}${p.where ? ` 지금 휴대폰은 <b>${esc(p.where)}</b>를 씁니다.` : ''}</span>`
     : p.warn === 'old' ? '<span class="warnline">스크립트를 버전 7로 다시 배포해야 확인할 수 있습니다.</span>'
     : p.warn === 'error' ? '<span class="warnline">확인하지 못했습니다.</span>'
     : `휴대폰과 PC가 같은 파일을 씁니다: <b>${esc(p.where)}</b>`;
@@ -2520,14 +2520,14 @@ function renderSync() {
   const [cls, label] = M[st] || M.ok;
   el.className = 'gchip ' + cls;
   el.innerHTML = `${ic(st === 'saving' ? 'refresh' : 'drive')}<span>${esc(label)}</span>`;
-  el.title = st === 'none' ? '구글 드라이브 데스크톱 앱의 폴더(예: G:\\내 드라이브\\학과장실 대시보드)를 고르면 다른 PC에서도 같은 데이터를 봅니다'
+  el.title = st === 'none' ? '구글 드라이브 데스크톱 앱의 폴더(예: G:\\내 드라이브\\업무 대시보드)를 고르면 다른 PC에서도 같은 데이터를 봅니다'
     : st === 'broken' ? `${FILE_NAME}이 깨져 있어 덮어쓰지 않았습니다. 폴더의 backup 안 파일을 확인해 주세요.` : '눌러서 지금 저장·불러오기';
 }
 const BYDAY = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
 const rrule = e => repDays(e) && e.repeat.freq === 'monthly' && (e.repeat.nth || []).length ? `RRULE:FREQ=MONTHLY;BYDAY=${e.repeat.nth.flatMap(n => repDays(e).map(d => n + BYDAY[d])).join(',')}${isDate(e.repeat.until) ? ';UNTIL=' + e.repeat.until.replace(/-/g, '') + 'T235959' : ''}`
   : repDays(e) ? `RRULE:FREQ=WEEKLY${(+e.repeat.interval || 1) > 1 ? ';INTERVAL=' + e.repeat.interval : ''};BYDAY=${repDays(e).map(d => BYDAY[d]).join(',')}${isDate(e.repeat.until) ? ';UNTIL=' + e.repeat.until.replace(/-/g, '') + 'T235959' : ''}` : '';
 function gTemplateUrl(e) {
-  const q = new URLSearchParams({ action: 'TEMPLATE', text: e.title || '', details: '학과장실 대시보드에서 추가', ctz: TZ });
+  const q = new URLSearchParams({ action: 'TEMPLATE', text: e.title || '', details: '대시보드에서 추가', ctz: TZ });
   if (rrule(e)) q.set('recur', rrule(e));
   if (e.location) q.set('location', e.location);
   const d = s => s.replace(/-/g, '');
@@ -2715,6 +2715,8 @@ function cleanNewActions(arr) {
   const kinds = ['회의', '행사', '마감', '학사'], hmRe = /^\d{2}:\d{2}$/;
   return (Array.isArray(arr) ? arr : []).filter(a => a && a.title).slice(0, 20).map(a => {
     const x = { type: ['event', 'task', 'block'].includes(a.type) ? a.type : 'event', title: String(a.title).slice(0, 120), date: isDate(a.date) ? a.date : '', time: hmRe.test(a.time || '') ? a.time : '', endTime: hmRe.test(a.endTime || '') ? a.endTime : '', allDay: !!a.allDay, due: isDate(a.due) ? a.due : '', kind: kinds.includes(a.kind) ? a.kind : '회의', notes: [] };
+    if (a.location) x.location = String(a.location).slice(0, 120);
+    if (a.notes && typeof a.notes === 'string') x.memo = String(a.notes).slice(0, 600); // (x.notes is the preview's own warning list)
     const rp = cleanRepeat(a.repeat); if (rp) x.repeat = rp;
     if (x.repeat && (!x.date || !repMatch({ date: x.date, repeat: x.repeat }, x.date))) { const from = x.date || todayStr(); x.date = nextOccurrences({ date: from, repeat: x.repeat }, 1)[0] || from; }
     if (x.time && !x.endTime) x.endTime = fromMin(Math.min(toMin(x.time) + 60, 1439));
@@ -2742,7 +2744,7 @@ async function applyActions(actions) {
       } else await add('blocks', { date: a.date, allDay: a.allDay || !a.time, start: a.allDay ? '' : a.time, end: a.allDay ? '' : a.endTime, label: a.title, createdAt: nowISO() });
       n++; first = first || a.date; continue;
     }
-    const doc = { title: a.title, date: a.date, time: a.allDay ? '' : a.time, endTime: a.allDay ? '' : a.endTime, location: '', kind: a.kind || '회의', imp: a.imp, source: 'command', createdAt: nowISO() };
+    const doc = { title: a.title, date: a.date, time: a.allDay ? '' : a.time, endTime: a.allDay ? '' : a.endTime, location: a.location || '', kind: a.kind || '회의', imp: a.imp, source: 'command', createdAt: nowISO(), ...(a.memo ? { memo: { text: a.memo } } : {}) };
     if (a.repeat) doc.repeat = JSON.parse(JSON.stringify(a.repeat));
     const nid = await add('events', doc);
     if (gAuto() && gReady()) pushGoogle(doc, nid);
@@ -2801,14 +2803,16 @@ function parseLoose(t) {
   for (const x of tries) { try { return JSON.parse(repairJson(dec(x))); } catch {} }
   throw new Error('json');
 }
-function relay({ title, prompt, json, alt }) {
+function relay({ title, prompt, json, alt, why, images }) {
   if (UI.relay) UI.relay.reject({ code: 'cancelled' });
-  return new Promise((resolve, reject) => { UI.relay = { title, prompt, json, alt, resolve, reject, mode: 'manual' }; UI.dlg = 'relay'; renderRelay(); });
+  return new Promise((resolve, reject) => { UI.relay = { title, prompt, json, alt, why, images: images || [], resolve, reject, mode: 'manual' }; UI.dlg = 'relay'; renderRelay(); });
 }
 function renderRelay() {
   const r = UI.relay; if (!r) return;
   $('dlgRoot').innerHTML = `<div class="scrim" data-act="relayCancel"></div><div class="dlg"><div class="dlgbox wide" role="dialog" aria-modal="true" aria-labelledby="dlgT">
     <h3 id="dlgT">${ic('spark')}${esc(r.title)}</h3>
+    ${r.why ? `<div class="warnline" style="margin:-.2rem 0 .5rem">${ic('alert')} ${esc(r.why)}</div>` : ''}
+    ${r.images.length ? `<div class="count" style="margin-bottom:.5rem">그림 ${r.images.length}장도 AI 창에 같이 넣어야 합니다: ${r.images.map((im, i) => `<a href="data:${esc(im.mime)};base64,${im.b64}" download="${esc(im.name || 'image' + (i + 1) + '.jpg')}">${esc(im.name || '그림 ' + (i + 1))}</a>`).join(' · ')} (받아서 AI 창에 끌어다 놓으세요)</div>` : ''}
     <div class="rstep"><b>1</b><div>${relayFits(r) ? '아래 버튼을 누르면 질문이 미리 들어간 AI 창이 열립니다. 그 창에서 <b>Enter</b>만 누르세요.' : '아래 버튼을 누르면 질문이 복사되고 AI 창이 열립니다. 그 창에서 <b>Ctrl+V</b> → <b>Enter</b>를 누르세요.'}
       <div class="row" style="margin-top:.45rem">
       <a class="btn primary" href="https://gemini.google.com/app" target="_blank" rel="noopener" data-act="relayCopy" data-open="1">${ic('ext')}Gemini로 보내기</a>
@@ -2894,7 +2898,7 @@ function frameLoad(f, ms) {
     f.src = GEM_APP;
   });
 }
-async function frameAsk(prompt, json, setStatus) {
+async function frameAsk(prompt, json, setStatus, images) {
   const back = UI.qtab && UI.qtab !== 'gem' ? UI.qtab : 'auto';
   const f = gemDock(true);
   const q = document.querySelector('.quick'); q && q.classList.add('ontop');
@@ -2916,16 +2920,16 @@ async function frameAsk(prompt, json, setStatus) {
       resolve(e.data.text);
     };
     window.addEventListener('message', on);
-    f.contentWindow.postMessage({ type: 'gbf-ask', id, prompt, json: !!json }, GEM_ORIGIN);
+    f.contentWindow.postMessage({ type: 'gbf-ask', id, prompt, json: !!json, images: images || [] }, GEM_ORIGIN);
   });
 }
-function bridgeAsk(prompt, title, json) {
-  if (aiFrame()) return aiProgress(title, setStatus => frameAsk(prompt, json, setStatus), json, 'Gemini (Gemini 탭)')
+function bridgeAsk(prompt, title, json, images) {
+  if (aiFrame()) return aiProgress(title, setStatus => frameAsk(prompt, json, setStatus, images), json, 'Gemini (Gemini 탭)')
     .catch(e => {
       if (!e || e.code !== 'frame') throw e;
       UI.gemFrameBad = true; gemDock(false);
       toast(e.message + ' 이번에는 따로 창으로 엽니다.');
-      return bridgeAsk(prompt, title, json);
+      return bridgeAsk(prompt, title, json, images);
     });
   return aiProgress(title, (setStatus) => new Promise((resolve, reject) => {
     const id = uid();
@@ -2938,7 +2942,7 @@ function bridgeAsk(prompt, title, json) {
       resolve(e.data.text);
     };
     window.addEventListener('message', on);
-    window.postMessage({ type: 'gb-ask', id, prompt, json: !!json }, location.origin);
+    window.postMessage({ type: 'gb-ask', id, prompt, json: !!json, images: images || [] }, location.origin);
   }), json, 'Gemini 웹');
 }
 // shared "working…" window with a cancel button; run(setStatus) does the actual asking
@@ -2960,28 +2964,25 @@ function aiProgress(title, run, json, who) {
       .catch(e => { if (done) return; close(); reject(e); });
   });
 }
-function geminiAsk(prompt, title, json) {
-  return aiProgress(title, () => gasPost({ action: 'ai', prompt, json: !!json, model: S.settings.aiModel || 'gemini-2.5-flash' }).then(j => j.text)
+function geminiAsk(prompt, title, json, images) {
+  return aiProgress(title, () => gasPost({ action: 'ai', prompt, json: !!json, model: S.settings.aiModel || 'gemini-2.5-flash', ...(images && images.length ? { images } : {}) }).then(j => j.text)
     .catch(e => { throw (e && e.code === 'action' ? { code: 'old', message: '스크립트를 버전 10으로 다시 배포해야 Gemini를 쓸 수 있습니다.' } : e); }), json, 'Gemini');
 }
 // automatic first; if it cannot (no key, limit reached, network), the copy-and-paste window opens instead
+const imgOK = () => { const v = bridgeVer(); return v[0] > 1 || (v[0] === 1 && v[1] >= 2); };
 async function aiRun(prompt, opts, json) {
-  if (aiWeb()) {
-    try { return await bridgeAsk(prompt, opts.title, json); }
-    catch (e) {
-      if (e && e.code === 'cancelled') throw e;
-      toast('Gemini 웹 자동 처리가 안 돼 복사 방식으로 엽니다. ' + ((e && e.message) || ''));
-      return relay({ title: opts.title || (json ? 'AI 분석' : 'AI에게 답 받기'), prompt, json });
-    }
-  }
+  const images = opts.images || [], title = opts.title || (json ? 'AI 분석' : 'AI에게 답 받기');
+  let why = '';
+  if (aiWeb() && (!images.length || imgOK())) {
+    try { return await bridgeAsk(prompt, opts.title, json, images); }
+    catch (e) { if (e && e.code === 'cancelled') throw e; why = 'Gemini 웹 자동 처리 실패: ' + ((e && e.message) || '알 수 없는 오류'); }
+  } else if (aiWeb() && images.length) why = '그림을 Gemini에 자동으로 넣으려면 Gemini 연결 확장을 1.2 이상으로 바꿔야 합니다.';
   if (aiAuto()) {
-    try { return await geminiAsk(prompt, opts.title, json); }
-    catch (e) {
-      if (e && e.code === 'cancelled') throw e;
-      toast('Gemini 자동 처리가 안 돼 복사 방식으로 엽니다. ' + ((e && e.message) || ''));
-    }
+    try { return await geminiAsk(prompt, opts.title, json, images); }
+    catch (e) { if (e && e.code === 'cancelled') throw e; why = 'Gemini API 실패: ' + ((e && e.message) || ''); }
   }
-  return relay({ title: opts.title || (json ? 'AI 분석' : 'AI에게 답 받기'), prompt, json });
+  if (!why && !bridgeOn()) why = '이 브라우저에서 Gemini 연결 확장이 보이지 않아 복사 방식으로 엽니다 (PC 크롬에 확장을 설치하면 자동으로 처리됩니다).';
+  return relay({ title, prompt, json, why, images });
 }
 function aiSettingsHtml(s) {
   const on = s.aiMode === 'gemini', models = s.aiModels || [];
@@ -3146,8 +3147,13 @@ function cmdContext() {
   const sl = slotsForPrompt();
   return `대시보드 일정 (번호는 [ ] 안):\n${evs.join('\n') || '- 없음'}\n\n구글 캘린더 일정:\n${gs.join('\n') || '- 없음 또는 연결 안 됨'}\n\n남은 할 일:\n${ts.join('\n') || '- 없음'}\n\n앞으로 2주 빈 시간:\n${sl.map(x => '- ' + x).join('\n') || '- 계산 못 함'}`;
 }
-function commandPrompt(text) {
-  return `나 컴공과 학과장인데, 대시보드에 일정 명령을 하나 적었어. 이걸 대시보드가 바로 실행할 수 있게 동작 목록으로 바꿔 줘.
+function commandPrompt(text, nImg) {
+  return `${nImg ? `그림 ${nImg}장(캡처)을 같이 보냈어. 그림에서 일정·할 일을 찾아서 대시보드가 바로 넣을 수 있게 동작 목록으로 바꿔 줘.${text ? ' 내가 덧붙인 말도 반영해 줘.' : ''}
+- 기차표·비행기표·예매 내역이면 편마다 일정 하나씩: 제목은 "KTX 광명→포항"처럼 (교통편 출발지→도착지), 시간은 출발–도착, notes에 열차·편 번호와 호차·좌석, 예매 번호 끝자리 정도만.
+- 같은 날 여러 편(가는 편·오는 편)이면 각각 따로 만들어. 출장·여행 일정이면 notes에 그렇게 적어 줘.
+- 초대장·포스터·공문 캡처면 행사 이름·날짜·시간·장소를 일정으로.
+- 그림에 날짜가 없거나 흐리면 지어내지 말고 note에 물어봐.
+` : '대시보드에 일정 명령을 하나 적었어. 이걸 대시보드가 바로 실행할 수 있게 동작 목록으로 바꿔 줘.'}${roleLine()}
 ${ctxLine()}
 요일 번호는 일0 월1 화2 수3 목4 금5 토6이야. "3시"처럼 오전/오후 없이 쓰면 근무시간 기준이라 1~7시는 오후로 보면 돼.
 "빈 시간에", "가능한 시간에"처럼 시간을 맡기면 아래 빈 시간 목록에서 골라 줘.
@@ -3158,7 +3164,7 @@ ${cmdContext()}
 {"actions": [동작, ...], "note": "나한테 알려 줄 말 (확인할 점, 질문에 대한 답, 없으면 null)"}
 
 동작 종류
-1) 새로 만들기: {"type": "event | task | block", "title": "짧은 제목", "date": "YYYY-MM-DD 또는 null (반복이면 첫 날짜, 모르면 null)", "time": "HH:MM 또는 null", "endTime": "HH:MM 또는 null", "allDay": true/false, "repeat": 반복 또는 null, "due": "할 일 기한 YYYY-MM-DD 또는 null", "kind": "회의 | 행사 | 마감 | 학사", "important": true/false}
+1) 새로 만들기: {"type": "event | task | block", "title": "짧은 제목", "date": "YYYY-MM-DD 또는 null (반복이면 첫 날짜, 모르면 null)", "time": "HH:MM 또는 null", "endTime": "HH:MM 또는 null", "allDay": true/false, "repeat": 반복 또는 null, "due": "할 일 기한 YYYY-MM-DD 또는 null", "kind": "회의 | 행사 | 마감 | 학사", "important": true/false, "location": "장소 또는 null", "notes": "메모(편 번호·좌석 등) 또는 null"}
    event는 일정, task는 할 일, block은 내가 안 되는 시간(불가 시간).
 2) 기존 항목 고치기: {"type": "update", "ref": "위 목록의 번호 (예: e:abc, t:xyz, g:...)", 바뀌는 필드만: "title", "date", "time", "endTime", "allDay", "due", "important", "repeat"}
 3) 지우기: {"type": "delete", "ref": "e:… 또는 t:… 또는 g:…"} — 구글 캘린더 일정(g:)도 지울 수 있어 (실행 전에 내가 한 번 더 확인해).
@@ -3526,7 +3532,15 @@ function attPromptBlock(list) {
 const MF_TONE = { formal: '정중한 격식체(-습니다)', soft: '부드러운 존댓말(-요, 따뜻하게)', brief: '간결한 업무체(군더더기 없이)' };
 const MF_LEN = { short: '아주 짧게 (3~5줄)', normal: '적당히 (5~10줄)', long: '필요한 내용을 빠짐없이 자세히' };
 const MF_DTONE = { polite: '정중한 부탁 말투', direct: '짧고 분명한 지시 말투', friendly: '친근하고 부드러운 말투' };
-function mfOf() { return { ...DEFAULTS.mf, ...(S.settings.mf || {}) }; }
+function mfOf() {
+  const f = { ...DEFAULTS.mf, ...(S.settings.mf || {}) };
+  if (f.dSig === '학과장') f.dSig = '{이름}';            // old defaults from when this was a 학과장 dashboard
+  if (f.title === '컴퓨터공학과 학과장' && !(S.settings.mf || {}).titleSet) f.title = '';
+  return f;
+}
+const roleLine = () => { const t = mfOf().title; return t ? ` 참고로 나는 ${t}야.` : ''; };
+const OLD_SIG = '컴퓨터공학과 학과장 드림';
+const sigText = () => { const v = String(S.settings.signature || '').trim(); return mfFill(!v || v === OLD_SIG ? '{이름} 드림' : v).trim(); };
 function mfFill(t) { const f = mfOf(); return String(t || '').replace(/\{이름\}/g, f.name || '').replace(/\{직함\}/g, f.title || '').replace(/\{조교\}/g, S.settings.assistant || '조교').replace(/\s{2,}/g, ' ').trim(); }
 // the AI sometimes signs with another person's name taken from the recipient list: put the real name back
 function fixNames(t) {
@@ -3535,8 +3549,8 @@ function fixNames(t) {
   const STOP = /^(입니다|드림|올림|배상|님|회의|위원|명의)$/;
   t = t.replace(/(학과장|교수|주임교수)\s+([가-힣]{2,4})(?=\s*(입니다|드림|올림|배상)|\s*$)/gm, (all, role, nm) => STOP.test(nm) || nm === me ? all : me ? `${role} ${me}` : role);
   // the old default sign-off line → the signature set now
-  const sig = mfFill(S.settings.signature || '');
-  if (sig && sig !== DEFAULTS.signature) t = t.replace(new RegExp('^[ \\t]*' + DEFAULTS.signature.replace(/\s+/g, '[ \\t]*') + '[ \\t]*$', 'm'), sig);
+  const sig = sigText();
+  if (sig && sig !== OLD_SIG) t = t.replace(new RegExp('^[ \\t]*' + OLD_SIG.replace(/\s+/g, '[ \\t]*') + '[ \\t]*$', 'm'), sig);
   // no title in the settings: drop "컴퓨터공학과 학과장" in front of my name
   if (!(f.title || '').trim()) t = t.replace(/([가-힣A-Za-z]+(?:학과|학부|대학|사업단)\s*)?(?:학과장|주임교수)\s+(?=[가-힣]{2,4}\s*(?:입니다|드림|올림|배상|$))/gm, '');
   // nothing after the sign-off (Gemini likes to add "관련하여 추가로 필요하신…" and suggestion chips)
@@ -3550,11 +3564,11 @@ function replyFmt() {
   const f = mfOf();
   return [`답장 형식:`,
     f.name ? `- 보내는 사람은 ${f.title ? f.title + ' ' : ''}${f.name}. 이 이름을 그대로 써. 다른 이름은 절대 지어내지 마.` : f.title ? `- 보내는 사람 이름은 모르니까 이름은 지어내지 말고 직함(${f.title})만 써.` : '- 보내는 사람 이름은 지어내지 마.',
-    f.title ? '' : '- 직함이나 소속(학과장, 교수, 컴퓨터공학과 같은 말)으로 나를 소개하지 마. 인사·본문·서명 어디에도 내 직함·소속은 쓰지 마.',
+    f.title ? '' : '- 직책이나 소속 같은 말로 나를 소개하지 마. 인사·본문·서명 어디에도 내 직책·소속은 쓰지 마.',
     f.greet ? `- 첫 인사는 "${mfFill(f.greet)}" (받는 사람 호칭 한 줄을 그 앞에 둘 수 있어).` : '',
     `- 말투: ${MF_TONE[f.tone] || MF_TONE.formal}. 길이: ${MF_LEN[f.len] || MF_LEN.normal}.`,
     f.close ? `- 맺음말은 "${mfFill(f.close)}"` : '',
-    `- 마지막 줄 서명은 "${mfFill(S.settings.signature)}" 그대로. 서명 뒤에는 아무것도 쓰지 마 (추가로 도와줄 게 있냐는 말, 제안, 설명 모두 빼).`,
+    `- 마지막 줄 서명은 "${sigText()}" 그대로. 서명 뒤에는 아무것도 쓰지 마 (추가로 도와줄 게 있냐는 말, 제안, 설명 모두 빼).`,
     f.style ? `- 문체 규칙 (꼭 지켜):\n${f.style}` : '',
     f.rules ? `- 그 밖에 꼭 지킬 것: ${f.rules}` : ''].filter(Boolean).join('\n');
 }
@@ -3563,7 +3577,7 @@ function delegFmt() {
   return [`조교 지시 메일 형식: 받는 사람은 ${S.settings.assistant}.`,
     f.dGreet ? `- 첫 인사는 "${mfFill(f.dGreet)}"` : '',
     `- 말투: ${MF_DTONE[f.dTone] || MF_DTONE.polite}.`,
-    `- 서명은 "${mfFill(f.dSig || '학과장')}" 그대로. 다른 이름은 지어내지 마.`,
+    `- 서명은 "${mfFill(f.dSig || '{이름}')}" 그대로. 다른 이름은 지어내지 마.`,
     f.dRules ? `- 그 밖에 꼭 지킬 것: ${f.dRules}` : ''].filter(Boolean).join('\n');
 }
 const ATT_RULES = `첨부파일도 내용까지 읽고 반영해 줘. 첨부 안의 날짜·마감·대상 목록·제출 양식은 events/tasks/답장/조교 지시에 쓰고, 조교 지시에는 어떤 첨부를 어떻게 처리할지(예: 엑셀의 노란색 행 검토) 구체적으로 적어 줘. "attachments"에는 첨부마다 한 줄 요약.`;
@@ -3669,7 +3683,7 @@ function composeShort(m) {
   const dec = decChosen(m).map(x => `결정 사항: ${x.a}${x.detail ? ' — ' + x.detail : ''}`);
   const atts = (m.attachments || []).length ? [`첨부: ${m.attachments.map(x => x.name).join(', ')}`] : [];
   const who = S.settings.assistant || '조교';
-  return `제목: ${(m.delegate && m.delegate.title) || m.subject || '업무 요청'}\n\n${who}님,\n아래 사항 처리 부탁드립니다.\n\n${[...items, ...dec, ...atts].map(x => '- ' + x).join('\n')}\n\n진행 상황이나 확인할 점이 있으면 알려 주세요.\n학과장`;
+  return `제목: ${(m.delegate && m.delegate.title) || m.subject || '업무 요청'}\n\n${who}님,\n아래 사항 처리 부탁드립니다.\n\n${[...items, ...dec, ...atts].map(x => '- ' + x).join('\n')}\n\n진행 상황이나 확인할 점이 있으면 알려 주세요.\n${mfFill(mfOf().dSig || '{이름}')}`;
 }
 // colors in the original: what the head must notice
 const HL_TYPES = { deadline: ['마감·기한', 'hl-deadline'], request: ['요청·회신', 'hl-request'], decision: ['결정 필요', 'hl-decision'], date: ['날짜·시간', 'hl-date'], attachment: ['첨부', 'hl-att'], warning: ['주의·필수', 'hl-warn'] };
@@ -3772,7 +3786,7 @@ function fontSettingsHtml() {
     <div class="fontlist">${FONTS.map(([k, name, fam, , note]) => `<label class="fontcard ${c.body === k ? 'on' : ''}"><input type="radio" name="fontBody" value="${k}" ${c.body === k ? 'checked' : ''}>
       <span class="fname">${esc(name)} <span class="count">${esc(note)}</span></span>
       <span class="fsample" style="font-family:${esc(fam)},sans-serif">${sample}</span>
-      <span class="fsample small" style="font-family:${esc(fam)},sans-serif">학과장실 대시보드 · 처리 중 메일 3 · 조교 전달 대기 1</span></label>`).join('')}</div>
+      <span class="fsample small" style="font-family:${esc(fam)},sans-serif">업무 대시보드 · 처리 중 메일 3 · 답장 대기 1</span></label>`).join('')}</div>
     <div class="impgrid">
       <label>제목 글꼴<select class="field" id="fontHead"><option value="serif" ${c.head !== 'same' ? 'selected' : ''}>명조 (지금처럼)</option><option value="same" ${c.head === 'same' ? 'selected' : ''}>본문과 같은 글꼴</option></select></label>
       <label>작은 회색 글씨<select class="field" id="fontSmall"><option value="mono" ${c.small !== 'body' ? 'selected' : ''}>고정폭 (지금처럼)</option><option value="body" ${c.small === 'body' ? 'selected' : ''}>본문 글꼴 (더 깔끔)</option></select></label>
@@ -3937,7 +3951,7 @@ function phoneSettingsHtml() {
     <ol class="count steps"><li>아이폰 카메라로 이 QR을 찍어 사파리로 엽니다.</li><li>사파리 아래 <b>공유</b> 버튼 → <b>홈 화면에 추가</b>를 누르면 앱처럼 열립니다. 아이콘 앱이 "연결 안 됨"이면 그 앱에서 붙여넣기로 연결합니다.</li><li>휴대폰은 Apps Script를 통해 드라이브의 같은 데이터 파일을 읽고 씁니다${DRIVE.where ? ` (<b>${esc(DRIVE.where)}</b>)` : ''}.</li></ol></div>
     ${phoneLinkHtml()}
     <div class="count" style="margin-top:.4rem">${ic('inbox')} <b>아이폰 메일·다른 메일 앱에서 보내기</b>: 메일을 <b>전달</b> → 받는 사람 <code>${esc((localStorage.getItem('gasEmail') || 'sclee00@gmail.com').replace('@', '+dash@'))}</code> (연락처에 "대시보드"로 저장해 두면 편합니다). 몇 분 안에 이메일 처리 목록에 들어옵니다. 스크립트 버전 11이 필요합니다.
-      <div class="row" style="align-items:center;flex-wrap:wrap;margin-top:.3rem">들어온 뒤 지메일의 전달 메일은 <select class="field" id="fwdDel" style="width:auto">${[['perm', '영구 삭제'], ['trash', '휴지통으로 (30일 뒤 자동 삭제)'], ['keep', '그대로 두기']].map(([v, l]) => `<option value="${v}" ${(S.settings.fwdDelete || 'perm') === v ? 'selected' : ''}>${l}</option>`).join('')}</select><span class="count">원본 전체(본문·첨부)는 드라이브 학과장실 대시보드/inbox/done에 남습니다.</span></div></div>
+      <div class="row" style="align-items:center;flex-wrap:wrap;margin-top:.3rem">들어온 뒤 지메일의 전달 메일은 <select class="field" id="fwdDel" style="width:auto">${[['perm', '영구 삭제'], ['trash', '휴지통으로 (30일 뒤 자동 삭제)'], ['keep', '그대로 두기']].map(([v, l]) => `<option value="${v}" ${(S.settings.fwdDelete || 'perm') === v ? 'selected' : ''}>${l}</option>`).join('')}</select><span class="count">원본 전체(본문·첨부)는 드라이브의 대시보드 폴더(inbox/done)에 남습니다.</span></div></div>
     <div class="row"><button class="btn small" type="button" data-act="copyConnect">${ic('copy')}연결 링크 복사</button><span class="count warnline">이 QR·링크에는 비밀 키가 들어 있으니 다른 사람에게 보내지 마세요.</span></div>
     <span class="count">스크립트가 버전 4 이상이어야 합니다. 이전 버전이면 새 Code.gs로 바꾸고 authorize 실행 → 배포 관리 → 새 버전으로 배포하세요.</span></div>`;
 }
@@ -4776,7 +4790,7 @@ function renderSheet(force) {
   // only what the head has to care about is shown; the rest is one click away
   const split = (arr, fn, key, noun) => {
     const main = arr.map((x, i) => [x, i]).filter(([x]) => x.forHead !== false), rest = arr.map((x, i) => [x, i]).filter(([x]) => x.forHead === false), open = UI['showRest' + key];
-    return `${main.length ? main.map(([x, i]) => fn(x, i)).join('') : `<div class="count">학과장이 직접 챙길 ${noun}은 없습니다.</div>`}
+    return `${main.length ? main.map(([x, i]) => fn(x, i)).join('') : `<div class="count">내가 직접 챙길 ${noun}은 없습니다.</div>`}
       ${rest.length ? `<button class="btn small ghost restbtn" type="button" data-act="showRest" data-k="${key}">${ic(open ? 'dash' : 'plus')}${open ? '숨기기' : `숨긴 ${noun} ${rest.length}개 보기`} <span class="count">(조교·부서가 처리하거나 참고용)</span></button>${open ? rest.map(([x, i]) => fn(x, i)).join('') : ''}` : ''}`;
   };
   const evMain = evs.filter(e => e.forHead !== false), tkMain = tks.filter(t => t.forHead !== false);
@@ -4889,7 +4903,7 @@ function closeSheet() { if (UI.draftCtl) UI.draftCtl.abort(); UI.openId = null; 
 /* ---------- Claude prompts ---------- */
 function ctxLine() { const d = new Date(); return `오늘 날짜: ${ymd(d)} (${WD[d.getDay()]}요일). 현재 학기: ${S.settings.semesterLabel}.`; }
 function analysisPrompt(raw, cat, atts) {
-  return `나 컴공과 학과장이야. 받은 메일 하나 분석 좀 해 줘.
+  return `받은 메일 하나 분석 좀 해 줘.${roleLine()}
 ${ctxLine()}
 내가 고른 분류: ${cat}
 ${(S.settings.ignoreHints || []).length ? '전에 내가 "상관없다"고 넘긴 메일들이야(비슷하면 irrelevant로 봐): ' + S.settings.ignoreHints.slice(0, 20).join(' / ') : ''}
@@ -4903,25 +4917,25 @@ ${keyLine() ? keyLine() + '\n참석 여부를 묻는 메일인데 그 행사 날
 {
   "subject": "메일 제목. 없으면 내용을 대표하는 짧은 제목",
   "from": "보낸 사람 이름과 소속. 모르면 빈 문자열",
-  "summary": "학과장이 알아야 할 현재 상황의 핵심을 2~3문장으로 (스레드면 지금까지의 경과를 반영)",
+  "summary": "내가 알아야 할 현재 상황의 핵심을 2~3문장으로 (스레드면 지금까지의 경과를 반영)",
   "thread": [{"date": "YYYY-MM-DD 또는 null", "from": "보낸 쪽(역할·소속)", "gist": "그 메일의 요지 한 문장"}]  (스레드가 아니면 메일 1건만, 오래된 것부터),
   "openIssues": ["아직 결정·회신되지 않은 쟁점을 짧게"],
   "priority": "high | mid | low  (마감 임박, 본부 요청, 학생 민원은 높게)",
   "needsReply": true 또는 false,
   "replyDeadline": "YYYY-MM-DD 또는 null",
   "events": [{"title": "일정 이름", "date": "YYYY-MM-DD", "time": "HH:MM 또는 null", "endTime": "HH:MM 또는 null", "location": "장소 또는 null", "kind": "회의 | 행사 | 마감 | 학사", "important": true 또는 false, "forHead": true 또는 false}],
-  "tasks": [{"title": "학과장이 할 일을 '~하기' 형태의 짧은 문장으로", "due": "YYYY-MM-DD 또는 null", "priority": "high | mid | low", "forHead": true 또는 false}],
+  "tasks": [{"title": "내가 할 일을 '~하기' 형태의 짧은 문장으로", "due": "YYYY-MM-DD 또는 null", "priority": "high | mid | low", "forHead": true 또는 false}],
   "relevance": "relevant | irrelevant",
   "ignoreReason": "irrelevant이면 그렇게 본 이유 한 문장, 아니면 null",
   "replyMode": "draft | none",
-  "replyDraft": "replyMode가 draft일 때 학과장 명의의 한국어 답장 전문, 아니면 null",
+  "replyDraft": "replyMode가 draft일 때 내 이름으로 보낼 한국어 답장 전문, 아니면 null",
   "replyOptions": [],
   "delegable": true 또는 false  (자료 취합, 공문 작성, 일정 조율, 명단 정리, 회신 발송처럼 조교가 실무를 맡을 수 있는 일이 있으면 true),
-  "delegateDraft": "delegable이면 학과장이 ${S.settings.assistant}에게 보내는 업무 지시 메일 전문(15줄 이내), 아니면 null",
+  "delegateDraft": "delegable이면 내가 ${S.settings.assistant}에게 보내는 업무 지시 메일 전문(15줄 이내), 아니면 null",
   "delegateTitle": "업무 지시 메일 제목 (짧게)",
   "delegateItems": [{"text": "조교가 할 일 한 줄 (개조식, 산출물·기한 포함)", "essential": true 또는 false}],
-  "myAction": "학과장이 지금 해야 할 일을 한두 줄로 (예: 11/3까지 예외 교과목 여부를 정해 조교에게 회신. 나머지는 조교에게 맡기면 됨)",
-  "decisions": [{"question": "학과장이 정해야 할 것 (질문 한 줄)", "options": [{"label": "선택지 (짧게)", "detail": "고르면 어떻게 되는지 한 줄"}], "recommend": 추천 선택지 번호(0부터) 또는 null, "why": "추천 이유 한 줄 또는 null"}],
+  "myAction": "내가 지금 해야 할 일을 한두 줄로 (예: 11/3까지 예외 교과목 여부를 정해 조교에게 회신. 나머지는 조교에게 맡기면 됨)",
+  "decisions": [{"question": "내가 정해야 할 것 (질문 한 줄)", "options": [{"label": "선택지 (짧게)", "detail": "고르면 어떻게 되는지 한 줄"}], "recommend": 추천 선택지 번호(0부터) 또는 null, "why": "추천 이유 한 줄 또는 null"}],
   "highlights": [{"text": "원문에서 글자 그대로 옮긴 짧은 구절", "type": "deadline | request | decision | date | attachment | warning"}]
 }
 forHead: 내가 직접 참석·결정·제출·확인해야 하는 일정이랑 할 일만 true. 조교·행정실·다른 부서가 실무로 하는 거나 참고용 일정은 false (화면에서 기본으로 숨겨).
@@ -5121,10 +5135,22 @@ async function inboxImport() {
   } finally { INBOX.busy = false; INBOX.items = []; renderInbox(); }
   if (got) { UI.mf = 'open'; syncTabs(); renderAll(); toast(got === 1 ? `Thunderbird에서 받은 메일: ${last} — 이메일 처리 목록에서 "분석"을 누르세요.` : `Thunderbird에서 메일 ${got}건을 받았습니다. 이메일 처리 목록에서 "분석"을 누르세요.`); }
 }
+async function imagesFrom(list) {
+  const out = [];
+  for (const x of list.slice(0, 6)) { try { const d = await shrinkImage(x.file); out.push({ name: (x.name || 'image').replace(/\.\w+$/, '') + '.jpg', mime: 'image/jpeg', b64: d.split(',')[1] }); } catch {} }
+  return out;
+}
 async function analyzeNew() {
   const text = $('rawMail').value.trim();
   const st = $('pasteStatus');
   if (!text && !UI.att.length) { st.className = 'status err'; st.textContent = '메일을 붙여넣거나 명령을 적어 주세요.'; return; }
+  // pictures (screenshots of tickets, posters…): find events in them
+  const imgAtts = UI.att.filter(x => /^image\//.test((x.file && x.file.type) || '') || /\.(png|jpe?g|webp|gif|heic)$/i.test(x.name || ''));
+  if (imgAtts.length && imgAtts.length === UI.att.length && (!text || text.length < 200)) {
+    const images = await imagesFrom(imgAtts);
+    UI.att = []; renderAttList(); $('rawMail').value = '';
+    return runCommandAI(text, images);
+  }
   if (!UI.att.length && looksLikeCommand(text) && !$('threadOf').value) {
     const fixed = normalizeCmd(text); UI.cmdFixed = fixed !== text.replace(/\s+/g, ' ').trim() ? fixed : '';
     const ed = parseEdit(fixed);
@@ -5196,7 +5222,7 @@ async function writeDelegate(m) {
   const ta = $('dlgDraft'), st = $('delegStatus');
   const note = ($('delegNote').value || '').trim(), current = ta.value.trim();
   const a = m.analysis || {};
-  const prompt = `나 컴공과 학과장인데, ${S.settings.assistant}한테 보낼 업무 지시 메일 좀 써 줘. 설명은 빼고 메일만 줘. 메일 자체는 조교한테 보내는 거니까 평소 업무 메일처럼 예의 있게.
+  const prompt = `${S.settings.assistant}한테 보낼 업무 지시 메일 좀 써 줘. 설명은 빼고 메일만 줘. 메일 자체는 조교한테 보내는 거니까 평소 업무 메일처럼 예의 있게.
 ${ctxLine()}${(m.attachments || []).length ? `\n원메일 첨부파일(조교한테 같이 넘길 거야): ${m.attachments.map(x => x.name).join(', ')}. 지시에서 파일 이름으로 짚어 주고 뭘 확인·작성할지 써 줘.` : ''}
 형식: 첫 줄 "제목: ...", 빈 줄, 본문. 본문은 배경 한 문장 → 할 일 개조식(-), 줄마다 산출물·기한 → 내 확인이 필요한 지점 → 완료 보고 방식 한 줄. 전체 15줄 안으로 짧게. 조교가 원메일 안 봐도 일할 수 있게 구체적으로. 내가 정할 건 [대괄호].
 ${delegFmt()}
@@ -5231,7 +5257,7 @@ async function redraft(m, tone) {
   const ta = $('draft'), st = $('draftStatus');
   const note = ($('draftNote').value || '').trim();
   const current = ta.value.trim();
-  const prompt = `나 컴공과 학과장인데, 아래 받은 메일에 내 이름으로 보낼 답장 좀 써 줘. 설명이나 머리말 없이 답장 본문만 줘. 답장은 실제로 보낼 거니까 받는 사람한테 맞게 예의 바르게.
+  const prompt = `아래 받은 메일에 내 이름으로 보낼 답장 좀 써 줘. 설명이나 머리말 없이 답장 본문만 줘. 답장은 실제로 보낼 거니까 받는 사람한테 맞게 예의 바르게.
 ${ctxLine()}
 순서는 인사 → 요청에 대한 답 → (필요할 때만) 되묻거나 부탁할 것 → 맺음말. 내가 아직 안 정한 건 [대괄호]로 비워 둬.
 ${replyFmt()}
@@ -5268,12 +5294,12 @@ async function genPrompts(m) {
   const st = $('promptStatus');
   const ask = (($('askNote') || {}).value || '').trim() || '이 메일에 어떻게 대응하면 좋을지 제안해 줘';
   st.className = 'status'; st.textContent = '프롬프트 후보를 만드는 중…';
-  const prompt = `나 컴공과 학과장이야. 아래 메일을 두고 "${ask}" 하고 싶은데, 네가 바로 답하거나 대응안을 내지는 말고, 내가 다른 AI(ChatGPT 같은 거)한테 그대로 붙여넣을 프롬프트 후보를 3~5개 만들어 줘.
+  const prompt = `아래 메일을 두고 "${ask}" 하고 싶은데, 네가 바로 답하거나 대응안을 내지는 말고, 내가 다른 AI(ChatGPT 같은 거)한테 그대로 붙여넣을 프롬프트 후보를 3~5개 만들어 줘.
 ${ctxLine()}
 
 이렇게 해 줘:
 - 프롬프트마다 관점이 달라야 해. 예를 들면 국내외 대학 사례 조사, 관련 법령·학칙·교육부 지침 확인, 대응 방안 비교(장단점·리스크), 문서·공문 초안, 이해관계자별 소통 전략 같은 거. 요청에 맞는 관점만 골라.
-- 메일을 못 본 AI도 알아듣게 배경을 프롬프트 안에 다 담아 줘: 묻는 사람 역할(국내 4년제 대학 컴퓨터공학과 학과장), 상황 요약, 핵심 쟁점, 제약(기한·예산·규정), 원하는 결과물 형식과 분량, 출처나 근거 밝혀 달라는 말.
+- 메일을 못 본 AI도 알아듣게 배경을 프롬프트 안에 다 담아 줘: 묻는 사람 역할(${mfOf().title || '대학 교원'}), 상황 요약, 핵심 쟁점, 제약(기한·예산·규정), 원하는 결과물 형식과 분량, 출처나 근거 밝혀 달라는 말.
 - 개인정보는 빼 줘. 사람 이름, 학번, 이메일, 전화번호는 "학생 A", "교무처 담당자"처럼 역할로 바꾸고, 대학 이름은 "본교"로.
 - 한국어로, 하나당 300~900자 정도.
 
@@ -5346,15 +5372,16 @@ async function chatCopy(el) {
   $('rawMail').value = ''; UI.cmd = null;
 }
 
-async function runCommandAI(text) {
+async function runCommandAI(text, images) {
+  images = images || [];
   const st = $('pasteStatus');
-  st.className = 'status'; st.textContent = 'GPT나 Claude에 프롬프트를 붙여넣고, 답을 다시 붙여넣어 주세요.';
+  st.className = 'status'; st.textContent = images.length ? '그림에서 일정을 찾는 중…' : 'AI에게 명령을 넘겼습니다…';
   try {
-    const j = await relay({ title: '일정 명령 · ' + text.slice(0, 40), prompt: commandPrompt(text), json: true, alt: { label: '대신 Claude가 구글 캘린더에 직접', text } });
+    const j = await sample.json(commandPrompt(text, images.length), { title: images.length ? `캡처에서 일정 찾기 · 그림 ${images.length}장` : '일정 명령 · ' + text.slice(0, 40), images });
     const acts = cleanActions(j && j.actions), note = j && j.note ? String(j.note).slice(0, 1500) : '';
     if (!acts.length) { if (note) { st.className = 'status'; st.innerHTML = `<div class="cmdbox"><div class="cmdhead">${ic('chat')}<b>AI의 답</b></div><div class="cmdnote"><span>${esc(note)}</span></div><div class="row"><button class="btn small" type="button" data-act="cmdCancel">닫기</button></div></div>`; } else { st.className = 'status err'; st.textContent = '실행할 내용을 찾지 못했습니다. 조금 더 구체적으로 적어 주세요.'; } return; }
     renderCmdPreview(acts, text, true, note);
-  } catch (e) { st.className = 'status'; st.textContent = e && e.code === 'cancelled' ? '취소했습니다.' : sampleErr(e); }
+  } catch (e) { console.error('command AI', e); st.className = 'status'; st.textContent = e && e.code === 'cancelled' ? '취소했습니다.' : sampleErr(e); }
 }
 
 /* ---------- actions ---------- */
@@ -5617,7 +5644,7 @@ document.addEventListener('click', async ev0 => {
         const fxData = $('fxShort') ? fxReadForm() : null, fontData = $('fontSize') ? fontReadForm() : null, wcData = document.querySelector('.wclist') ? wcReadForm() : null;
         const data = { ...S.settings, semesterLabel: $('sLabel').value.trim() || DEFAULTS.semesterLabel, semesterStart: isDate($('sStart').value) ? $('sStart').value : DEFAULTS.semesterStart, signature: $('sSig') ? $('sSig').value.trim() || DEFAULTS.signature : S.settings.signature, assistant: $('sAsst') ? $('sAsst').value.trim() || DEFAULTS.assistant : S.settings.assistant,
           ...($('sUseDeleg') ? { useDelegate: $('sUseDeleg').checked } : {}),
-          ...($('mfName') ? { mf: { name: $('mfName').value.trim(), title: $('mfTitle').value.trim(), greet: $('mfGreet').value.trim(), close: $('mfClose').value.trim(), tone: $('mfTone').value, len: $('mfLen').value, rules: $('mfRules').value.trim(), style: $('mfStyle').value.trim(), dGreet: $('mfDGreet').value.trim(), dSig: $('mfDSig').value.trim() || '학과장', dTone: $('mfDTone').value, dRules: $('mfDRules').value.trim() } } : {}),
+          ...($('mfName') ? { mf: { name: $('mfName').value.trim(), title: $('mfTitle').value.trim(), greet: $('mfGreet').value.trim(), close: $('mfClose').value.trim(), tone: $('mfTone').value, len: $('mfLen').value, rules: $('mfRules').value.trim(), style: $('mfStyle').value.trim(), dGreet: $('mfDGreet').value.trim(), dSig: $('mfDSig').value.trim() || '{이름}', dTone: $('mfDTone').value, dRules: $('mfDRules').value.trim() } } : {}),
           ...(fxData ? { fx: fxData } : {}), ...(fontData ? { font: fontData } : {}), ...(wcData ? { wordColors: wcData } : {}), cellMode: $('sCellMode') && $('sCellMode').value === 'titles' ? 'titles' : 'icons', googleShow: $('sGShow').checked, googleBusy: $('sGBusy').checked, gAutoPush: $('sGPush').checked };
         if ($('tripOn')) data.trip = tripReadForm();
         if ($('impMode')) { const iv = impFormValues(); const amber = getComputedStyle(document.documentElement).getPropertyValue('--amber').trim(); data.impStyle = { ...iv, color: iv.color.toLowerCase() === amber.toLowerCase() ? '' : iv.color }; }
@@ -5886,7 +5913,7 @@ function mailFmtHtml(s) {
   return `<span class="count">AI가 쓰는 답장·조교 지시 메일에 그대로 넣는 형식입니다. {이름} {직함} {조교}는 아래 값으로 바뀝니다.</span>
     <div class="bsec"><b>${ic('reply')} 답장</b>
       <div class="row2"><label>내 이름<input class="field" id="mfName" value="${esc(f.name)}" placeholder="예: 홍길동 (비우면 이름을 넣지 않음)"></label>
-      <label>직함·소속<input class="field" id="mfTitle" value="${esc(f.title)}" placeholder="예: 컴퓨터공학과 학과장"></label></div>
+      <label>직함·소속<input class="field" id="mfTitle" value="${esc(f.title)}" placeholder="예: 컴퓨터공학과 교수 (비우면 쓰지 않음)"></label></div>
       <label>첫 인사<input class="field" id="mfGreet" value="${esc(f.greet)}" placeholder="예: 안녕하세요. {직함} {이름}입니다."></label>
       <label>맺음말<input class="field" id="mfClose" value="${esc(f.close)}" placeholder="예: 감사합니다."></label>
       <label>서명 (마지막 줄)<textarea class="field" id="sSig" rows="3">${esc(s.signature)}</textarea></label>
@@ -5899,7 +5926,7 @@ function mailFmtHtml(s) {
       <label class="chk"><input type="checkbox" id="sUseDeleg" ${s.useDelegate ? 'checked' : ''}> 메일을 분석할 때 조교 업무 지시도 만들기 (끄면 메일 화면에 답장 초안만 보입니다)</label>
       <label>받는 조교 (이름·호칭)<input class="field" id="sAsst" value="${esc(s.assistant)}" placeholder="예: 김OO 조교"></label>
       <label>첫 인사<input class="field" id="mfDGreet" value="${esc(f.dGreet)}" placeholder="예: {조교}님, 수고 많으십니다."></label>
-      <div class="row2"><label>서명<input class="field" id="mfDSig" value="${esc(f.dSig)}" placeholder="예: 학과장 {이름}"></label>
+      <div class="row2"><label>서명<input class="field" id="mfDSig" value="${esc(f.dSig)}" placeholder="예: {이름} 드림"></label>
       <label>말투<select class="field" id="mfDTone">${opt(MF_DTONE, f.dTone)}</select></label></div>
       <label>그 밖의 규칙<textarea class="field" id="mfDRules" rows="2" placeholder="예: 기한은 항상 굵게 · 완료 후 카톡으로 알려 달라고 쓰기">${esc(f.dRules)}</textarea></label>
     </div>`;
@@ -5933,7 +5960,7 @@ function openSettings() {
     </div><div class="stab" data-tab="link" ${tab === 'link' ? '' : 'hidden'}>
     ${phoneSettingsHtml()}
     <div class="bsec"><b>${ic('drive')} 저장 폴더</b>
-      <span class="count">PC에 <b>Google Drive 데스크톱 앱</b>을 설치하면 내 드라이브가 일반 폴더(예: G:\\내 드라이브)로 보입니다. 그 안에 "학과장실 대시보드" 폴더를 만들어 고르면 데이터가 그 폴더의 ${FILE_NAME}에 저장되고, 드라이브가 다른 PC로 동기화합니다. 다른 PC에서도 같은 폴더를 한 번 고르면 됩니다.</span>
+      <span class="count">PC에 <b>Google Drive 데스크톱 앱</b>을 설치하면 내 드라이브가 일반 폴더(예: G:\\내 드라이브)로 보입니다. 그 안에 "업무 대시보드" 폴더를 만들어 고르면 데이터가 그 폴더의 ${FILE_NAME}에 저장되고, 드라이브가 다른 PC로 동기화합니다. 다른 PC에서도 같은 폴더를 한 번 고르면 됩니다.</span>
       ${!fsOK ? `<span class="count" style="color:var(--amber)">이 브라우저는 폴더 저장을 지원하지 않습니다. 크롬이나 엣지에서 열어 주세요.</span>` : `<div class="row"><span>${FS.handle ? `현재 폴더: <b>${esc(FS.handle.name)}</b>` : '아직 고른 폴더가 없습니다.'}</span><button class="btn small ${FS.handle ? '' : 'primary'}" type="button" data-act="fsPick">${ic('drive')}${FS.handle ? '폴더 바꾸기' : '폴더 고르기'}</button></div>`}
       <span class="count">하루 한 번 폴더 안 backup 폴더에 날짜별 사본도 남깁니다.</span>
       <div class="row"><button class="btn small" type="button" data-act="exportData">${ic('copy')}파일로 내보내기</button><button class="btn small" type="button" data-act="importData">${ic('plus')}파일에서 가져오기</button></div>

@@ -1,4 +1,4 @@
-/* 학과장실 대시보드로 보내기 — selected mail (text + attachments) → Apps Script → Google Drive inbox → dashboard */
+/* 업무 대시보드로 보내기 — selected mail (text + attachments) → Apps Script → Google Drive inbox → dashboard */
 const MAX_TOTAL = 20 * 1024 * 1024; // attachments over this are listed by name only
 
 async function settings() {

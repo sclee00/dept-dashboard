@@ -12,11 +12,11 @@
     if (e.source !== window.parent || !OK.includes(e.origin) || !e.data) return;
     if (e.data.type === 'gbf-hello') return ready(e.origin);
     if (e.data.type !== 'gbf-ask') return;
-    const { id, prompt, json } = e.data;
+    const { id, prompt, json, images } = e.data;
     if (busy) return window.parent.postMessage({ type: 'gbf-result', id, error: 'busy', message: 'Gemini가 아직 앞 질문에 답하는 중입니다.' }, e.origin);
     busy = true;
     let r;
-    try { r = await runInGemini(String(prompt || ''), !!json, 240000); } catch (x) { r = { error: 'bridge', message: String((x && x.message) || x) }; }
+    try { r = await runInGemini(String(prompt || ''), !!json, 240000, images || []); } catch (x) { r = { error: 'bridge', message: String((x && x.message) || x) }; }
     busy = false;
     window.parent.postMessage({ type: 'gbf-result', id, ...r }, e.origin);
   });
