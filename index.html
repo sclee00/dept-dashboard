@@ -1800,7 +1800,7 @@ async function autoDone(id, msg) {
   const m = S.emails.find(x => x.id === id);
   if (!m || m.status !== 'open' || pendingCount(m) || !m.analysis || !((m.analysis.events || []).length + (m.analysis.tasks || []).length)) { if (msg) toast(msg); return false; }
   await patch('emails', id, { status: 'done' });
-  toast(`${msg ? msg + ' ' : ''}모두 반영해서 처리 완료로 옮겼습니다.${needsReplyNow(m) ? ' 답장은 "답장 대기"에 남아 있습니다.' : ''}`);
+  toast(`${msg ? msg + ' ' : ''}모두 반영해서 처리 완료로 옮겼습니다.`);
   closeSheet(); return true;
 }
 function pendingCount(m) {
@@ -1809,7 +1809,8 @@ function pendingCount(m) {
 }
 const isActive = m => m.status !== 'archived' && m.status !== 'ignored';
 const askIgnore = m => m.relevance === 'irrelevant' && !m.relevanceDecided && m.status === 'open';
-const needsReplyNow = m => m.needsReply && !m.replied && isActive(m) && !askIgnore(m);
+// a mail marked 처리 완료 no longer waits for a reply
+const needsReplyNow = m => m.needsReply && !m.replied && isActive(m) && m.status !== 'done' && !askIgnore(m);
 // the address to answer: the sender's e-mail in the stored "from" or the first 보낸 사람/From line of the mail
 function replyTo(m) {
   const re = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/;
@@ -3041,13 +3042,13 @@ function applyDiff(d, back) {
   return touched;
 }
 const UNDO_LABEL = {
-  cmdApply: '자동 처리 명령', addEv: '메일 일정 추가', addTk: '메일 할 일 추가', addAllEv: '메일 일정 모두 추가', addAllTk: '메일 할 일 모두 추가',
+  cmdApply: '자동 처리 명령', sendReply: '답장 보내기', addEv: '메일 일정 추가', addTk: '메일 할 일 추가', addAllEv: '메일 일정 모두 추가', addAllTk: '메일 할 일 모두 추가',
   toggleTask: '할 일 완료 표시', delTask: '할 일 삭제', delEvent: '일정 삭제', delBlock: '불가 시간 삭제', delMail: '메일 삭제',
   ignoreMail: '메일 무시', keepMail: '메일 남기기', pickOpt: '답장 방향 선택', impT: '중요도 변경', impG: '중요도 변경', ipSave: '아이콘 변경',
   delRule: '아이콘 규칙 삭제', skipOcc: '반복 일정 한 번 빼기', edSave: '일정 편집', bdSave: '불가 시간 설정', saveSettings: '설정 변경', imSave: '아이콘 색·이름',
   pushG: '구글에 추가', fEvent: '일정 추가', fBlock: '불가 시간 추가', taskForm: '할 일 추가', importData: '파일 가져오기'
 };
-const UNDO_SKIP = new Set(['gemCancel', 'sendReply', 'copyReply', 'copyDraft', 'gemEmbed', 'gemDockOpen', 'qTab', 'gemNew', 'gemTall', 'gemZoom', 'histUndo', 'histRedo', 'stPing', 'pushAllG', 'aiKeySave', 'aiKeyClear', 'aiTest', 'aiMode', 'aiModelSel', 'relayClip', 'stOpen', 'tidyOpen', 'tidyDel', 'tidyTime', 'tidyMerge', 'inboxRun', 'analyzeMail', 'tgShow', 'tgHide', 'phoneLink', 'gDel', 'fltImp', 'fltIcons', 'fltTog', 'fltClear', 'fltClose', 'cmdToAI', 'cmdPick', 'cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
+const UNDO_SKIP = new Set(['gemCancel', 'copyReply', 'copyDraft', 'gemEmbed', 'gemDockOpen', 'qTab', 'gemNew', 'gemTall', 'gemZoom', 'histUndo', 'histRedo', 'stPing', 'pushAllG', 'aiKeySave', 'aiKeyClear', 'aiTest', 'aiMode', 'aiModelSel', 'relayClip', 'stOpen', 'tidyOpen', 'tidyDel', 'tidyTime', 'tidyMerge', 'inboxRun', 'analyzeMail', 'tgShow', 'tgHide', 'phoneLink', 'gDel', 'fltImp', 'fltIcons', 'fltTog', 'fltClear', 'fltClose', 'cmdToAI', 'cmdPick', 'cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
 function undoSnap() {
   const o = { settings: JSON.parse(JSON.stringify(S.settings)) };
   for (const c of COLS) o[c] = JSON.parse(JSON.stringify(S[c]));
@@ -5627,6 +5628,7 @@ document.addEventListener('click', async ev0 => {
         const ta = $('draft'), d = ta && UI.openId === id ? ta.value : fixNames((mm.reply && mm.reply.draft) || ((mm.replyOptions || [])[mm.replyChoice ?? 0] || {}).draft || '');
         if (!d.trim()) return toast('보낼 답장 내용이 없습니다.');
         try { await navigator.clipboard.writeText(d); } catch {}
+        if (!mm.replied) await patch('emails', mm.id, { replied: true, repliedAt: nowISO() }); // shows as 답장 완료 ("답장 완료 취소" undoes it)
         // mail that came from Thunderbird: ask the add-on to open Thunderbird's own reply (original quoted below)
         if (mm.msgId && mm.via === 'thunderbird' && gasOn()) {
           try {
@@ -5716,7 +5718,7 @@ document.addEventListener('click', async ev0 => {
           toast(v === 'all' ? '모두 반영하고 처리 완료로 옮겼습니다.' : '처리 완료로 옮겼습니다.'); closeSheet(); return;
         }
         await patch('emails', m.id, { status: el.dataset.s });
-        if (el.dataset.s === 'done') toast('처리 완료로 옮겼습니다.' + (needsReplyNow(S.emails.find(x => x.id === m.id) || {}) ? ' 답장은 "답장 대기"에 남아 있습니다.' : ''));
+        if (el.dataset.s === 'done') toast('처리 완료로 옮겼습니다.');
         if (el.dataset.s !== 'open') closeSheet(); else renderSheet(true); return;
       }
       case 'reanalyze': return reanalyze(m);
