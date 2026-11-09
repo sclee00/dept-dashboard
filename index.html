@@ -3495,12 +3495,15 @@ function fixNames(t) {
   // the old default sign-off line → the signature set now
   const sig = mfFill(S.settings.signature || '');
   if (sig && sig !== DEFAULTS.signature) t = t.replace(new RegExp('^[ \\t]*' + DEFAULTS.signature.replace(/\s+/g, '[ \\t]*') + '[ \\t]*$', 'm'), sig);
+  // no title in the settings: drop "컴퓨터공학과 학과장" in front of my name
+  if (!(f.title || '').trim()) t = t.replace(/([가-힣A-Za-z]+(?:학과|학부|대학|사업단)\s*)?(?:학과장|주임교수)\s+(?=[가-힣]{2,4}\s*(?:입니다|드림|올림|배상|$))/gm, '');
   return t;
 }
 function replyFmt() {
   const f = mfOf();
   return [`답장 형식:`,
-    f.name ? `- 보내는 사람은 ${f.title ? f.title + ' ' : ''}${f.name}. 이 이름을 그대로 써. 다른 이름은 절대 지어내지 마.` : `- 보내는 사람 이름은 모르니까 이름은 지어내지 말고 직함(${f.title || '학과장'})만 써.`,
+    f.name ? `- 보내는 사람은 ${f.title ? f.title + ' ' : ''}${f.name}. 이 이름을 그대로 써. 다른 이름은 절대 지어내지 마.` : f.title ? `- 보내는 사람 이름은 모르니까 이름은 지어내지 말고 직함(${f.title})만 써.` : '- 보내는 사람 이름은 지어내지 마.',
+    f.title ? '' : '- 직함이나 소속(학과장, 교수, 컴퓨터공학과 같은 말)으로 나를 소개하지 마. 인사·본문·서명 어디에도 내 직함·소속은 쓰지 마.',
     f.greet ? `- 첫 인사는 "${mfFill(f.greet)}" (받는 사람 호칭 한 줄을 그 앞에 둘 수 있어).` : '',
     `- 말투: ${MF_TONE[f.tone] || MF_TONE.formal}. 길이: ${MF_LEN[f.len] || MF_LEN.normal}.`,
     f.close ? `- 맺음말은 "${mfFill(f.close)}"` : '',
