@@ -780,6 +780,13 @@ label.inl{display:inline-flex;align-items:center;gap:.3rem;font-size:.85rem} lab
 .hrow time{font-family:var(--mono);font-size:.78rem;color:var(--muted)}
 .hrow b{font-weight:600}
 .hrow .hd{display:block;color:var(--muted);font-size:.78rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hrow .hbtns,.hghead .hbtns{display:flex;gap:.3rem;flex-wrap:wrap;justify-content:flex-end}
+.btn.ghost{background:none;border-color:transparent;color:var(--muted)} .btn.ghost:hover{color:var(--ink);border-color:var(--line)}
+.hgroup{background:var(--surface-2);border-radius:10px;padding:.45rem .6rem;display:flex;flex-direction:column;gap:.3rem}
+.hghead{display:flex;justify-content:space-between;align-items:center;gap:.6rem;font-size:.86rem}
+.hgroup .hlist{gap:.25rem}
+.hrow.sub{background:var(--surface);padding:.3rem .5rem}
+.hgroup .hd{color:var(--muted);font-size:.78rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .hrow.redo{opacity:.75;border:1px dashed var(--line);background:none}
 .hhead{display:flex;align-items:center;gap:.5rem;font-size:.8rem;color:var(--muted)}
 .hhead b{color:var(--ink);font-size:.85rem}
@@ -3057,7 +3064,7 @@ const UNDO_LABEL = {
   delRule: '아이콘 규칙 삭제', skipOcc: '반복 일정 한 번 빼기', edSave: '일정 편집', bdSave: '불가 시간 설정', saveSettings: '설정 변경', imSave: '아이콘 색·이름',
   pushG: '구글에 추가', fEvent: '일정 추가', fBlock: '불가 시간 추가', taskForm: '할 일 추가', importData: '파일 가져오기'
 };
-const UNDO_SKIP = new Set(['gemCancel', 'copyReply', 'copyDraft', 'gemEmbed', 'gemDockOpen', 'qTab', 'gemNew', 'gemTall', 'gemZoom', 'histUndo', 'histRedo', 'stPing', 'pushAllG', 'aiKeySave', 'aiKeyClear', 'aiTest', 'aiMode', 'aiModelSel', 'relayClip', 'stOpen', 'tidyOpen', 'tidyDel', 'tidyTime', 'tidyMerge', 'inboxRun', 'analyzeMail', 'tgShow', 'tgHide', 'phoneLink', 'gDel', 'fltImp', 'fltIcons', 'fltTog', 'fltClear', 'fltClose', 'cmdToAI', 'cmdPick', 'cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
+const UNDO_SKIP = new Set(['gemCancel', 'copyReply', 'copyDraft', 'gemEmbed', 'gemDockOpen', 'qTab', 'gemNew', 'gemTall', 'gemZoom', 'histUndo', 'histRedo', 'histOne', 'histGroup', 'histFold', 'stPing', 'pushAllG', 'aiKeySave', 'aiKeyClear', 'aiTest', 'aiMode', 'aiModelSel', 'relayClip', 'stOpen', 'tidyOpen', 'tidyDel', 'tidyTime', 'tidyMerge', 'inboxRun', 'analyzeMail', 'tgShow', 'tgHide', 'phoneLink', 'gDel', 'fltImp', 'fltIcons', 'fltTog', 'fltClear', 'fltClose', 'cmdToAI', 'cmdPick', 'cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
 function undoSnap() {
   const o = { settings: JSON.parse(JSON.stringify(S.settings)) };
   for (const c of COLS) o[c] = JSON.parse(JSON.stringify(S[c]));
@@ -5561,6 +5568,9 @@ document.addEventListener('click', async ev0 => {
       case 'gemNew': { const f = gemDock(true); if (f) f.src = GEM_APP; return; }
       case 'gemTall': { const q = document.querySelector('.quick'); q.classList.toggle('gtall'); el.textContent = q.classList.contains('gtall') ? '작게' : '크게'; if (q.classList.contains('gtall')) q.scrollIntoView({ block: 'nearest' }); return; }
       case 'histUndo': return undoSteps(+el.dataset.n, false);
+      case 'histOne': return undoPick([+el.dataset.i]);
+      case 'histGroup': return undoPick(UNDO.stack.map((x, i) => histKey(x) === el.dataset.k ? i : -1).filter(i => i >= 0));
+      case 'histFold': UI.histOpen = { ...(UI.histOpen || {}), [el.dataset.k]: !(UI.histOpen && UI.histOpen[el.dataset.k]) }; return renderHist();
       case 'histRedo': return undoSteps(+el.dataset.n, true);
       case 'stPing': UI.ping = null; UI.pingAt = 0; return statPing(true);
       case 'pushAllG': return pushAllG();
@@ -6090,13 +6100,45 @@ function histDiff(d) {
   }
   return out.join(' · ');
 }
+// the item a step is mainly about (its first changed event / to-do / mail), so steps on the same item can be grouped
+function histKey(x) {
+  const ch = (x.d || []).find(c => c.c !== 'settings'); if (!ch) return 'settings';
+  return ch.c + ':' + ch.id;
+}
+function histName(x) {
+  const ch = (x.d || []).find(c => c.c !== 'settings'); if (!ch) return '설정';
+  const o = ch.a || ch.b || {}; return `${HCOL[ch.c] || ''} ${String(o.title || o.subject || o.name || '').slice(0, 30)}`.trim();
+}
+// undo chosen steps only (by their place in the stack), newest first
+async function undoPick(idx) {
+  idx = [...new Set(idx)].filter(i => UNDO.stack[i]).sort((a, b) => b - a); if (!idx.length) return;
+  UNDO.pending = null;
+  const steps = idx.map(i => UNDO.stack[i]), chosen = new Set(idx);
+  // a later step (not undone now) touched the same item: undoing brings back the older value and drops that later change
+  const later = [];
+  for (const i of idx) for (const ch of UNDO.stack[i].d) for (let k = i + 1; k < UNDO.stack.length; k++) if (!chosen.has(k) && UNDO.stack[k].d.some(c => c.c === ch.c && c.id === ch.id)) later.push(UNDO.stack[k].label);
+  const ok = await gAsk({ title: steps.length > 1 ? `작업 ${steps.length}개 되돌리기` : '이 작업만 되돌리기', icon: 'refresh', rows: steps.map(x => [hhmm(new Date(x.at)), `${x.label} — ${histDiff(x.d) || '바뀐 것 없음'}`]),
+    note: (later.length ? `주의: 그 뒤에 같은 항목을 바꾼 작업(${[...new Set(later)].slice(0, 3).join(', ')})이 있어 그 변경도 함께 사라집니다. ` : '') + '다른 작업은 그대로 둡니다.', choices: [{ v: 'go', label: '되돌리기', primary: true }] });
+  if (ok !== 'go') return;
+  let touched = [];
+  for (const i of idx) { const step = UNDO.stack.splice(i, 1)[0]; UNDO.redo.push(step); touched = touched.concat(applyDiff(step.d, true)); }
+  undoSave(); renderUndo();
+  const g = await syncUndoToGoogle(touched);
+  toast(`되돌렸습니다: ${steps.length === 1 ? steps[0].label : steps.length + '개'}${g.fixed ? ' · 구글 캘린더도 되돌렸습니다' : ''}${g.left ? ` · 이미 구글에 들어간 일정 ${g.left}개는 구글 캘린더에서 지워 주세요` : ''}`);
+}
 function renderHist() {
   const n = $('histN'); if (n) n.textContent = UNDO.stack.length ? ' ' + UNDO.stack.length : '';
   const el = $('qHist'); if (!el || UI.qtab !== 'hist') return;
-  const st = UNDO.stack, rd = UNDO.redo;
-  const rows = st.map((x, i) => ({ x, i, d: histDiff(x.d) })).reverse();
-  el.innerHTML = `<div class="hhead"><b>이번에 한 작업</b><span>이 브라우저에 최근 ${UNDO.max}개까지 남습니다 · 버튼을 누르면 그 작업까지 되돌립니다</span></div>
-    ${rows.length ? `<ol class="hlist">${rows.map((r, k) => `<li class="hrow"><time>${hhmm(new Date(r.x.at))}</time><span><b>${esc(r.x.label)}</b><span class="hd">${esc(r.d || '바뀐 것 없음')}</span></span><button class="btn small" type="button" data-act="histUndo" data-n="${k + 1}" title="${k ? `최근 ${k + 1}개 작업을 되돌립니다` : '이 작업을 되돌립니다'}">${k ? `여기까지 되돌리기 (${k + 1})` : '되돌리기'}</button></li>`).join('')}</ol>` : '<div class="count">아직 되돌릴 작업이 없습니다.</div>'}
+  const st = UNDO.stack, rd = UNDO.redo, top = st.length - 1;
+  // group steps about the same item; groups ordered by their newest step
+  const groups = new Map();
+  for (let i = top; i >= 0; i--) { const k = histKey(st[i]); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(i); }
+  const row = (i, inGroup) => { const x = st[i], back = top - i + 1;
+    return `<li class="hrow${inGroup ? ' sub' : ''}"><time>${hhmm(new Date(x.at))}</time><span><b>${esc(x.label)}</b><span class="hd">${esc(histDiff(x.d) || '바뀐 것 없음')}</span></span><span class="hbtns"><button class="btn small" type="button" data-act="histOne" data-i="${i}" title="이 작업만 되돌립니다 (다른 작업은 그대로)">이것만 되돌리기</button>${back > 1 ? `<button class="btn small ghost" type="button" data-act="histUndo" data-n="${back}" title="가장 최근 작업부터 여기까지 ${back}개를 되돌립니다">여기까지 (${back})</button>` : ''}</span></li>`; };
+  const body = [...groups.entries()].map(([k, ix]) => ix.length === 1 ? row(ix[0], false)
+    : `<li class="hgroup"><div class="hghead"><span><b>${esc(histName(st[ix[0]]))}</b> <span class="hd" style="display:inline">작업 ${ix.length}개 · ${hhmm(new Date(st[ix[ix.length - 1]].at))}–${hhmm(new Date(st[ix[0]].at))}</span></span><span class="hbtns"><button class="btn small" type="button" data-act="histGroup" data-k="${esc(k)}">이 항목 작업 모두 되돌리기</button><button class="btn small ghost" type="button" data-act="histFold" data-k="${esc(k)}">${UI.histOpen && UI.histOpen[k] ? '접기' : '펼치기'}</button></span></div>${UI.histOpen && UI.histOpen[k] ? `<ol class="hlist">${ix.map(i => row(i, true)).join('')}</ol>` : `<div class="hd" style="padding:.15rem 0 0 3.8rem">${esc(ix.map(i => st[i].label).join(' · '))}</div>`}</li>`).join('');
+  el.innerHTML = `<div class="hhead"><b>이번에 한 작업</b><span>최근 ${UNDO.max}개 · 같은 일정·할 일에 한 작업은 묶어서 보여 줍니다 · "이것만 되돌리기"는 다른 작업을 건드리지 않습니다</span></div>
+    ${st.length ? `<ol class="hlist">${body}</ol>` : '<div class="count">아직 되돌릴 작업이 없습니다.</div>'}
     ${rd.length ? `<div class="hhead"><b>되돌린 작업</b><span>다시 할 수 있습니다</span></div><ol class="hlist">${rd.slice().reverse().map((x, k) => `<li class="hrow redo"><time>${hhmm(new Date(x.at))}</time><span><b>${esc(x.label)}</b><span class="hd">${esc(histDiff(x.d))}</span></span><button class="btn small" type="button" data-act="histRedo" data-n="${k + 1}">${k ? `여기까지 다시 하기 (${k + 1})` : '다시 하기'}</button></li>`).join('')}</ol>` : ''}`;
 }
 { let k = 'auto'; try { k = localStorage.getItem('qtab') || 'auto'; } catch {} qTab(k); }
