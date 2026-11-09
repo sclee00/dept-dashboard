@@ -3514,7 +3514,12 @@ function fixNames(t) {
   if (sig && sig !== DEFAULTS.signature) t = t.replace(new RegExp('^[ \\t]*' + DEFAULTS.signature.replace(/\s+/g, '[ \\t]*') + '[ \\t]*$', 'm'), sig);
   // no title in the settings: drop "컴퓨터공학과 학과장" in front of my name
   if (!(f.title || '').trim()) t = t.replace(/([가-힣A-Za-z]+(?:학과|학부|대학|사업단)\s*)?(?:학과장|주임교수)\s+(?=[가-힣]{2,4}\s*(?:입니다|드림|올림|배상|$))/gm, '');
-  return t;
+  // nothing after the sign-off (Gemini likes to add "관련하여 추가로 필요하신…" and suggestion chips)
+  const lines = t.split('\n'), sigLines = sig.split('\n').map(x => x.replace(/\s+/g, '')).filter(Boolean), sigLast = sigLines[sigLines.length - 1] || '';
+  let cut = sigLast ? lines.findIndex(l => l.replace(/\s+/g, '') === sigLast) : -1;
+  if (cut < 0 && sigLines.length <= 1) cut = lines.findIndex(l => { const x = l.replace(/\s+/g, ''); return x && x.length <= 30 && /(드림|올림|배상)$/.test(x); });
+  if (cut >= 0 && cut < lines.length - 1) t = lines.slice(0, cut + 1).join('\n');
+  return t.replace(/\s+$/, '');
 }
 function replyFmt() {
   const f = mfOf();
@@ -3524,7 +3529,7 @@ function replyFmt() {
     f.greet ? `- 첫 인사는 "${mfFill(f.greet)}" (받는 사람 호칭 한 줄을 그 앞에 둘 수 있어).` : '',
     `- 말투: ${MF_TONE[f.tone] || MF_TONE.formal}. 길이: ${MF_LEN[f.len] || MF_LEN.normal}.`,
     f.close ? `- 맺음말은 "${mfFill(f.close)}"` : '',
-    `- 마지막 줄 서명은 "${mfFill(S.settings.signature)}" 그대로.`,
+    `- 마지막 줄 서명은 "${mfFill(S.settings.signature)}" 그대로. 서명 뒤에는 아무것도 쓰지 마 (추가로 도와줄 게 있냐는 말, 제안, 설명 모두 빼).`,
     f.rules ? `- 그 밖에 꼭 지킬 것: ${f.rules}` : ''].filter(Boolean).join('\n');
 }
 function delegFmt() {
