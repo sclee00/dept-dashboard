@@ -15,6 +15,7 @@
  * 할 수 있는 일: 캘린더 목록, 일정 읽기, 일정 만들기·고치기·지우기 (반복 일정은 이 날만 또는 전체),
  *               일정 설명(메모) 읽기·쓰기, 내 드라이브의 dashboard-data.json 읽기·쓰기 (아이폰 등 폴더 저장이 안 되는 기기용)
  * 버전 4부터 드라이브 권한이 추가되었습니다. 코드를 바꾼 뒤 authorize를 한 번 더 실행해 권한을 허용하세요.
+ * 버전 14: 아이폰에서 Scriptable이 Gemini에 대신 물어보는 작업함 (aiPut / aiGet / aiDone / aiResult)
  * 버전 13: Gemini API로 그림(캡처)도 함께 보냄 (ai: images)
  * 버전 12: 대시보드에서 "Thunderbird로 답장"을 누르면 Thunderbird 애드온이 원본을 인용한 답장 창을 엽니다 (replyPut / replyTake)
  * 버전 11: 대시보드가 가져간 전달 메일은 지메일에서 지우기(gdel=trash 휴지통 / perm 영구삭제, 영구삭제는 서비스에 Gmail API 추가 필요)
@@ -45,7 +46,7 @@ function doGet(e) {
   if (p.key !== KEY) return out({ ok: false, error: 'key' });
   try {
     switch (p.action) {
-      case 'ping': return out({ ok: true, email: Session.getEffectiveUser().getEmail(), tz: Session.getScriptTimeZone(), version: 13, forward: dashAddress(), gemini: !!PropertiesService.getScriptProperties().getProperty('GEMINI_KEY'), advanced: typeof Calendar !== 'undefined' });
+      case 'ping': return out({ ok: true, email: Session.getEffectiveUser().getEmail(), tz: Session.getScriptTimeZone(), version: 14, forward: dashAddress(), gemini: !!PropertiesService.getScriptProperties().getProperty('GEMINI_KEY'), advanced: typeof Calendar !== 'undefined' });
       case 'dataGet': return out(Object.assign({ ok: true }, dataGet(p)));
       case 'dataFiles': return out({ ok: true, current: PropertiesService.getScriptProperties().getProperty('DATA_FILE_ID') || '', files: dataFiles() });
       case 'dataUse': return out(Object.assign({ ok: true }, dataUse(p)));
@@ -53,6 +54,8 @@ function doGet(e) {
       case 'inboxGet': return out({ ok: true, mail: inboxGet(p.id) });
       case 'inboxDone': return out({ ok: true, done: inboxDone(p.id, p.gdel) });
       case 'replyTake': return out({ ok: true, items: replyTake() });
+      case 'aiGet': return out(Object.assign({ ok: true }, aiJobGet(p.id)));
+      case 'aiResult': return out(Object.assign({ ok: true }, aiJobResult(p.id)));
       case 'calendars': return out({ ok: true, calendars: listCalendars() });
       case 'events': return out({ ok: true, events: listEvents(p.cal, p.from, p.to) });
       case 'create': return out({ ok: true, event: createEvent(p) });
@@ -76,6 +79,8 @@ function doPost(e) {
     if (b.action === 'aiKey') return out(Object.assign({ ok: true }, aiKey(b)));
     if (b.action === 'ai') return out(Object.assign({ ok: true }, aiAsk(b)));
     if (b.action === 'replyPut') return out(Object.assign({ ok: true }, replyPut(b)));
+    if (b.action === 'aiPut') return out(Object.assign({ ok: true }, aiJobPut(b)));
+    if (b.action === 'aiDone') return out(Object.assign({ ok: true }, aiJobDone(b)));
     return out({ ok: false, error: 'action' });
   } catch (err) {
     return out({ ok: false, error: 'script', message: String((err && err.message) || err) });
@@ -215,6 +220,41 @@ function inboxList() {
   }
   return list.sort(function (a, b) { return a.at - b.at; });
 }
+/* ---------- AI jobs: the iPhone dashboard leaves a question here, Scriptable on the iPhone asks Gemini and leaves the answer ---------- */
+function aiJobFolder() { return inboxFolder('ai'); }
+function aiJobClean(folder) {
+  const it = folder.getFiles(), old = Date.now() - 24 * 3600 * 1000;
+  while (it.hasNext()) { const f = it.next(); if (f.getDateCreated().getTime() < old) f.setTrashed(true); }
+}
+function aiJobFile(folder, name) { const it = folder.getFilesByName(name); return it.hasNext() ? it.next() : null; }
+function aiJobPut(b) {
+  const folder = aiJobFolder(); aiJobClean(folder);
+  const id = Utilities.getUuid().replace(/-/g, '').slice(0, 16);
+  const job = { id: id, at: Date.now(), title: String(b.title || '').slice(0, 200), prompt: String(b.prompt || ''), json: !!b.json, images: Array.isArray(b.images) ? b.images.slice(0, 6) : [] };
+  folder.createFile('job_' + id + '.json', JSON.stringify(job), 'application/json');
+  return { id: id };
+}
+function aiJobGet(id) {
+  const f = aiJobFile(aiJobFolder(), 'job_' + String(id || '').replace(/[^\w]/g, '') + '.json');
+  if (!f) throw new Error('작업을 찾지 못했습니다 (이미 처리했거나 하루가 지났습니다).');
+  return { job: JSON.parse(f.getBlob().getDataAsString('UTF-8')) };
+}
+function aiJobDone(b) {
+  const id = String(b.id || '').replace(/[^\w]/g, ''), folder = aiJobFolder();
+  const res = { id: id, at: Date.now(), text: b.text == null ? null : String(b.text), error: b.error ? String(b.error) : null, message: b.message ? String(b.message) : null };
+  const old = aiJobFile(folder, 'res_' + id + '.json'); if (old) old.setTrashed(true);
+  folder.createFile('res_' + id + '.json', JSON.stringify(res), 'application/json');
+  const job = aiJobFile(folder, 'job_' + id + '.json'); if (job) job.setTrashed(true);
+  return { saved: true };
+}
+function aiJobResult(id) {
+  id = String(id || '').replace(/[^\w]/g, '');
+  const f = aiJobFile(aiJobFolder(), 'res_' + id + '.json');
+  if (!f) return { done: false };
+  const r = JSON.parse(f.getBlob().getDataAsString('UTF-8')); f.setTrashed(true);
+  return { done: true, text: r.text, error: r.error, message: r.message };
+}
+
 /* ---------- replies the dashboard asks Thunderbird to open (kept 15 minutes in the script cache) ---------- */
 function replyQueue(fn) {
   const lock = LockService.getScriptLock(); lock.waitLock(10000);

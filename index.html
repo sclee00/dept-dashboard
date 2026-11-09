@@ -2977,6 +2977,26 @@ function geminiAsk(prompt, title, json, images) {
     .catch(e => { throw (e && e.code === 'action' ? { code: 'old', message: '스크립트를 버전 10으로 다시 배포해야 Gemini를 쓸 수 있습니다.' } : e); }), json, 'Gemini');
 }
 // automatic first; if it cannot (no key, limit reached, network), the copy-and-paste window opens instead
+/* ---------- iPhone: Scriptable asks Gemini on the phone (job passes through my Apps Script) ---------- */
+const SCRIPTABLE_NAME = '대시보드AI';
+const scriptableOn = () => { try { return localStorage.getItem('dashScriptable') === '1'; } catch { return false; } };
+const scriptableUrl = q => 'scriptable:///run/' + encodeURIComponent(SCRIPTABLE_NAME) + '?' + Object.entries(q).map(([k, v]) => k + '=' + encodeURIComponent(v)).join('&');
+function scriptableAsk(prompt, title, json, images) {
+  return aiProgress(title, async setStatus => {
+    setStatus('질문을 맡기는 중…');
+    const j = await gasPost({ action: 'aiPut', prompt, json: !!json, images: images || [], title: title || '' });
+    if (!j || !j.id) throw { code: 'scriptable', message: '작업을 맡기지 못했습니다.' };
+    location.href = scriptableUrl({ id: j.id });
+    setStatus('Scriptable이 Gemini에 묻는 중입니다. 끝나면 왼쪽 위 ◀︎로 돌아오세요.');
+    const t0 = Date.now();
+    while (Date.now() - t0 < 8 * 60 * 1000) {
+      await new Promise(r => setTimeout(r, document.hidden ? 4000 : 2000));
+      let r; try { r = await gas({ action: 'aiResult', id: j.id }); } catch { continue; }
+      if (r && r.done) { if (r.error) throw { code: r.error, message: r.message || 'Scriptable 처리 실패' }; return r.text; }
+    }
+    throw { code: 'timeout', message: 'Scriptable 답을 기다리다 시간이 지났습니다.' };
+  }, json, '아이폰 Gemini (Scriptable)');
+}
 const imgOK = () => { const v = bridgeVer(); return v[0] > 1 || (v[0] === 1 && v[1] >= 2); }; // 1.2.1+ uses Gemini's own file input
 async function aiRun(prompt, opts, json) {
   // whatever happens, the answer must stay machine-readable
@@ -2991,13 +3011,31 @@ async function aiRun(prompt, opts, json) {
     try { return await geminiAsk(prompt, opts.title, json, images); }
     catch (e) { if (e && e.code === 'cancelled') throw e; why = 'Gemini API 실패: ' + ((e && e.message) || ''); }
   }
+  if (!bridgeOn() && scriptableOn() && gasOn()) {
+    try { return await scriptableAsk(prompt, title, json, images); }
+    catch (e) { if (e && e.code === 'cancelled') throw e; why = '아이폰 Gemini(Scriptable) 실패: ' + ((e && e.message) || '') + (e && e.code === 'action' ? ' (Apps Script를 버전 14로 배포해야 합니다)' : ''); }
+  }
   if (!why && !bridgeOn()) why = '이 브라우저에서 Gemini 연결 확장이 보이지 않아 복사 방식으로 엽니다 (PC 크롬에 확장을 설치하면 자동으로 처리됩니다).';
   glog('복사 창으로 넘김: ' + (why || '자동 처리 방식이 꺼져 있음'));
   return relay({ title, prompt, json, why, images, pre });
 }
+function scriptableHtml() {
+  if (!isIOS() && !scriptableOn()) return '';
+  const code = location.origin + location.pathname.replace(/[^/]*$/, '') + 'scriptable/DashboardAI.js';
+  return `<div class="bsec"><b>${ic('phone')} 아이폰에서 Gemini 쓰기 (Scriptable)</b>
+    <span class="count">PC 없이 이 아이폰의 Scriptable 앱이 Gemini(내 계정 그대로)에 대신 묻고 답을 가져옵니다. 처음 한 번만 준비하면 됩니다.</span>
+    <ol class="count" style="margin:.2rem 0 .2rem 1.1rem;padding:0;line-height:1.7">
+      <li><button class="btn small" type="button" data-act="scriptCopy">${ic('copy')}스크립트 복사</button> → Scriptable 앱에서 <b>+</b> → 붙여넣기 → 이름을 <b>${SCRIPTABLE_NAME}</b>로 저장</li>
+      <li><button class="btn small" type="button" data-act="scriptSetup" ${gasOn() ? '' : 'disabled'}>${ic('link')}Scriptable 연결</button> (Scriptable이 열려 "연결했습니다"가 뜨면 ◀︎로 돌아오기)</li>
+      <li><button class="btn small" type="button" data-act="scriptTest" ${scriptableOn() ? '' : 'disabled'}>${ic('spark')}시험해 보기</button> (처음이면 구글 로그인 창이 뜹니다)</li>
+    </ol>
+    <label class="chk"><input type="checkbox" data-act="scriptOn" ${scriptableOn() ? 'checked' : ''}> 이 기기에서 "AI로 처리"를 Scriptable로 하기</label>
+    <span class="count">스크립트 원본: <a href="${esc(code)}" target="_blank" rel="noopener">DashboardAI.js</a> · Gemini 화면을 다루는 부분은 매번 최신으로 받아 씁니다.</span>
+  </div>`;
+}
 function aiSettingsHtml(s) {
   const on = s.aiMode === 'gemini', models = s.aiModels || [];
-  return `<div class="bsec"><b>${ic('spark')} AI 분석</b>
+  return `${scriptableHtml()}<div class="bsec"><b>${ic('spark')} AI 분석</b>
     <div class="row" style="flex-wrap:wrap;gap:.8rem">
       <label class="chk"><input type="radio" name="aiMode" value="web" data-act="aiMode" ${aiWeb() || (!bridgeOn() && s.aiMode === 'web') ? 'checked' : ''}> Gemini 웹 자동 (크롬 확장 · Pro 플랜 그대로)</label>
       <label class="chk"><input type="radio" name="aiMode" value="gemini" data-act="aiMode" ${on ? 'checked' : ''}> Gemini API 자동 (API 키)</label>
@@ -3076,7 +3114,7 @@ const UNDO_LABEL = {
   delRule: '아이콘 규칙 삭제', skipOcc: '반복 일정 한 번 빼기', edSave: '일정 편집', bdSave: '불가 시간 설정', saveSettings: '설정 변경', imSave: '아이콘 색·이름',
   pushG: '구글에 추가', fEvent: '일정 추가', fBlock: '불가 시간 추가', taskForm: '할 일 추가', importData: '파일 가져오기'
 };
-const UNDO_SKIP = new Set(['gemCancel', 'copyReply', 'copyDraft', 'gemEmbed', 'gemDockOpen', 'qTab', 'gemNew', 'gemTall', 'gemZoom', 'histUndo', 'histRedo', 'histOne', 'histGroup', 'histFold', 'stPing', 'pushAllG', 'aiKeySave', 'aiKeyClear', 'aiTest', 'aiMode', 'aiModelSel', 'relayClip', 'stOpen', 'tidyOpen', 'tidyDel', 'tidyTime', 'tidyMerge', 'inboxRun', 'analyzeMail', 'tgShow', 'tgHide', 'phoneLink', 'gDel', 'fltImp', 'fltIcons', 'fltTog', 'fltClear', 'fltClose', 'cmdToAI', 'cmdPick', 'cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
+const UNDO_SKIP = new Set(['gemCancel', 'scriptCopy', 'scriptSetup', 'scriptTest', 'scriptOn', 'copyReply', 'copyDraft', 'gemEmbed', 'gemDockOpen', 'qTab', 'gemNew', 'gemTall', 'gemZoom', 'histUndo', 'histRedo', 'histOne', 'histGroup', 'histFold', 'stPing', 'pushAllG', 'aiKeySave', 'aiKeyClear', 'aiTest', 'aiMode', 'aiModelSel', 'relayClip', 'stOpen', 'tidyOpen', 'tidyDel', 'tidyTime', 'tidyMerge', 'inboxRun', 'analyzeMail', 'tgShow', 'tgHide', 'phoneLink', 'gDel', 'fltImp', 'fltIcons', 'fltTog', 'fltClear', 'fltClose', 'cmdToAI', 'cmdPick', 'cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
 function undoSnap() {
   const o = { settings: JSON.parse(JSON.stringify(S.settings)) };
   for (const c of COLS) o[c] = JSON.parse(JSON.stringify(S[c]));
@@ -5624,6 +5662,14 @@ document.addEventListener('click', async ev0 => {
       case 'relayApply': return relayApply();
       case 'aiMode': if (el.value === 'gemini' && !S.settings.aiKeySet) toast('먼저 Gemini API 키를 넣고 "키 저장·확인"을 눌러 주세요.'); if (el.value === 'web' && !bridgeOn()) toast('먼저 Gemini 연결 확장 프로그램을 설치해 주세요.'); await saveSettings({ ...S.settings, aiMode: ['web', 'gemini'].includes(el.value) ? el.value : 'copy' }); if (UI.dlg === 'settings') openSettings(); return;
       case 'gemCancel': return UI.gemCancel && UI.gemCancel();
+      case 'scriptCopy': {
+        try { const t = await (await fetch('scriptable/DashboardAI.js?t=' + Date.now(), { cache: 'no-store' })).text(); await navigator.clipboard.writeText(t); toast('스크립트를 복사했습니다. Scriptable에서 + 를 눌러 붙여넣고 이름을 "' + SCRIPTABLE_NAME + '"로 저장하세요.'); }
+        catch { window.open('scriptable/DashboardAI.js', '_blank'); toast('복사가 막혀 스크립트를 새 창에 열었습니다. 전체 선택해서 복사하세요.'); }
+        return;
+      }
+      case 'scriptSetup': if (!gasOn()) return toast('먼저 Apps Script를 연결해 주세요.'); try { localStorage.setItem('dashScriptable', '1'); } catch {} location.href = scriptableUrl({ setup: 1, gas: S.settings.gasUrl, key: S.settings.gasKey }); setTimeout(() => { if (UI.dlg === 'settings') openSettings(); }, 1500); return;
+      case 'scriptTest': location.href = scriptableUrl({ test: 1 }); return;
+      case 'scriptOn': try { localStorage.setItem('dashScriptable', el.checked ? '1' : '0'); } catch {} return;
       case 'gemEmbed': UI.gemFrameBad = false; if (!el.checked) { gemDock(false); const ff = $('gemFrame'); if (ff) ff.remove(); } await saveSettings({ ...S.settings, gemEmbed: el.checked }); if (UI.dlg === 'settings') openSettings(); return;
       case 'gemDockOpen': if (UI.qtab === 'gem') qTab('auto'); else gemDock(true); return;
       case 'qTab': qTab(el.dataset.k); return;
