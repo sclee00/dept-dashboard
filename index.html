@@ -271,6 +271,17 @@ textarea.field{resize:vertical;width:100%;line-height:1.55}
 
 /* sheet */
 .scrim{position:fixed;inset:0;background:rgb(10 14 20 / .45);z-index:20}
+/* Gemini inside the dashboard (needs the Gemini connection extension 1.1+) */
+.gemdock{position:fixed;right:12px;bottom:12px;width:min(400px,calc(100vw - 24px));height:min(560px,calc(100vh - 24px));z-index:70;display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:0 12px 32px rgb(0 0 0 / .25);overflow:hidden}
+.gemdock[hidden]{display:none}
+.gemdock.min{height:auto}
+.gemdock.min iframe{display:none}
+.gemdock.big{width:min(640px,calc(100vw - 24px));height:calc(100vh - 24px)}
+.gemdock header{display:flex;align-items:center;gap:.4rem;padding:.35rem .5rem .35rem .75rem;border-bottom:1px solid var(--line);background:var(--surface-2);font-size:.85rem;font-weight:600}
+.gemdock header .st{flex:1;font-weight:400;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gemdock header button{border:0;background:none;color:var(--muted);cursor:pointer;font:inherit;padding:.15rem .4rem;border-radius:6px}
+.gemdock header button:hover{background:var(--line);color:var(--ink)}
+.gemdock iframe{flex:1;border:0;width:100%;background:#fff}
 .sheet{position:fixed;top:0;right:0;bottom:0;width:min(46rem,100%);background:var(--surface);border-left:1px solid var(--line);z-index:21;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);padding-right:env(safe-area-inset-right,0px)}
 .sheethead{padding:1rem 1.3rem .8rem;border-bottom:1px solid var(--line);display:flex;gap:1rem;justify-content:space-between;align-items:flex-start}
 .sheethead h2{font-family:var(--display);font-size:1.35rem;margin:0;line-height:1.3;text-wrap:balance;overflow-wrap:anywhere}
@@ -778,6 +789,7 @@ label.inl{display:inline-flex;align-items:center;gap:.3rem;font-size:.85rem} lab
       <button class="iconbtn" id="redoBtn" data-act="redo" data-ok="redo" draggable="true" type="button" hidden aria-label="다시 하기"><span data-ic="redo"></span></button>
       <button class="iconbtn" data-act="openFinder" data-ok="finder" draggable="true" type="button"><span data-ic="search"></span>빈 시간 찾기</button>
       <button class="iconbtn" data-act="openBusy" data-ok="busy" draggable="true" type="button"><span data-ic="lock"></span>불가 시간</button>
+      <button class="iconbtn" id="gemBtn" data-act="gemDockOpen" data-ok="gemini" draggable="true" type="button" hidden title="Gemini 창 열기/닫기"><span data-ic="spark"></span>Gemini</button>
       <button class="iconbtn" data-act="settings" data-ok="settings" draggable="true" type="button"><span data-ic="gear"></span>설정</button>
     </div>
   </header>
@@ -2726,7 +2738,63 @@ function pickModel(list) {
 // Gemini web through the Chrome extension (gemini-bridge): the page asks, the extension types into a small Gemini window and reads the answer
 const bridgeOn = () => !!document.documentElement.dataset.geminiBridge;
 const aiWeb = () => bridgeOn() && (S.settings.aiMode === 'web' || !S.settings.aiMode);
+const bridgeVer = () => (document.documentElement.dataset.geminiBridge || '0').split('.').map(Number);
+const frameOK = () => { const v = bridgeVer(); return v[0] > 1 || (v[0] === 1 && v[1] >= 1); };
+const aiFrame = () => frameOK() && S.settings.gemEmbed !== false && !UI.gemFrameBad;
+const GEM_APP = 'https://gemini.google.com/app', GEM_ORIGIN = 'https://gemini.google.com';
+// the small Gemini window in the corner: open (o=true), keep, or hide (o=false)
+function gemDock(o) {
+  let d = $('gemDock');
+  if (!d) {
+    d = document.createElement('div'); d.id = 'gemDock'; d.className = 'gemdock'; d.hidden = true;
+    d.innerHTML = `<header><span>Gemini</span><span class="st" id="gemDockSt"></span><button type="button" data-act="gemDockSize" title="크게/작게">⤢</button><button type="button" data-act="gemDockMin" title="접기/펴기">–</button><button type="button" data-act="gemDockClose" title="닫기 (다음에 물을 때 다시 열림)">✕</button></header><iframe id="gemFrame" title="Gemini" allow="clipboard-read; clipboard-write"></iframe>`;
+    document.body.appendChild(d);
+  }
+  if (o === false) { d.hidden = true; return d.querySelector('iframe'); }
+  if (o) { d.hidden = false; d.classList.remove('min'); }
+  const f = d.querySelector('iframe');
+  if (o && !f.getAttribute('src')) f.src = GEM_APP;
+  return f;
+}
+function gemDockStatus(t) { const el = $('gemDockSt'); if (el) el.textContent = t || ''; }
+// load a fresh Gemini chat in the frame and wait for the extension's script inside it
+function frameLoad(f, ms) {
+  return new Promise(res => {
+    const off = () => { clearTimeout(to); window.removeEventListener('message', on); };
+    const on = e => { if (e.source !== f.contentWindow || e.origin !== GEM_ORIGIN || !e.data || e.data.type !== 'gbf-ready') return; off(); res(e.data); };
+    const to = setTimeout(() => { off(); res(null); }, ms || 25000);
+    window.addEventListener('message', on);
+    f.src = GEM_APP;
+  });
+}
+async function frameAsk(prompt, json, setStatus) {
+  const f = gemDock(true);
+  const say = t => { setStatus(t); gemDockStatus(t); };
+  say('Gemini 새 대화를 여는 중');
+  const r = await frameLoad(f, 25000);
+  if (!r) throw { code: 'frame', message: '대시보드 안에 Gemini가 열리지 않았습니다.' };
+  if (!r.signedIn) throw { code: 'frame', message: '대시보드 안 Gemini 창이 로그인되어 있지 않습니다 (크롬이 다른 사이트 안의 구글 로그인을 막고 있을 수 있습니다).' };
+  say('Gemini가 답하는 중');
+  return new Promise((resolve, reject) => {
+    const id = uid();
+    const on = e => {
+      if (e.source !== f.contentWindow || e.origin !== GEM_ORIGIN || !e.data || e.data.id !== id || e.data.type !== 'gbf-result') return;
+      window.removeEventListener('message', on); gemDockStatus(e.data.error ? '' : '답을 받았습니다');
+      if (e.data.error) return reject({ code: e.data.error, message: e.data.message });
+      resolve(e.data.text);
+    };
+    window.addEventListener('message', on);
+    f.contentWindow.postMessage({ type: 'gbf-ask', id, prompt, json: !!json }, GEM_ORIGIN);
+  });
+}
 function bridgeAsk(prompt, title, json) {
+  if (aiFrame()) return aiProgress(title, setStatus => frameAsk(prompt, json, setStatus), json, 'Gemini (오른쪽 아래 창)')
+    .catch(e => {
+      if (!e || e.code !== 'frame') throw e;
+      UI.gemFrameBad = true; gemDock(false);
+      toast(e.message + ' 이번에는 따로 창으로 엽니다.');
+      return bridgeAsk(prompt, title, json);
+    });
   return aiProgress(title, (setStatus) => new Promise((resolve, reject) => {
     const id = uid();
     const on = e => {
@@ -2748,7 +2816,7 @@ function aiProgress(title, run, json, who) {
     const close = () => { done = true; clearInterval(tick); if (UI.dlg === 'gem') { UI.dlg = null; $('dlgRoot').innerHTML = ''; } UI.gemCancel = null; };
     UI.gemCancel = () => { if (done) return; close(); reject({ code: 'cancelled', message: '취소했습니다.' }); };
     UI.dlg = 'gem';
-    $('dlgRoot').innerHTML = `<div class="scrim"></div><div class="dlg"><div class="dlgbox" role="dialog" aria-modal="true" aria-labelledby="dlgT">
+    $('dlgRoot').innerHTML = `<div class="scrim"></div><div class="dlg"${/오른쪽 아래/.test(who || '') ? ' style="place-items:center start;padding-left:max(16px,calc(50vw - 420px))"' : ''}><div class="dlgbox" role="dialog" aria-modal="true" aria-labelledby="dlgT">
       <h3 id="dlgT"><span class="spin"></span>${esc(who || 'Gemini')}에서 처리하는 중</h3>
       <div class="count">${esc(title || '')}</div>
       <div class="count" id="gemState"></div>
@@ -2791,7 +2859,7 @@ function aiSettingsHtml(s) {
       <label class="chk"><input type="radio" name="aiMode" value="gemini" data-act="aiMode" ${on ? 'checked' : ''}> Gemini API 자동 (API 키)</label>
       <label class="chk"><input type="radio" name="aiMode" value="copy" data-act="aiMode" ${s.aiMode === 'copy' || (!s.aiMode && !bridgeOn()) ? 'checked' : ''}> 복사해서 AI 창에 붙여넣기</label>
     </div>
-    <span class="count">${bridgeOn() ? `${ic('check')} 이 브라우저에 Gemini 연결 확장(버전 ${esc(document.documentElement.dataset.geminiBridge)})이 있습니다. 질문하면 작은 Gemini 창이 열려 거기서 답을 받아 옵니다. 그 창은 닫지 말고 옆에 두세요. <button class="btn small" type="button" data-act="aiTest">${ic('spark')}시험해 보기</button><span class="count" id="aiTestOut"></span>` : `Gemini 웹 자동은 PC 크롬에 확장 프로그램을 한 번 설치해야 합니다: <a href="gemini-bridge.zip" download>확장 프로그램 내려받기</a> → 압축 풀기 → 크롬 주소창에 chrome://extensions → 오른쪽 위 '개발자 모드' 켜기 → '압축해제된 확장 프로그램 로드' → 푼 폴더 선택 → 이 페이지 새로고침.`}</span>
+    <span class="count">${bridgeOn() ? `${ic('check')} 이 브라우저에 Gemini 연결 확장(버전 ${esc(document.documentElement.dataset.geminiBridge)})이 있습니다. ${aiFrame() ? '질문하면 대시보드 오른쪽 아래에 Gemini 창이 작게 열려 거기서 답을 받아 옵니다.' : '질문하면 작은 Gemini 창이 따로 열려 거기서 답을 받아 옵니다. 그 창은 닫지 말고 옆에 두세요.'}${frameOK() ? ` <label class="chk" style="display:inline-flex"><input type="checkbox" data-act="gemEmbed" ${S.settings.gemEmbed !== false ? 'checked' : ''}> 대시보드 안에 작게 보이기</label>` : ' (확장을 1.1 이상으로 바꾸면 대시보드 안에 작게 보입니다.)'} <button class="btn small" type="button" data-act="aiTest">${ic('spark')}시험해 보기</button><span class="count" id="aiTestOut"></span>` : `Gemini 웹 자동은 PC 크롬에 확장 프로그램을 한 번 설치해야 합니다: <a href="gemini-bridge.zip" download>확장 프로그램 내려받기</a> → 압축 풀기 → 크롬 주소창에 chrome://extensions → 오른쪽 위 '개발자 모드' 켜기 → '압축해제된 확장 프로그램 로드' → 푼 폴더 선택 → 이 페이지 새로고침.`}</span>
     ${s.aiMode !== 'gemini' ? '' : !gasOn() ? '<span class="count warnline">Gemini API 자동은 "저장·구글" 탭의 Apps Script 연결이 있어야 합니다.</span>' : `
     <span class="count">Gemini API 키는 <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio → API 키</a>에서 만들 수 있습니다. 키는 내 Apps Script 안에만 보관되고 이 화면·데이터 파일에는 남지 않습니다.</span>
     <div class="row" style="flex-wrap:wrap"><input class="field" id="aiKeyIn" type="password" autocomplete="off" placeholder="${s.aiKeySet ? '키 설정됨 — 바꾸려면 새 키를 넣으세요' : 'Gemini API 키 (AIza…)'}" style="flex:1;min-width:14rem">
@@ -2828,7 +2896,7 @@ const UNDO_LABEL = {
   delRule: '아이콘 규칙 삭제', skipOcc: '반복 일정 한 번 빼기', edSave: '일정 편집', bdSave: '불가 시간 설정', saveSettings: '설정 변경', imSave: '아이콘 색·이름',
   pushG: '구글에 추가', fEvent: '일정 추가', fBlock: '불가 시간 추가', taskForm: '할 일 추가', importData: '파일 가져오기'
 };
-const UNDO_SKIP = new Set(['gemCancel', 'aiKeySave', 'aiKeyClear', 'aiTest', 'aiMode', 'aiModelSel', 'relayClip', 'stOpen', 'tidyOpen', 'tidyDel', 'tidyTime', 'tidyMerge', 'inboxRun', 'analyzeMail', 'tgShow', 'tgHide', 'phoneLink', 'gDel', 'fltImp', 'fltIcons', 'fltTog', 'fltClear', 'fltClose', 'cmdToAI', 'cmdPick', 'cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
+const UNDO_SKIP = new Set(['gemCancel', 'gemEmbed', 'gemDockMin', 'gemDockSize', 'gemDockClose', 'gemDockOpen', 'aiKeySave', 'aiKeyClear', 'aiTest', 'aiMode', 'aiModelSel', 'relayClip', 'stOpen', 'tidyOpen', 'tidyDel', 'tidyTime', 'tidyMerge', 'inboxRun', 'analyzeMail', 'tgShow', 'tgHide', 'phoneLink', 'gDel', 'fltImp', 'fltIcons', 'fltTog', 'fltClear', 'fltClose', 'cmdToAI', 'cmdPick', 'cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
 function undoSnap() {
   const o = { settings: JSON.parse(JSON.stringify(S.settings)) };
   for (const c of COLS) o[c] = JSON.parse(JSON.stringify(S[c]));
@@ -5217,6 +5285,11 @@ document.addEventListener('click', async ev0 => {
       case 'relayApply': return relayApply();
       case 'aiMode': if (el.value === 'gemini' && !S.settings.aiKeySet) toast('먼저 Gemini API 키를 넣고 "키 저장·확인"을 눌러 주세요.'); if (el.value === 'web' && !bridgeOn()) toast('먼저 Gemini 연결 확장 프로그램을 설치해 주세요.'); await saveSettings({ ...S.settings, aiMode: ['web', 'gemini'].includes(el.value) ? el.value : 'copy' }); if (UI.dlg === 'settings') openSettings(); return;
       case 'gemCancel': return UI.gemCancel && UI.gemCancel();
+      case 'gemEmbed': UI.gemFrameBad = false; if (!el.checked) gemDock(false); await saveSettings({ ...S.settings, gemEmbed: el.checked }); if (UI.dlg === 'settings') openSettings(); return;
+      case 'gemDockMin': { const d = $('gemDock'); if (d) d.classList.toggle('min'); return; }
+      case 'gemDockSize': { const d = $('gemDock'); if (d) { d.classList.remove('min'); d.classList.toggle('big'); } return; }
+      case 'gemDockClose': gemDock(false); return;
+      case 'gemDockOpen': { const d = $('gemDock'); if (d && !d.hidden) { gemDock(false); return; } gemDock(true); return; }
       case 'aiKeySave': return aiKeySave(false);
       case 'aiKeyClear': return aiKeySave(true);
       case 'aiTest': { const o = $('aiTestOut'); if (o) o.textContent = '…'; try { const t = await (aiWeb() ? bridgeAsk : geminiAsk)('연결 시험이야. 딴말 말고 "연결됨" 한 단어로만 답해 줘', '연결 시험', false); toast('Gemini 답: ' + String(t).trim().slice(0, 60)); } catch (e) { toast('시험 실패: ' + ((e && e.message) || '')); } if (UI.dlg !== 'settings') openSettings(); return; }
@@ -5530,7 +5603,7 @@ renderLegend();
 
 UI.selDay = todayStr();
 try { if (localStorage.getItem('calView') === 'month') UI.view = 'month'; } catch {}
-function renderAll() { try { renderTidyBtn(); } catch {} applyTripStyle(); applyImpStyle(); applyFont(); applyLayout(); renderHeader(); renderTasks(); renderMails(); renderCal(); renderDay(false); renderRail(); renderGChip(); renderSync(); renderSheet(false); }
+function renderAll() { { const gb = $('gemBtn'); if (gb) gb.hidden = !aiWeb() || !aiFrame(); } try { renderTidyBtn(); } catch {} applyTripStyle(); applyImpStyle(); applyFont(); applyLayout(); renderHeader(); renderTasks(); renderMails(); renderCal(); renderDay(false); renderRail(); renderGChip(); renderSync(); renderSheet(false); }
 renderAll();
 setInterval(() => { renderHeader(); if (UI.selDay === todayStr()) renderDay(false); }, 60000);
 
