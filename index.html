@@ -2542,6 +2542,9 @@ const hm = (h, m) => `${pad(Math.min(23, h))}:${pad(m || 0)}`;
 function parseCommand(raw) {
   const today = todayStr();
   let t = ' ' + String(raw).replace(/\s+/g, ' ').trim() + ' ';
+  // "구글에도 추가해", "구글캘린더에 넣어줘" are about where it goes, not part of the title
+  t = t.replace(/\s(?:하고|고|그리고|및)?\s*구글\s*(?:캘린더|캘|달력)?\s*(?:(?:에도|에|도|으로도|으로|로|까지)\s*(?:같이|함께)?\s*(?:(?:추가|넣|등록|반영|동기화|올려|올리|저장|싱크)\S*)?|(?:추가|넣|등록|반영|동기화|올려|올리|저장|싱크)\S*)(?=\s)/g, ' ')
+       .replace(/(추가|등록|넣어)\s*하고(?=\s)/g, '$1').replace(/\s하고(?=\s*$)/, ' ');
   const cut = re => { const m = t.match(re); if (m) t = t.replace(m[0], ' '); return m; };
   const r = { type: 'event', title: '', date: '', due: '', time: '', endTime: '', allDay: false, repeat: null, kind: '', imp: '', notes: [] };
   if (/불가|안\s*됨|안\s*되는|못\s*(가|감|함|해)|막아|비워\s*둬/.test(t)) r.type = 'block';
@@ -2626,7 +2629,8 @@ function parseCommand(raw) {
     .replace(/(해야\s*(함|해|돼|한다))/g, ' ')
     .replace(/\s(에|에는|부터|까지|에서|은|는|을|를|이|가|도|으로|로)(?=\s)/g, ' ')
     .replace(/[\s,.:!~]+/g, ' ').trim()
-    .replace(/(을|를|은|는|이|가|에|으로|로|도)$/, '').trim();
+    .replace(/(을|를|은|는|이|가|에|으로|로|도)$/, '').trim()
+    .replace(/\s(일정|스케줄)$/, '').trim();
   r.title = title || (r.type === 'block' ? '불가' : r.type === 'task' ? '할 일' : '일정');
   if (r.type === 'event') r.kind = /마감|제출/.test(r.title) ? '마감' : /강의|수업|학사|시험|개강|종강|졸업|입학/.test(r.title) ? '학사' : /행사|세미나|학회|전시|축제|식사|회식|발표회|설명회/.test(r.title) ? '행사' : '회의';
   r.imp = autoImp(r.title, r.kind);
@@ -2972,7 +2976,43 @@ const sample = Object.assign(
 
 /* ---------- undo / redo of data changes ---------- */
 // A click (or drop / form) arms a snapshot; the first data change after it commits the snapshot to the undo stack.
-const UNDO = { stack: [], redo: [], max: 30, pending: null, busy: false };
+const UNDO = { stack: [], redo: [], max: 50, pending: null, busy: false };
+// the history is kept in this browser as just the items each step changed, so it survives a refresh
+try { const u = JSON.parse(localStorage.getItem('dashUndo') || 'null'); if (u && Array.isArray(u.stack)) { UNDO.stack = u.stack.filter(x => x && Array.isArray(x.d)); UNDO.redo = (u.redo || []).filter(x => x && Array.isArray(x.d)); } } catch {}
+function undoSave() {
+  for (let k = 0; k < 6; k++) {
+    try { localStorage.setItem('dashUndo', JSON.stringify({ stack: UNDO.stack, redo: UNDO.redo })); return; }
+    catch { if (UNDO.redo.length) UNDO.redo.splice(0, Math.ceil(UNDO.redo.length / 2)); else if (UNDO.stack.length > 1) UNDO.stack.splice(0, Math.ceil(UNDO.stack.length / 2)); else return; }
+  }
+}
+const sameItem = (a, b) => JSON.stringify({ ...a, _u: 0 }) === JSON.stringify({ ...b, _u: 0 });
+const clone = x => x == null ? null : JSON.parse(JSON.stringify(x));
+// what changed between a full snapshot and now: [{ c, id, b: before | null, a: after | null }]
+function snapDiff(before) {
+  const d = [];
+  for (const c of COLS) {
+    const A = new Map((before[c] || []).map(x => [x.id, x]));
+    for (const x of S[c]) { const o = A.get(x.id); if (!o) d.push({ c, id: x.id, b: null, a: clone(x) }); else if (!sameItem(o, x)) d.push({ c, id: x.id, b: clone(o), a: clone(x) }); A.delete(x.id); }
+    for (const [id, o] of A) d.push({ c, id, b: clone(o), a: null });
+  }
+  if (JSON.stringify(before.settings) !== JSON.stringify(S.settings)) d.push({ c: 'settings', b: clone(before.settings), a: clone(S.settings) });
+  return d;
+}
+// put the items of one step back (back=true) or forward again (back=false)
+function applyDiff(d, back) {
+  const now = Date.now(), touched = [];
+  for (const ch of d) {
+    const want = back ? ch.b : ch.a;
+    if (ch.c === 'settings') { if (want) { S.settings = { ...DEFAULTS, ...clone(want) }; S.settingsU = now; } continue; }
+    const arr = S[ch.c]; if (!arr) continue;
+    S.deleted[ch.c] ||= {};
+    const i = arr.findIndex(x => x.id === ch.id), cur = i >= 0 ? arr[i] : null;
+    if (!want) { if (i >= 0) arr.splice(i, 1); S.deleted[ch.c][ch.id] = now; if (ch.c === 'events' && cur) touched.push({ before: cur, after: null }); }
+    else { const nx = { ...clone(want), _u: now }; if (i >= 0) arr[i] = nx; else arr.push(nx); delete S.deleted[ch.c][ch.id]; if (ch.c === 'events') touched.push({ before: cur, after: nx }); }
+  }
+  UNDO.busy = true; try { changed(); } finally { UNDO.busy = false; }
+  return touched;
+}
 const UNDO_LABEL = {
   cmdApply: '자동 처리 명령', addEv: '메일 일정 추가', addTk: '메일 할 일 추가', addAllEv: '메일 일정 모두 추가', addAllTk: '메일 할 일 모두 추가',
   toggleTask: '할 일 완료 표시', delTask: '할 일 삭제', delEvent: '일정 삭제', delBlock: '불가 시간 삭제', delMail: '메일 삭제',
@@ -2990,30 +3030,10 @@ function undoArm(label) { if (!UNDO.busy) UNDO.pending = { label: label || '변�
 function undoCommit() {
   const p = UNDO.pending; UNDO.pending = null;
   if (!p || UNDO.busy || Date.now() - p.at > 90000) return;
-  UNDO.stack.push(p); if (UNDO.stack.length > UNDO.max) UNDO.stack.shift();
-  UNDO.redo = [];
+  const d = snapDiff(p.snap); if (!d.length) return;
+  UNDO.stack.push({ label: p.label, at: p.at, d }); if (UNDO.stack.length > UNDO.max) UNDO.stack.shift();
+  UNDO.redo = []; undoSave();
   setTimeout(renderUndo, 0);
-}
-function restoreSnap(snap) {
-  const now = Date.now(), touched = [];
-  const same = (a, b) => JSON.stringify({ ...a, _u: 0 }) === JSON.stringify({ ...b, _u: 0 });
-  for (const c of COLS) {
-    const want = new Map((snap[c] || []).map(x => [x.id, x]));
-    const cur = new Map(S[c].map(x => [x.id, x]));
-    S.deleted[c] ||= {};
-    for (const [id, old] of cur) if (!want.has(id)) { S.deleted[c][id] = now; if (c === 'events') touched.push({ before: old, after: null }); }
-    const next = [];
-    for (const [id, x] of want) {
-      const old = cur.get(id);
-      if (old && same(old, x)) next.push(old);
-      else { next.push({ ...JSON.parse(JSON.stringify(x)), _u: now }); if (c === 'events') touched.push({ before: old || null, after: x }); }
-      delete S.deleted[c][id];
-    }
-    S[c] = next;
-  }
-  S.settings = { ...DEFAULTS, ...JSON.parse(JSON.stringify(snap.settings)) }; S.settingsU = now;
-  UNDO.busy = true; try { changed(); } finally { UNDO.busy = false; }
-  return touched;
 }
 async function syncUndoToGoogle(touched) {
   let fixed = 0, left = 0;
@@ -3033,7 +3053,8 @@ async function undoSteps(n, redo) {
   const ok = await gAsk({ title: redo ? '다시 하기' : '되돌리기', icon: 'refresh', rows: steps.map(x => [hhmm(new Date(x.at)), x.label]), note: redo ? `이 ${n}개 작업을 다시 합니다.` : `가장 최근 것부터 이 ${n}개 작업을 되돌립니다. 구글 캘린더에 이미 들어간 일정은 바뀐 시간·제목은 되돌리고, 새로 넣은 일정은 직접 지워야 합니다.`, choices: [{ v: 'go', label: redo ? `${n}개 다시 하기` : `${n}개 되돌리기`, primary: true }] });
   if (ok !== 'go') return;
   let touched = [];
-  for (let k = 0; k < n; k++) { const step = from.pop(); to.push({ label: step.label, at: Date.now(), snap: undoSnap() }); touched = touched.concat(restoreSnap(step.snap)); }
+  for (let k = 0; k < n; k++) { const step = from.pop(); to.push(step); touched = touched.concat(applyDiff(step.d, !redo)); }
+  undoSave();
   renderUndo();
   const g = await syncUndoToGoogle(touched);
   toast(`${redo ? '다시 했습니다' : '되돌렸습니다'}: ${n}개${g.fixed ? ' · 구글 캘린더도 되돌렸습니다' : ''}${g.left ? ` · 이미 구글에 들어간 일정 ${g.left}개는 구글 캘린더에서 지워 주세요` : ''}`);
@@ -3043,8 +3064,8 @@ async function doUndo(redo) {
   const from = redo ? UNDO.redo : UNDO.stack, to = redo ? UNDO.stack : UNDO.redo;
   const step = from.pop();
   if (!step) { toast(redo ? '다시 할 것이 없습니다.' : '되돌릴 것이 없습니다.'); return; }
-  to.push({ label: step.label, at: Date.now(), snap: undoSnap() });
-  const touched = restoreSnap(step.snap);
+  to.push(step);
+  const touched = applyDiff(step.d, !redo); undoSave();
   renderUndo();
   { const st = $('pasteStatus'); if (st && st.querySelector('[data-act="undo"]')) st.textContent = ''; }
   const g = await syncUndoToGoogle(touched);
@@ -5227,7 +5248,7 @@ document.addEventListener('click', async ev0 => {
   if (el.dataset.tf && !el.dataset.act) { UI.tf = el.dataset.tf; syncTabs(); renderTasks(); return; }
   if (el.dataset.mf && !el.dataset.act) { UI.mf = el.dataset.mf; syncTabs(); renderMails(); return; }
   const act = el.dataset.act, id = el.dataset.id;
-  if (act && !UNDO_SKIP.has(act)) undoArm(UNDO_LABEL[act] || (el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 18) || '변경');
+  if (act && !UNDO_SKIP.has(act)) undoArm(act === 'cmdApply' && UI.cmd && UI.cmd.text ? '명령: ' + String(UI.cmd.text).replace(/\s+/g, ' ').trim().slice(0, 30) : UNDO_LABEL[act] || (el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 18) || '변경');
   const m = UI.openId ? S.emails.find(x => x.id === UI.openId) : null;
   try {
     switch (act) {
@@ -5853,31 +5874,31 @@ function renderStat() {
   </div>`;
 }
 const HCOL = { events: '일정', tasks: '할 일', emails: '메일', blocks: '불가 시간', marks: '표시' };
-function histDiff(before, after) {
-  const out = [];
-  for (const c of COLS) {
-    const A = new Map((before[c] || []).map(x => [x.id, x])), B = new Map((after[c] || []).map(x => [x.id, x]));
-    const nm = x => String(x.title || x.subject || x.name || '').slice(0, 24);
-    const add = [], del = [], mod = [];
-    for (const [id, x] of B) { const o = A.get(id); if (!o) add.push(nm(x)); else if (JSON.stringify({ ...o, _u: 0 }) !== JSON.stringify({ ...x, _u: 0 })) mod.push(nm(x)); }
-    for (const [id, x] of A) if (!B.has(id)) del.push(nm(x));
-    const L = HCOL[c] || c, show = a => a.filter(Boolean).slice(0, 2).join(', ') + (a.length > 2 ? ` 외 ${a.length - 2}` : '');
-    if (add.length) out.push(`${L} 추가 ${show(add) || add.length + '개'}`);
-    if (mod.length) out.push(`${L} 수정 ${show(mod) || mod.length + '개'}`);
-    if (del.length) out.push(`${L} 삭제 ${show(del) || del.length + '개'}`);
+function histDiff(d) {
+  const out = [], by = {};
+  for (const ch of d || []) {
+    if (ch.c === 'settings') { out.push('설정 변경'); continue; }
+    const k = ch.c, g = by[k] ||= { add: [], mod: [], del: [] }, x = ch.a || ch.b || {};
+    const nm = String(x.title || x.subject || x.name || '').slice(0, 24);
+    (ch.b == null ? g.add : ch.a == null ? g.del : g.mod).push(nm);
   }
-  if (before.settings && after.settings && JSON.stringify(before.settings) !== JSON.stringify(after.settings)) out.push('설정 변경');
+  const show = a => a.filter(Boolean).slice(0, 2).join(', ') + (a.length > 2 ? ` 외 ${a.length - 2}` : '');
+  for (const [c, g] of Object.entries(by)) {
+    const L = HCOL[c] || c;
+    if (g.add.length) out.unshift(`${L} 추가 ${show(g.add) || g.add.length + '개'}`);
+    if (g.mod.length) out.push(`${L} 수정 ${show(g.mod) || g.mod.length + '개'}`);
+    if (g.del.length) out.push(`${L} 삭제 ${show(g.del) || g.del.length + '개'}`);
+  }
   return out.join(' · ');
 }
 function renderHist() {
   const n = $('histN'); if (n) n.textContent = UNDO.stack.length ? ' ' + UNDO.stack.length : '';
   const el = $('qHist'); if (!el || UI.qtab !== 'hist') return;
   const st = UNDO.stack, rd = UNDO.redo;
-  const cur = undoSnap();
-  const rows = st.map((x, i) => ({ x, i, d: histDiff(x.snap, i === st.length - 1 ? cur : st[i + 1].snap) })).reverse();
-  el.innerHTML = `<div class="hhead"><b>이번에 한 작업</b><span>최근 ${UNDO.max}개까지 · 새로고침하면 지워집니다 · 버튼을 누르면 그 작업까지 되돌립니다</span></div>
+  const rows = st.map((x, i) => ({ x, i, d: histDiff(x.d) })).reverse();
+  el.innerHTML = `<div class="hhead"><b>이번에 한 작업</b><span>이 브라우저에 최근 ${UNDO.max}개까지 남습니다 · 버튼을 누르면 그 작업까지 되돌립니다</span></div>
     ${rows.length ? `<ol class="hlist">${rows.map((r, k) => `<li class="hrow"><time>${hhmm(new Date(r.x.at))}</time><span><b>${esc(r.x.label)}</b><span class="hd">${esc(r.d || '바뀐 것 없음')}</span></span><button class="btn small" type="button" data-act="histUndo" data-n="${k + 1}" title="${k ? `최근 ${k + 1}개 작업을 되돌립니다` : '이 작업을 되돌립니다'}">${k ? `여기까지 되돌리기 (${k + 1})` : '되돌리기'}</button></li>`).join('')}</ol>` : '<div class="count">아직 되돌릴 작업이 없습니다.</div>'}
-    ${rd.length ? `<div class="hhead"><b>되돌린 작업</b><span>다시 할 수 있습니다</span></div><ol class="hlist">${rd.slice().reverse().map((x, k) => `<li class="hrow redo"><time>${hhmm(new Date(x.at))}</time><span><b>${esc(x.label)}</b></span><button class="btn small" type="button" data-act="histRedo" data-n="${k + 1}">${k ? `여기까지 다시 하기 (${k + 1})` : '다시 하기'}</button></li>`).join('')}</ol>` : ''}`;
+    ${rd.length ? `<div class="hhead"><b>되돌린 작업</b><span>다시 할 수 있습니다</span></div><ol class="hlist">${rd.slice().reverse().map((x, k) => `<li class="hrow redo"><time>${hhmm(new Date(x.at))}</time><span><b>${esc(x.label)}</b><span class="hd">${esc(histDiff(x.d))}</span></span><button class="btn small" type="button" data-act="histRedo" data-n="${k + 1}">${k ? `여기까지 다시 하기 (${k + 1})` : '다시 하기'}</button></li>`).join('')}</ol>` : ''}`;
 }
 { let k = 'auto'; try { k = localStorage.getItem('qtab') || 'auto'; } catch {} qTab(k); }
 setInterval(() => { if (UI.qtab === 'stat' && !document.hidden) renderStat(); }, 30000);
