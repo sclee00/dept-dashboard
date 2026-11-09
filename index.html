@@ -820,7 +820,7 @@ label.inl{display:inline-flex;align-items:center;gap:.3rem;font-size:.85rem} lab
 .mbox.opt{background:var(--amber-soft);color:var(--amber)}
 .mbox.opt b{color:var(--ink)}
 .mbox.draft{background:var(--surface-2);border:1px solid var(--line)}
-.dprev{white-space:pre-wrap;font-size:.84rem;line-height:1.6;color:var(--ink);opacity:.9;display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+.dprev{white-space:pre-wrap;font-size:.84rem;line-height:1.6;color:var(--ink);opacity:.9;max-height:16rem;overflow-y:auto;overflow-wrap:anywhere;overscroll-behavior:contain;padding-right:.3rem;resize:vertical}
 .optrow{display:grid;grid-template-columns:repeat(auto-fill,minmax(10rem,1fr));gap:.4rem}
 .optchip{text-align:left;border:1px solid var(--amber);background:var(--surface);color:var(--ink);border-radius:8px;padding:.45rem .55rem;cursor:pointer;display:flex;flex-direction:column;gap:.15rem;font:inherit}
 .optchip b{color:var(--amber);font-size:.9rem}
@@ -5608,6 +5608,20 @@ document.addEventListener('click', async ev0 => {
       case 'unignore': await patch('emails', id, { status: 'open', relevanceDecided: 'kept' }); toast('처리 중으로 되돌렸습니다.'); return;
       case 'pickOpt': { const mm = S.emails.find(x => x.id === id); if (mm) await pickOpt(mm, +el.dataset.i); return; }
       case 'clearOpt': await patch('emails', id, { replyChoice: null }); return;
+      case 'sendReply': {
+        const mm = S.emails.find(x => x.id === id); if (!mm) return;
+        const ta = $('draft'), d = ta && UI.openId === id ? ta.value : fixNames((mm.reply && mm.reply.draft) || ((mm.replyOptions || [])[mm.replyChoice ?? 0] || {}).draft || '');
+        if (!d.trim()) return toast('보낼 답장 내용이 없습니다.');
+        try { await navigator.clipboard.writeText(d); } catch {}
+        const to = replyTo(mm), subj = 'Re: ' + String(mm.subject || '').replace(/^\s*(re|회신|답장)\s*:\s*/i, '');
+        const body = d.length > 1800 ? '' : d;
+        // open the mail app through a link (the page stays; no "leave site?" prompt)
+        UI.extLaunch = Date.now() + 3000;
+        const a = document.createElement('a'); a.href = `mailto:${encodeURIComponent(to).replace(/%40/g, '@')}?subject=${encodeURIComponent(subj)}${body ? '&body=' + encodeURIComponent(body).replace(/%0A/g, '%0D%0A') : ''}`; a.rel = 'noopener'; a.style.display = 'none';
+        document.body.appendChild(a); a.click(); setTimeout(() => a.remove(), 1000);
+        toast(body ? `메일 앱에 답장을 열었습니다${to ? ' (받는 사람: ' + to + ')' : ''}. 내용은 복사도 해 두었습니다.` : '답장이 길어서 본문은 복사해 두었습니다. 열린 메일 창에 붙여넣으세요.');
+        return;
+      }
       case 'copyReply': {
         const mm = S.emails.find(x => x.id === id); const d = mm && fixNames((mm.reply && mm.reply.draft) || ((mm.replyOptions || [])[mm.replyChoice ?? 0] || {}).draft || ''); if (!d) return;
         try { await navigator.clipboard.writeText(d); toast('답장을 복사했습니다. 메일 답장 창에 붙여넣으세요.'); } catch { openSheet(id); toast('복사하지 못했습니다. 열린 창에서 선택해 복사하세요.'); }
@@ -5656,17 +5670,6 @@ document.addEventListener('click', async ev0 => {
       case 'redraft': return redraft(m, el.dataset.tone);
       case 'stopDraft': UI.draftCtl && UI.draftCtl.abort(); return;
       case 'saveDraft': await patch('emails', m.id, { reply: { draft: $('draft').value } }); toast('초안을 저장했습니다.'); return;
-      case 'sendReply': {
-        const mm = S.emails.find(x => x.id === id); if (!mm) return;
-        const ta = $('draft'), d = ta && UI.openId === id ? ta.value : fixNames((mm.reply && mm.reply.draft) || ((mm.replyOptions || [])[mm.replyChoice ?? 0] || {}).draft || '');
-        if (!d.trim()) return toast('보낼 답장 내용이 없습니다.');
-        try { await navigator.clipboard.writeText(d); } catch {}
-        const to = replyTo(mm), subj = 'Re: ' + String(mm.subject || '').replace(/^\s*(re|회신|답장)\s*:\s*/i, '');
-        const body = d.length > 1800 ? '' : d;
-        location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subj)}${body ? '&body=' + encodeURIComponent(body) : ''}`;
-        toast(body ? `메일 앱에 답장을 열었습니다${to ? ' (받는 사람: ' + to + ')' : ''}. 내용은 복사도 해 두었습니다.` : '답장이 길어서 본문은 복사해 두었습니다. 열린 메일 창에 붙여넣으세요.');
-        return;
-      }
       case 'copyDraft': {
         const ta = $('draft');
         try { await navigator.clipboard.writeText(ta.value); toast('복사했습니다. 메일 프로그램에 붙여넣으세요.'); }
@@ -5926,7 +5929,7 @@ inboxSchedule();
 document.addEventListener('visibilitychange', () => { if (!document.hidden && inboxSec() > 0) setTimeout(() => inboxCheck(false), 800); });
 setInterval(() => { syncNow(); if (gasOn() && !G.cals.length && G.state !== 'loading') signIn(); else if (gReady()) gLoad(false); else renderAll(); }, 60000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { syncNow(); if (gReady()) gLoad(false); } });
-window.addEventListener('beforeunload', e => { if (DRIVE.dirty && fsReady()) { syncNow(); e.preventDefault(); e.returnValue = ''; } });
+window.addEventListener('beforeunload', e => { if (Date.now() < (UI.extLaunch || 0)) return; if (DRIVE.dirty && fsReady()) { syncNow(); e.preventDefault(); e.returnValue = ''; } });
 /* ---------- the word "구글" on screen is shown as the Google logo (the word stays for copy and screen readers) ---------- */
 const GL_SKIP = 'pre,textarea,input,select,option,script,style,.raw,.glw,[data-nogl],[contenteditable]';
 function glWalk(root) {
