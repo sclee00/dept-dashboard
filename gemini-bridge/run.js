@@ -12,20 +12,27 @@ async function runInGemini(prompt, wantJson, maxMs, images) {
   // pictures first: paste them into the input like Ctrl+V, then wait until Gemini shows them
   if (images && images.length) {
     const files = images.map((im, i) => { const bin = atob(im.b64); const u = new Uint8Array(bin.length); for (let k = 0; k < bin.length; k++) u[k] = bin.charCodeAt(k); return new File([u], im.name || `image${i + 1}.jpg`, { type: im.mime || 'image/jpeg' }); });
-    const shown = () => document.querySelectorAll('uploader-file-preview, .file-preview-container img, [data-test-id*="file-preview"] img, .attachment-preview img, img[src^="blob:"], img[src^="data:image"]').length;
+    const shown = () => document.querySelectorAll('uploader-file-preview, img.gem-attachment-style-img, .file-preview-container img, [data-test-id*="file-preview"] img').length;
     const n0 = shown();
-    const dt = new DataTransfer(); files.forEach(f => dt.items.add(f));
-    try { ed.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true })); } catch (e) {}
+    const fresh = () => { const dt = new DataTransfer(); files.forEach(f => dt.items.add(f)); return dt; };
+    const waitShown = async ms => { for (let t = 0; t < ms; t += 400) { await sleep(400); if (shown() > n0) return true; } return false; };
     let ok = false;
-    for (let i = 0; i < 20 && !ok; i++) { await sleep(500); ok = shown() > n0; }
-    if (!ok) { // some versions take a drop instead of a paste
-      const dt2 = new DataTransfer(); files.forEach(f => dt2.items.add(f));
-      for (const type of ['dragenter', 'dragover', 'drop']) { try { ed.dispatchEvent(new DragEvent(type, { dataTransfer: dt2, bubbles: true, cancelable: true })); } catch (e) {} }
-      for (let i = 0; i < 20 && !ok; i++) { await sleep(500); ok = shown() > n0; }
+    // 1) Gemini's own hidden file input (the one "Upload & tools → Files" uses)
+    const fileInput = () => document.querySelector('input[type=file][accept*="image"]') || document.querySelector('input.hidden-file-input[type=file]') || document.querySelector('input[type=file]');
+    let inp = fileInput();
+    if (!inp) {
+      const up = [...document.querySelectorAll('button')].find(b => /upload|업로드|파일 추가|add file/i.test(b.getAttribute('aria-label') || ''));
+      if (up) { up.click(); await sleep(900); inp = fileInput(); document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); }
     }
+    if (inp) { try { inp.files = fresh().files; inp.dispatchEvent(new Event('change', { bubbles: true })); ok = await waitShown(8000); } catch (e) {} }
+    // 2) paste, like Ctrl+V
+    if (!ok) { try { ed.focus(); ed.dispatchEvent(new ClipboardEvent('paste', { clipboardData: fresh(), bubbles: true, cancelable: true })); } catch (e) {} ok = await waitShown(8000); }
+    // 3) drop
+    if (!ok) { const dt2 = fresh(); for (const type of ['dragenter', 'dragover', 'drop']) { try { ed.dispatchEvent(new DragEvent(type, { dataTransfer: dt2, bubbles: true, cancelable: true })); } catch (e) {} } ok = await waitShown(8000); }
     if (!ok) return { error: 'image', message: 'Gemini 창에 그림을 넣지 못했습니다. 그림을 직접 Gemini 창에 붙여넣어 주세요.' };
     // wait for the upload to finish (spinner gone, send button usable)
-    for (let i = 0; i < 40; i++) { await sleep(500); if (!document.querySelector('uploader-file-preview mat-spinner, .file-preview-container mat-progress-spinner, [role="progressbar"]')) break; }
+    const uploading = () => [...document.querySelectorAll('uploader-file-preview mat-progress-spinner, uploader-file-preview mat-spinner, uploader-file-preview [role="progressbar"]')].some(e => e.offsetParent !== null);
+    for (let i = 0; i < 60; i++) { await sleep(500); if (!uploading()) break; }
     await sleep(800);
     ed.focus();
   }

@@ -126,7 +126,7 @@ header.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:spac
 .ci.dim{color:var(--muted)}
 .ci.busy{color:var(--muted);background:repeating-linear-gradient(135deg,transparent 0 4px,var(--hatch) 4px 7px)}
 .more{font-size:.7rem;color:var(--muted);padding-left:.2rem}
-.kc-학사{color:var(--k-acad)} .kc-회의{color:var(--k-meet)} .kc-행사{color:var(--k-event)} .kc-마감{color:var(--k-due)} .kc-g{color:var(--k-g)} .kc-할일{color:var(--muted)}
+.kc-학사{color:var(--k-acad)} .kc-개인{color:var(--green)} .kc-회의{color:var(--k-meet)} .kc-행사{color:var(--k-event)} .kc-마감{color:var(--k-due)} .kc-g{color:var(--k-g)} .kc-할일{color:var(--muted)}
 .ci.hot .ic{color:var(--red)}
 
 .rail{background:var(--surface);border:1px solid var(--line);border-radius:14px;display:flex;flex-direction:column;min-width:0}
@@ -939,7 +939,7 @@ label.inl{display:inline-flex;align-items:center;gap:.3rem;font-size:.85rem} lab
       <div class="gutter v" data-split="qin" role="separator" aria-orientation="vertical" tabindex="0" title="끌어서 입력 칸·버튼 너비 조절 · 두 번 누르면 원래대로"></div>
       <div class="qctl">
         <select class="field" id="mailCat" aria-label="분류">
-          <option>대학본부·행정</option><option>교원</option><option>학생</option><option>외부기관</option><option>기타</option>
+          <option>대학본부·행정</option><option>교원</option><option>학생</option><option>외부기관</option><option>개인일정</option><option>기타</option>
         </select>
         <select class="field" id="threadOf" aria-label="이어지는 메일" hidden><option value="">새 메일로 등록</option></select>
         <button class="btn small" type="button" data-act="attPick" title="메일에 딸린 파일(엑셀·한글·PDF·워드 등)을 같이 넣으면 내용까지 읽어 분석합니다. 이 칸에 끌어다 놓아도 됩니다" style="justify-content:center"><span data-ic="doc"></span>첨부파일 넣기</button>
@@ -1000,6 +1000,7 @@ const IP = {
   cal:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
   hand:'<circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0"/><path d="M16 11h6m-2.5-2.5L22 11l-2.5 2.5"/>',
   list:'<path d="M10 6h10M10 12h10M10 18h10"/><path d="m3 6 1.3 1.3L7 4.7M3 12l1.3 1.3L7 10.7M3 18l1.3 1.3L7 16.7"/>',
+  개인:'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
   학사:'<path d="m2 9 10-5 10 5-10 5z"/><path d="M6 11v5c3 2 9 2 12 0v-5M22 9v5"/>',
   회의:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6 6 0 0 1 3.5 6"/>',
   행사:'<path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>',
@@ -1102,6 +1103,7 @@ const ICON_RULES = [
   [/마감|deadline|기한/i, '마감']
 ];
 const ICON_GROUP = {
+  개인: 'kc-개인',
   interview: 'kc-회의', hire: 'kc-회의', users: 'kc-회의', chat: 'kc-회의', 회의: 'kc-회의', video: 'kc-회의', phone: 'kc-회의',
   lecture: 'kc-학사', mic: 'kc-학사', paper: 'kc-학사', exam: 'kc-학사', grade: 'kc-학사', 학사: 'kc-학사', door: 'kc-학사', book: 'kc-학사', flask: 'kc-학사', medal: 'kc-학사',
   plane: 'kc-행사', train: 'kc-행사', car: 'kc-행사', 행사: 'kc-행사',
@@ -1116,7 +1118,7 @@ function iconFor(text, fallback) {
   for (const [re, k] of ICON_RULES) if (re.test(t)) return k;
   return fallback;
 }
-const ICON_LEGEND = [['interview', '면접'], ['hire', '채용'], ['회의', '회의'], ['gavel', '위원회'], ['video', '온라인'], ['lecture', '강의'], ['mic', '학회·세미나'], ['paper', '논문·심사'], ['exam', '시험'], ['grade', '성적'], ['학사', '졸업·학위'], ['door', '입시'], ['medal', '장학·시상'], ['users', '학생'], ['chat', '상담'], ['book', '교육'], ['flask', '연구'], ['doc', '제출·보고'], ['pen', '결재'], ['won', '예산·정산'], ['shield', '보험·세금'], ['server', '전산'], ['vote', '선거'], ['plane', '출장'], ['train', '기차'], ['car', '차량'], ['hospital', '병원'], ['food', '식사'], ['cake', '축하'], ['sun', '휴가'], ['home', '가족'], ['sword', '검도'], ['dumbbell', '운동'], ['fish', '낚시'], ['phone', '전화'], ['행사', '행사'], ['마감', '마감'], ['할일', '할 일'], ['reply', '답장 기한'], ['lock', '불가 시간']];
+const ICON_LEGEND = [['개인', '개인 일정'], ['interview', '면접'], ['hire', '채용'], ['회의', '회의'], ['gavel', '위원회'], ['video', '온라인'], ['lecture', '강의'], ['mic', '학회·세미나'], ['paper', '논문·심사'], ['exam', '시험'], ['grade', '성적'], ['학사', '졸업·학위'], ['door', '입시'], ['medal', '장학·시상'], ['users', '학생'], ['chat', '상담'], ['book', '교육'], ['flask', '연구'], ['doc', '제출·보고'], ['pen', '결재'], ['won', '예산·정산'], ['shield', '보험·세금'], ['server', '전산'], ['vote', '선거'], ['plane', '출장'], ['train', '기차'], ['car', '차량'], ['hospital', '병원'], ['food', '식사'], ['cake', '축하'], ['sun', '휴가'], ['home', '가족'], ['sword', '검도'], ['dumbbell', '운동'], ['fish', '낚시'], ['phone', '전화'], ['행사', '행사'], ['마감', '마감'], ['할일', '할 일'], ['reply', '답장 기한'], ['lock', '불가 시간']];
 
 /* ---------- event importance: 중요 / 일반 ---------- */
 const IMP_HIGH = /면접|채용|임용|공개\s*발표|위원회|심의|평의원|이사회|총장|학장|교무처|기획처|본부|감사|평가|인증|공청회|교수회의|학과회의|마감|제출|심사|예산|입시|학위|디펜스|defense|발표|출장|병원|진료|수술|장례|조문|결혼식|시험|성적|감독|입학식|졸업식|deadline/i;
@@ -1222,7 +1224,7 @@ const iconStyleOf = k => ((S.settings && S.settings.iconStyle) || {})[k] || {};
 const iconLabel = k => iconStyleOf(k).label || (ICON_LEGEND.find(x => x[0] === k) || [k, k === 'gcal' ? '구글 일정' : k])[1];
 const ICON_KEYS = () => [...ICON_LEGEND.map(x => x[0]), 'gcal'];
 function defaultIconHex(k) {
-  const v = { 'kc-회의': '--k-meet', 'kc-학사': '--k-acad', 'kc-행사': '--k-event', 'kc-p': '--green', 'kc-adm': '--amber', 'kc-마감': '--k-due', 'kc-할일': '--muted', 'kc-g': '--k-g' }[ICON_GROUP[k] || (k === 'gcal' ? 'kc-g' : k === 'reply' ? 'kc-adm' : '')] || '--ink';
+  const v = { 'kc-회의': '--k-meet', 'kc-학사': '--k-acad', 'kc-행사': '--k-event', 'kc-p': '--green', 'kc-adm': '--amber', 'kc-마감': '--k-due', 'kc-할일': '--muted', 'kc-g': '--k-g', 'kc-개인': '--green' }[ICON_GROUP[k] || (k === 'gcal' ? 'kc-g' : k === 'reply' ? 'kc-adm' : '')] || '--ink';
   const c = getComputedStyle(document.documentElement).getPropertyValue(v).trim();
   return HEX_RE.test(c) ? c : '#e9edf3';
 }
@@ -2712,7 +2714,7 @@ function cleanActions(arr) {
   return (Array.isArray(arr) ? arr : []).slice(0, 40).map(a => !a ? null : ['update', 'delete', 'done', 'skip'].includes(a.type) ? cleanRefAction(a) : a.title ? cleanNewActions([a])[0] : null).filter(Boolean);
 }
 function cleanNewActions(arr) {
-  const kinds = ['회의', '행사', '마감', '학사'], hmRe = /^\d{2}:\d{2}$/;
+  const kinds = ['회의', '행사', '마감', '학사', '개인'], hmRe = /^\d{2}:\d{2}$/;
   return (Array.isArray(arr) ? arr : []).filter(a => a && a.title).slice(0, 20).map(a => {
     const x = { type: ['event', 'task', 'block'].includes(a.type) ? a.type : 'event', title: String(a.title).slice(0, 120), date: isDate(a.date) ? a.date : '', time: hmRe.test(a.time || '') ? a.time : '', endTime: hmRe.test(a.endTime || '') ? a.endTime : '', allDay: !!a.allDay, due: isDate(a.due) ? a.due : '', kind: kinds.includes(a.kind) ? a.kind : '회의', notes: [] };
     if (a.location) x.location = String(a.location).slice(0, 120);
@@ -2969,7 +2971,7 @@ function geminiAsk(prompt, title, json, images) {
     .catch(e => { throw (e && e.code === 'action' ? { code: 'old', message: '스크립트를 버전 10으로 다시 배포해야 Gemini를 쓸 수 있습니다.' } : e); }), json, 'Gemini');
 }
 // automatic first; if it cannot (no key, limit reached, network), the copy-and-paste window opens instead
-const imgOK = () => { const v = bridgeVer(); return v[0] > 1 || (v[0] === 1 && v[1] >= 2); };
+const imgOK = () => { const v = bridgeVer(); return v[0] > 1 || (v[0] === 1 && v[1] >= 2); }; // 1.2.1+ uses Gemini's own file input
 async function aiRun(prompt, opts, json) {
   const images = opts.images || [], title = opts.title || (json ? 'AI 분석' : 'AI에게 답 받기');
   let why = '';
@@ -3149,7 +3151,7 @@ function cmdContext() {
 }
 function commandPrompt(text, nImg) {
   return `${nImg ? `그림 ${nImg}장(캡처)을 같이 보냈어. 그림에서 일정·할 일을 찾아서 대시보드가 바로 넣을 수 있게 동작 목록으로 바꿔 줘.${text ? ' 내가 덧붙인 말도 반영해 줘.' : ''}
-- 기차표·비행기표·예매 내역이면 편마다 일정 하나씩: 제목은 "KTX 광명→포항"처럼 (교통편 출발지→도착지), 시간은 출발–도착, notes에 열차·편 번호와 호차·좌석, 예매 번호 끝자리 정도만.
+- 기차표·비행기표·예매 내역 같은 개인 일정은 kind를 "개인"으로. 편마다 일정 하나씩: 제목은 "KTX 광명→포항"처럼 (교통편 출발지→도착지), 시간은 출발–도착, notes에 열차·편 번호와 호차·좌석, 예매 번호 끝자리 정도만.
 - 같은 날 여러 편(가는 편·오는 편)이면 각각 따로 만들어. 출장·여행 일정이면 notes에 그렇게 적어 줘.
 - 초대장·포스터·공문 캡처면 행사 이름·날짜·시간·장소를 일정으로.
 - 그림에 날짜가 없거나 흐리면 지어내지 말고 note에 물어봐.
@@ -3164,7 +3166,7 @@ ${cmdContext()}
 {"actions": [동작, ...], "note": "나한테 알려 줄 말 (확인할 점, 질문에 대한 답, 없으면 null)"}
 
 동작 종류
-1) 새로 만들기: {"type": "event | task | block", "title": "짧은 제목", "date": "YYYY-MM-DD 또는 null (반복이면 첫 날짜, 모르면 null)", "time": "HH:MM 또는 null", "endTime": "HH:MM 또는 null", "allDay": true/false, "repeat": 반복 또는 null, "due": "할 일 기한 YYYY-MM-DD 또는 null", "kind": "회의 | 행사 | 마감 | 학사", "important": true/false, "location": "장소 또는 null", "notes": "메모(편 번호·좌석 등) 또는 null"}
+1) 새로 만들기: {"type": "event | task | block", "title": "짧은 제목", "date": "YYYY-MM-DD 또는 null (반복이면 첫 날짜, 모르면 null)", "time": "HH:MM 또는 null", "endTime": "HH:MM 또는 null", "allDay": true/false, "repeat": 반복 또는 null, "due": "할 일 기한 YYYY-MM-DD 또는 null", "kind": "회의 | 행사 | 마감 | 학사 | 개인", "important": true/false, "location": "장소 또는 null", "notes": "메모(편 번호·좌석 등) 또는 null"}
    event는 일정, task는 할 일, block은 내가 안 되는 시간(불가 시간).
 2) 기존 항목 고치기: {"type": "update", "ref": "위 목록의 번호 (예: e:abc, t:xyz, g:...)", 바뀌는 필드만: "title", "date", "time", "endTime", "allDay", "due", "important", "repeat"}
 3) 지우기: {"type": "delete", "ref": "e:… 또는 t:… 또는 g:…"} — 구글 캘린더 일정(g:)도 지울 수 있어 (실행 전에 내가 한 번 더 확인해).
@@ -3210,7 +3212,7 @@ function cleanChange(a) {
   if (typeof a.allDay === 'boolean') ch.allDay = a.allDay;
   if (isDate(a.due)) ch.due = a.due;
   if (typeof a.important === 'boolean') ch.imp = a.important ? 'high' : 'normal';
-  if (['회의', '행사', '마감', '학사'].includes(a.kind)) ch.kind = a.kind;
+  if (['회의', '행사', '마감', '학사', '개인'].includes(a.kind)) ch.kind = a.kind;
   if (typeof a.absent === 'boolean') ch.absent = a.absent;
   return ch;
 }
@@ -4769,7 +4771,7 @@ function renderSheet(force) {
         <input class="field" type="time" id="ev-h-${i}" value="${esc(tm || '')}" aria-label="시작" ${dis}>
         <input class="field" type="time" id="ev-e-${i}" value="${esc(en || '')}" aria-label="끝" ${dis}>
         <select class="field" id="ev-i-${i}" aria-label="중요도" ${dis}>${[['high', '중요'], ['normal', '일반']].map(([v, l]) => `<option value="${v}" ${(UI.edits['ev-i-'+i] ?? (e.important === false ? 'normal' : e.important === true ? 'high' : autoImp(e.title, e.kind))) === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
-        <select class="field" id="ev-k-${i}" aria-label="종류" ${dis}>${['회의','행사','마감','학사'].map(k => `<option ${(UI.edits['ev-k-'+i] ?? e.kind) === k ? 'selected' : ''}>${k}</option>`).join('')}</select>
+        <select class="field" id="ev-k-${i}" aria-label="종류" ${dis}>${['회의','행사','마감','학사','개인'].map(k => `<option ${(UI.edits['ev-k-'+i] ?? e.kind) === k ? 'selected' : ''}>${k}</option>`).join('')}</select>
         ${e.added ? (() => { const lk = S.events.find(x => x.emailId === m.id && String(x.title).replace(/\s+/g, '') === String(e.title).replace(/\s+/g, '')); const st = lk && statusOfE(lk); return st ? `<span class="tag st st-${st}">${ST_KO[st]}으로 추가됨</span>` : '<span class="tag">추가됨</span>'; })() : ''}
         <label class="chk abschk" ${e.added ? 'hidden' : ''}><input type="checkbox" data-act="evAbsent" data-i="${i}" ${absent ? 'checked' : ''} ${dis}>나는 불참</label>${clash.length ? `<span class="pill clash" title="${esc(clash.map(x => (x.why === '출장' ? '출장' : '중요') + ': ' + x.with).join('\n'))}">${ic('clash')}일정 겹침</span>` : ''}
         ${e.location && !simple ? `<input class="field title" id="ev-l-${i}" value="${ev('ev-l-'+i, e.location)}" aria-label="장소" ${dis}>` : ''}
@@ -4923,7 +4925,7 @@ ${keyLine() ? keyLine() + '\n참석 여부를 묻는 메일인데 그 행사 날
   "priority": "high | mid | low  (마감 임박, 본부 요청, 학생 민원은 높게)",
   "needsReply": true 또는 false,
   "replyDeadline": "YYYY-MM-DD 또는 null",
-  "events": [{"title": "일정 이름", "date": "YYYY-MM-DD", "time": "HH:MM 또는 null", "endTime": "HH:MM 또는 null", "location": "장소 또는 null", "kind": "회의 | 행사 | 마감 | 학사", "important": true 또는 false, "forHead": true 또는 false}],
+  "events": [{"title": "일정 이름", "date": "YYYY-MM-DD", "time": "HH:MM 또는 null", "endTime": "HH:MM 또는 null", "location": "장소 또는 null", "kind": "회의 | 행사 | 마감 | 학사 | 개인", "important": true 또는 false, "forHead": true 또는 false}],
   "tasks": [{"title": "내가 할 일을 '~하기' 형태의 짧은 문장으로", "due": "YYYY-MM-DD 또는 null", "priority": "high | mid | low", "forHead": true 또는 false}],
   "relevance": "relevant | irrelevant",
   "ignoreReason": "irrelevant이면 그렇게 본 이유 한 문장, 아니면 null",
@@ -4961,7 +4963,7 @@ ${raw.slice(0, 24000)}
 function cleanAnalysis(a) {
   a = a && typeof a === 'object' ? a : {};
   const pr = p => ['high','mid','low'].includes(p) ? p : 'mid';
-  const kinds = ['회의','행사','마감','학사'];
+  const kinds = ['회의','행사','마감','학사','개인'];
   return {
     subject: String(a.subject || '').slice(0, 200), from: String(a.from || '').slice(0, 120),
     summary: String(a.summary || '').slice(0, 1200), priority: pr(a.priority), needsReply: !!a.needsReply,

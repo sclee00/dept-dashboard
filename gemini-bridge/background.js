@@ -30,7 +30,7 @@ async function ask(prompt, json, status, images) {
   await chrome.tabs.update(tabId, { url: GEMINI });   // a fresh chat every time
   await loaded(tabId, 30000);
   status('Gemini가 답하는 중');
-  const [r] = await chrome.scripting.executeScript({ target: { tabId }, func: runInGemini, args: [prompt, json, 240000, images || []] });
+  const [r] = await chrome.scripting.executeScript({ target: { tabId }, world: 'MAIN', func: runInGemini, args: [prompt, json, 240000, images || []] });
   return (r && r.result) || { error: 'bridge', message: 'Gemini 창에서 결과를 받지 못했습니다.' };
 }
 
