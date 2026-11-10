@@ -2307,8 +2307,8 @@ const DRIVE = { folderId: null, fileId: null, remoteMod: null, dirty: false, sav
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 const isObj = v => v && typeof v === 'object' && !Array.isArray(v);
 function deepMerge(t, s) { for (const k of Object.keys(s)) { if (isObj(s[k]) && isObj(t[k])) deepMerge(t[k], s[k]); else t[k] = s[k]; } }
-function snapshot() { return { app: 'dept-dashboard', version: 2, savedAt: new Date().toISOString(), settings: S.settings, settingsU: S.settingsU || 0, tasks: S.tasks, events: S.events, emails: S.emails, blocks: S.blocks, marks: S.marks, deleted: S.deleted, gcache: gCacheObj() }; }
-function dataOnly(d) { const o = {}; for (const c of COLS) o[c] = (d && d[c]) || []; o.settings = d && d.settings; o.deleted = d && d.deleted; return JSON.stringify(o); }
+function snapshot() { return { app: 'dept-dashboard', version: 2, savedAt: new Date().toISOString(), settings: S.settings, settingsU: S.settingsU || 0, tasks: S.tasks, events: S.events, emails: S.emails, blocks: S.blocks, marks: S.marks, deleted: S.deleted, hist: S.hist || { entries: [] }, gcache: gCacheObj() }; }
+function dataOnly(d) { const o = {}; for (const c of COLS) o[c] = (d && d[c]) || []; o.settings = d && d.settings; o.deleted = d && d.deleted; o.hist = d && d.hist; return JSON.stringify(o); }
 function mergeIn(r) {
   if (!isObj(r)) return false;
   let changed = false;
@@ -2332,6 +2332,7 @@ function mergeIn(r) {
     if (conn && !(S.settings.gasUrl && S.settings.gasKey)) { S.settings.gasUrl = conn.u; S.settings.gasKey = conn.k; }
   }
   if (r.gcache && gCacheAdopt(r.gcache)) changed = true;
+  if (r.hist && histMerge(r.hist)) changed = true;
   return changed;
 }
 function cacheLocal() { try { const o = snapshot(); delete o.gcache; localStorage.setItem('deptDash', JSON.stringify(o)); if (gasOn()) localStorage.setItem('gasConn', JSON.stringify({ u: S.settings.gasUrl, k: S.settings.gasKey })); else localStorage.removeItem('gasConn'); } catch {} }
@@ -3071,14 +3072,56 @@ const sample = Object.assign(
 /* ---------- undo / redo of data changes ---------- */
 // A click (or drop / form) arms a snapshot; the first data change after it commits the snapshot to the undo stack.
 const UNDO = { stack: [], redo: [], max: 50, pending: null, busy: false };
-// the history is kept in this browser as just the items each step changed, so it survives a refresh
-try { const u = JSON.parse(localStorage.getItem('dashUndo') || 'null'); if (u && Array.isArray(u.stack)) { UNDO.stack = u.stack.filter(x => x && Array.isArray(x.d)); UNDO.redo = (u.redo || []).filter(x => x && Array.isArray(x.d)); } } catch {}
-function undoSave() {
-  for (let k = 0; k < 6; k++) {
-    try { localStorage.setItem('dashUndo', JSON.stringify({ stack: UNDO.stack, redo: UNDO.redo })); return; }
-    catch { if (UNDO.redo.length) UNDO.redo.splice(0, Math.ceil(UNDO.redo.length / 2)); else if (UNDO.stack.length > 1) UNDO.stack.splice(0, Math.ceil(UNDO.stack.length / 2)); else return; }
-  }
+// the history is shared by all devices: it lives in the data file (S.hist) as entries { id, label, at, dev, d, st: done|undone|gone, ut, _u }
+const HIST_KEEP = { done: 50, undone: 30, gone: 200 };
+const devName = () => /iPhone/.test(navigator.userAgent) ? '아이폰' : /iPad/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) ? '아이패드' : /Android/.test(navigator.userAgent) ? '휴대폰' : 'PC';
+function histTrim(list) {
+  const by = st => list.filter(e => e.st === st);
+  const keepDone = by('done').sort((a, b) => a.at - b.at).slice(-HIST_KEEP.done);
+  const keepUndone = by('undone').sort((a, b) => (a.ut || 0) - (b.ut || 0)).slice(-HIST_KEEP.undone);
+  const dropped = list.filter(e => (e.st === 'done' && !keepDone.includes(e)) || (e.st === 'undone' && !keepUndone.includes(e))).map(e => ({ id: e.id, st: 'gone', at: e.at, _u: e._u }));
+  const gone = by('gone').concat(dropped).sort((a, b) => (a._u || 0) - (b._u || 0)).slice(-HIST_KEEP.gone).map(e => ({ id: e.id, st: 'gone', at: e.at, _u: e._u }));
+  return [...keepDone, ...keepUndone, ...gone];
 }
+// the stack and redo lists the undo code works with, from the shared entries
+function histViews() {
+  const list = (S.hist && S.hist.entries) || [];
+  UNDO.stack = list.filter(e => e.st === 'done' && Array.isArray(e.d)).sort((a, b) => a.at - b.at);
+  UNDO.redo = list.filter(e => e.st === 'undone' && Array.isArray(e.d)).sort((a, b) => (a.ut || 0) - (b.ut || 0));
+}
+// write the lists back into the shared entries (only entries whose state changed get a new time) and save
+let histGone = [];
+function undoSave() {
+  const now = Date.now(), map = new Map(((S.hist && S.hist.entries) || []).map(e => [e.id, e]));
+  for (const e of UNDO.stack) { if (!e.id) e.id = uid(); if (e.st !== 'done') { e.st = 'done'; e._u = now; } map.set(e.id, e); }
+  for (const e of UNDO.redo) { if (!e.id) e.id = uid(); if (e.st !== 'undone') { e.st = 'undone'; e.ut = now; e._u = now; } map.set(e.id, e); }
+  for (const e of histGone) map.set(e.id, { id: e.id, st: 'gone', at: e.at, _u: now });
+  histGone = [];
+  S.hist = { entries: histTrim([...map.values()]) };
+  histViews();
+  try { localStorage.removeItem('dashUndo'); } catch {}
+  cacheLocal(); DRIVE.dirty = true; clearTimeout(DRIVE.timer); DRIVE.timer = setTimeout(syncNow, 1500);
+}
+// another device's history: keep the newer copy of every entry
+function histMerge(rh) {
+  if (!rh || !Array.isArray(rh.entries)) return false;
+  const map = new Map(((S.hist && S.hist.entries) || []).map(e => [e.id, e])); let ch = false;
+  for (const e of rh.entries) { if (!e || !e.id) continue; const cur = map.get(e.id); if (!cur || (e._u || 0) > (cur._u || 0)) { map.set(e.id, e); ch = true; } }
+  if (!ch) return false;
+  S.hist = { entries: histTrim([...map.values()]) }; histViews(); setTimeout(() => { try { renderUndo(); } catch {} }, 0);
+  return true;
+}
+// steps saved only in this browser before the history was shared
+try {
+  const u = JSON.parse(localStorage.getItem('dashUndo') || 'null');
+  if (u && Array.isArray(u.stack)) {
+    const dev = devName(), now = Date.now();
+    UNDO.stack = u.stack.filter(x => x && Array.isArray(x.d)).map(x => ({ ...x, id: uid(), dev, st: 'done', _u: now }));
+    UNDO.redo = (u.redo || []).filter(x => x && Array.isArray(x.d)).map(x => ({ ...x, id: uid(), dev, st: 'undone', ut: x.at, _u: now }));
+    S.hist = { entries: histTrim([...UNDO.stack, ...UNDO.redo]) }; UNDO.migrated = true;
+  }
+} catch {}
+const NONE = '__none__'; // "this field was not there" in a partial change
 const sameItem = (a, b) => JSON.stringify({ ...a, _u: 0 }) === JSON.stringify({ ...b, _u: 0 });
 const clone = x => x == null ? null : JSON.parse(JSON.stringify(x));
 // what changed between a full snapshot and now: [{ c, id, b: before | null, a: after | null }]
@@ -3086,7 +3129,16 @@ function snapDiff(before) {
   const d = [];
   for (const c of COLS) {
     const A = new Map((before[c] || []).map(x => [x.id, x]));
-    for (const x of S[c]) { const o = A.get(x.id); if (!o) d.push({ c, id: x.id, b: null, a: clone(x) }); else if (!sameItem(o, x)) d.push({ c, id: x.id, b: clone(o), a: clone(x) }); A.delete(x.id); }
+    for (const x of S[c]) {
+      const o = A.get(x.id);
+      if (!o) d.push({ c, id: x.id, b: null, a: clone(x) });
+      else if (!sameItem(o, x)) {
+        const b = {}, a = {};
+        for (const k of new Set([...Object.keys(o), ...Object.keys(x)])) { if (k === '_u' || JSON.stringify(o[k]) === JSON.stringify(x[k])) continue; b[k] = o[k] === undefined ? NONE : clone(o[k]); a[k] = x[k] === undefined ? NONE : clone(x[k]); }
+        d.push({ c, id: x.id, p: 1, t: String(x.title || x.subject || x.name || o.title || o.subject || '').slice(0, 40), b, a });
+      }
+      A.delete(x.id);
+    }
     for (const [id, o] of A) d.push({ c, id, b: clone(o), a: null });
   }
   if (JSON.stringify(before.settings) !== JSON.stringify(S.settings)) d.push({ c: 'settings', b: clone(before.settings), a: clone(S.settings) });
@@ -3101,6 +3153,12 @@ function applyDiff(d, back) {
     const arr = S[ch.c]; if (!arr) continue;
     S.deleted[ch.c] ||= {};
     const i = arr.findIndex(x => x.id === ch.id), cur = i >= 0 ? arr[i] : null;
+    if (ch.p) { // partial change: put back only the changed fields
+      if (!cur || !want) continue;
+      const nx = { ...cur, _u: now };
+      for (const [k, v] of Object.entries(want)) { if (v === NONE) delete nx[k]; else nx[k] = clone(v); }
+      arr[i] = nx; if (ch.c === 'events') touched.push({ before: cur, after: nx }); continue;
+    }
     if (!want) { if (i >= 0) arr.splice(i, 1); S.deleted[ch.c][ch.id] = now; if (ch.c === 'events' && cur) touched.push({ before: cur, after: null }); }
     else { const nx = { ...clone(want), _u: now }; if (i >= 0) arr[i] = nx; else arr.push(nx); delete S.deleted[ch.c][ch.id]; if (ch.c === 'events') touched.push({ before: cur, after: nx }); }
   }
@@ -3125,8 +3183,8 @@ function undoCommit() {
   const p = UNDO.pending; UNDO.pending = null;
   if (!p || UNDO.busy || Date.now() - p.at > 90000) return;
   const d = snapDiff(p.snap); if (!d.length) return;
-  UNDO.stack.push({ label: p.label, at: p.at, d }); if (UNDO.stack.length > UNDO.max) UNDO.stack.shift();
-  UNDO.redo = []; undoSave();
+  UNDO.stack.push({ id: uid(), label: p.label, at: p.at, dev: devName(), d, st: 'done', _u: Date.now() });
+  histGone = histGone.concat(UNDO.redo); UNDO.redo = []; undoSave();
   setTimeout(renderUndo, 0);
 }
 async function syncUndoToGoogle(touched) {
@@ -6085,6 +6143,8 @@ setInterval(() => { renderHeader(); if (UI.selDay === todayStr()) renderDay(fals
 /* ---------- boot ---------- */
 applyOrder(document.querySelector('.tools'), 'tools');
 loadLocal();
+histViews();
+if (UNDO.migrated) { cacheLocal(); try { localStorage.removeItem('dashUndo'); } catch {} DRIVE.dirty = true; }
 takeConnectLink();
 if (isStandalone() && !gasOn() && !fsOK) setTimeout(() => phoneSetup('app'), 400);
 gCacheLoad();
@@ -6197,7 +6257,8 @@ function histDiff(d) {
   for (const ch of d || []) {
     if (ch.c === 'settings') { out.push('설정 변경'); continue; }
     const k = ch.c, g = by[k] ||= { add: [], mod: [], del: [] }, x = ch.a || ch.b || {};
-    const nm = String(x.title || x.subject || x.name || '').slice(0, 24);
+    const cur = ch.p ? (S[ch.c] || []).find(y => y.id === ch.id) : null;
+    const nm = String(ch.t || x.title || x.subject || x.name || (cur && (cur.title || cur.subject)) || '').slice(0, 24);
     (ch.b == null ? g.add : ch.a == null ? g.del : g.mod).push(nm);
   }
   const show = a => a.filter(Boolean).slice(0, 2).join(', ') + (a.length > 2 ? ` 외 ${a.length - 2}` : '');
@@ -6216,7 +6277,7 @@ function histKey(x) {
 }
 function histName(x) {
   const ch = (x.d || []).find(c => c.c !== 'settings'); if (!ch) return '설정';
-  const o = ch.a || ch.b || {}; return `${HCOL[ch.c] || ''} ${String(o.title || o.subject || o.name || '').slice(0, 30)}`.trim();
+  const o = ch.a || ch.b || {}; const cur = (S[ch.c] || []).find(y => y.id === ch.id) || {}; return `${HCOL[ch.c] || ''} ${String(ch.t || o.title || o.subject || o.name || cur.title || cur.subject || '').slice(0, 30)}`.trim();
 }
 // undo chosen steps only (by their place in the stack), newest first
 async function undoPick(idx) {
@@ -6235,6 +6296,7 @@ async function undoPick(idx) {
   const g = await syncUndoToGoogle(touched);
   toast(`되돌렸습니다: ${steps.length === 1 ? steps[0].label : steps.length + '개'}${g.fixed ? ' · 구글 캘린더도 되돌렸습니다' : ''}${g.left ? ` · 이미 구글에 들어간 일정 ${g.left}개는 구글 캘린더에서 지워 주세요` : ''}`);
 }
+const histWhen = t => { const d = new Date(t); return d.toDateString() === new Date().toDateString() ? hhmm(d) : `${d.getMonth() + 1}/${d.getDate()} ${hhmm(d)}`; };
 function renderHist() {
   const n = $('histN'); if (n) n.textContent = UNDO.stack.length ? ' ' + UNDO.stack.length : '';
   const el = $('qHist'); if (!el || UI.qtab !== 'hist') return;
@@ -6243,10 +6305,10 @@ function renderHist() {
   const groups = new Map();
   for (let i = top; i >= 0; i--) { const k = histKey(st[i]); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(i); }
   const row = (i, inGroup) => { const x = st[i], back = top - i + 1;
-    return `<li class="hrow${inGroup ? ' sub' : ''}"><time>${hhmm(new Date(x.at))}</time><span><b>${esc(x.label)}</b><span class="hd">${esc(histDiff(x.d) || '바뀐 것 없음')}</span></span><span class="hbtns"><button class="btn small" type="button" data-act="histOne" data-i="${i}" title="이 작업만 되돌립니다 (다른 작업은 그대로)">이것만 되돌리기</button>${back > 1 ? `<button class="btn small ghost" type="button" data-act="histUndo" data-n="${back}" title="가장 최근 작업부터 여기까지 ${back}개를 되돌립니다">여기까지 (${back})</button>` : ''}</span></li>`; };
+    return `<li class="hrow${inGroup ? ' sub' : ''}"><time>${histWhen(x.at)}</time><span><b>${esc(x.label)}</b>${x.dev ? ` <span class="pill">${esc(x.dev)}</span>` : ''}<span class="hd">${esc(histDiff(x.d) || '바뀐 것 없음')}</span></span><span class="hbtns"><button class="btn small" type="button" data-act="histOne" data-i="${i}" title="이 작업만 되돌립니다 (다른 작업은 그대로)">이것만 되돌리기</button>${back > 1 ? `<button class="btn small ghost" type="button" data-act="histUndo" data-n="${back}" title="가장 최근 작업부터 여기까지 ${back}개를 되돌립니다">여기까지 (${back})</button>` : ''}</span></li>`; };
   const body = [...groups.entries()].map(([k, ix]) => ix.length === 1 ? row(ix[0], false)
     : `<li class="hgroup"><div class="hghead"><span><b>${esc(histName(st[ix[0]]))}</b> <span class="hd" style="display:inline">작업 ${ix.length}개 · ${hhmm(new Date(st[ix[ix.length - 1]].at))}–${hhmm(new Date(st[ix[0]].at))}</span></span><span class="hbtns"><button class="btn small" type="button" data-act="histGroup" data-k="${esc(k)}">이 항목 작업 모두 되돌리기</button><button class="btn small ghost" type="button" data-act="histFold" data-k="${esc(k)}">${UI.histOpen && UI.histOpen[k] ? '접기' : '펼치기'}</button></span></div>${UI.histOpen && UI.histOpen[k] ? `<ol class="hlist">${ix.map(i => row(i, true)).join('')}</ol>` : `<div class="hd" style="padding:.15rem 0 0 3.8rem">${esc(ix.map(i => st[i].label).join(' · '))}</div>`}</li>`).join('');
-  el.innerHTML = `<div class="hhead"><b>이번에 한 작업</b><span>최근 ${UNDO.max}개 · 같은 일정·할 일에 한 작업은 묶어서 보여 줍니다 · "이것만 되돌리기"는 다른 작업을 건드리지 않습니다</span></div>
+  el.innerHTML = `<div class="hhead"><b>이번에 한 작업</b><span>모든 기기에서 같이 보는 최근 ${HIST_KEEP.done}개 · 같은 일정·할 일에 한 작업은 묶어서 보여 줍니다 · "이것만 되돌리기"는 다른 작업을 건드리지 않습니다</span></div>
     ${st.length ? `<ol class="hlist">${body}</ol>` : '<div class="count">아직 되돌릴 작업이 없습니다.</div>'}
     ${rd.length ? `<div class="hhead"><b>되돌린 작업</b><span>다시 할 수 있습니다</span></div><ol class="hlist">${rd.slice().reverse().map((x, k) => `<li class="hrow redo"><time>${hhmm(new Date(x.at))}</time><span><b>${esc(x.label)}</b><span class="hd">${esc(histDiff(x.d))}</span></span><button class="btn small" type="button" data-act="histRedo" data-n="${k + 1}">${k ? `여기까지 다시 하기 (${k + 1})` : '다시 하기'}</button></li>`).join('')}</ol>` : ''}`;
 }
@@ -6262,7 +6324,7 @@ try {
     .observe(ps, { childList: true, subtree: true, characterData: true });
 } catch {}
 setInterval(() => { if (UI.qtab === 'stat' && !document.hidden) renderStat(); }, 30000);
-if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__dd = { S, add, UNDO, replyFmt, delegFmt, fixNames, keyLine, snapshot, mergeIn, renderAll, FS, G, parseEdit, normalizeCmd, pickDT, parseCommand };
+if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__dd = { S, add, UNDO, undoArm, doUndo, patchItem: (c, id, d) => patch(c, id, d), replyFmt, delegFmt, fixNames, keyLine, snapshot, mergeIn, renderAll, FS, G, parseEdit, normalizeCmd, pickDT, parseCommand };
 })();
 </script>
 </body>
