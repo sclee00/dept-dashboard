@@ -869,6 +869,8 @@ label.inl{display:inline-flex;align-items:center;gap:.3rem;font-size:.85rem} lab
 .ritem:hover{background:rgba(127,127,127,.12)}.ritem .t{opacity:.7;font-size:.78rem}.ritem .tt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ritem.absent .tt{text-decoration:line-through;opacity:.6}.ritem.busy{opacity:.65}.ritem.hot .tt{font-weight:700}
 .ritem .ic svg{width:1rem;height:1rem}
+/* week / month lists are for looking: editing happens on the day you open */
+.ritems{cursor:pointer}.ritems .acts,.ritems > .memo{display:none!important}.ritems .icbtn,.ritems .gst,.ritems .memodot{pointer-events:none}
 </style>
 
 </head>
@@ -4767,10 +4769,10 @@ function renderRange(root, mode) {
     const r = dayRows(d, evs, true), it = [...r.ad, ...r.timed.map(x => x.h)], dd = parse(d), wk = dd.getDay();
     total += it.length;
     if (!it.length && mode === 'month') { empty++; continue; }
-    rows.push(`<div class="rday ${d === today ? 'rtoday' : ''} ${d === day ? 'sel' : ''}"><button type="button" class="rhead" data-act="dayGo" data-day="${d}"><b class="${wk === 0 ? 'sun' : wk === 6 ? 'sat' : ''}">${dd.getMonth() + 1}/${dd.getDate()} (${WD[wk]})</b>${d === today ? '<span class="pill">오늘</span>' : ''}<span class="count">${it.length ? it.length + '건' : '일정 없음'}</span></button>${it.length ? `<div class="sched ritems">${it.join('')}</div>` : ''}</div>`);
+    rows.push(`<div class="rday ${d === today ? 'rtoday' : ''} ${d === day ? 'sel' : ''}"><button type="button" class="rhead" data-act="dayGo" data-day="${d}"><b class="${wk === 0 ? 'sun' : wk === 6 ? 'sat' : ''}">${dd.getMonth() + 1}/${dd.getDate()} (${WD[wk]})</b>${d === today ? '<span class="pill">오늘</span>' : ''}<span class="count">${it.length ? it.length + '건' : '일정 없음'}</span></button>${it.length ? `<div class="sched ritems" data-act="dayGo" data-day="${d}" title="눌러서 이 날 일정 편집">${it.join('')}</div>` : ''}</div>`);
   }
   root.innerHTML = `${dayNavHtml()}
-    <div class="dayhead"><div class="eyebrow">${DAY_MODES.find(x => x[0] === mode)[1]} 보기</div><h3>${title}</h3><div class="count">일정·할 일 ${total}건${mode === 'month' && empty ? ` · 일정 없는 날 ${empty}일은 뺐습니다` : ''} · 날짜를 누르면 그날로 갑니다</div></div>
+    <div class="dayhead"><div class="eyebrow">${DAY_MODES.find(x => x[0] === mode)[1]} 보기</div><h3>${title}</h3><div class="count">일정·할 일 ${total}건${mode === 'month' && empty ? ` · 일정 없는 날 ${empty}일은 뺐습니다` : ''} · 날짜나 일정을 누르면 그날로 가서 편집할 수 있습니다</div></div>
     <div class="rlist">${rows.join('') || '<div class="empty">이 기간에 일정이 없습니다.</div>'}</div>`;
 }
 // the rows of one day, the same in the day view and the week / month lists (range: no weekly blocks, no free slots)
