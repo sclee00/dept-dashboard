@@ -877,6 +877,13 @@ label.inl{display:inline-flex;align-items:center;gap:.3rem;font-size:.85rem} lab
 .rhead .selp{background:var(--accent,#7aa2ff);color:#0b1020}
 .chipbtn{--cis:1.6rem;display:grid;place-items:center;margin-right:.3rem}
 .chipbtn .ci2 .ic{width:1rem;height:1rem}
+/* ⓘ speech-bubble help */
+.tipq{display:inline-grid;place-items:center;width:1.15rem;height:1.15rem;padding:0;margin:0 .15rem;border:0;border-radius:50%;background:none;color:var(--muted);cursor:help;vertical-align:middle;flex:none}
+.tipq:hover,.tipq:focus-visible{color:var(--accent)}
+.tipq .ic{width:.95rem;height:.95rem}
+#tipBubble{position:fixed;z-index:9999;background:var(--surface-2,#222838);color:var(--text,#eee);border:1px solid var(--line,#333);border-radius:10px;padding:.5rem .7rem;font-size:.82rem;line-height:1.5;box-shadow:0 8px 24px rgb(0 0 0 / .35);pointer-events:none;white-space:normal}
+#tipBubble::after{content:'';position:absolute;left:calc(var(--ax,50%) - 6px);bottom:-6px;width:10px;height:10px;background:inherit;border-right:1px solid var(--line,#333);border-bottom:1px solid var(--line,#333);transform:rotate(45deg)}
+#tipBubble.below::after{bottom:auto;top:-6px;transform:rotate(225deg)}
 </style>
 
 </head>
@@ -923,8 +930,7 @@ label.inl{display:inline-flex;align-items:center;gap:.3rem;font-size:.85rem} lab
       <div class="railbody" id="pane-day" role="tabpanel"><div id="dayPanel" style="display:flex;flex-direction:column;gap:.85rem"></div></div>
 
       <div class="railbody" id="pane-mail" role="tabpanel" hidden>
-        <div class="panehead"><b>이메일 처리</b><span class="count" id="mailCount"></span></div>
-        <div class="count" id="mailIntro">메일을 맨 위 칸에 붙여넣거나 Thunderbird에서 "대시보드로 보내기"를 누르면 여기에 쌓입니다.</div>
+        <div class="panehead"><b>이메일 처리</b><span id="mailIntro"></span><span class="count" id="mailCount"></span></div>
         <div class="tabs" id="mailTabs">
           <button class="tab" data-mf="open" aria-pressed="true" type="button">처리 중</button>
           <button class="tab" data-mf="reply" aria-pressed="false" type="button">답장 대기</button>
@@ -1040,6 +1046,7 @@ const IP = {
   마감:'<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M5 3 2 6M19 3l3 3"/>',
   할일:'<rect x="4" y="4" width="16" height="16" rx="3"/><path d="m8 12 3 3 5-6"/>',
   archive:'<rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10h14V9M10 13h4"/>',
+  info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.6v.4"/>',
   spark:'<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6.3 6.3l2.5 2.5M15.2 15.2l2.5 2.5M6.3 17.7l2.5-2.5M15.2 8.8l2.5-2.5"/>',
   copy:'<rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/>',
   thread:'<path d="M4 5h16v10H9l-5 4z"/><path d="M8 9h8M8 12h5"/>',
@@ -1877,7 +1884,7 @@ function replyBlock(m) {
   if (!needsReplyNow(m)) return '';
   const opts = m.replyOptions || [];
   if (needsChoice(m)) return `<div class="mbox opt">
-      <div>${ic('reply')} <b>어떻게 답할까요?</b> <span class="count">고르면 그 방향의 답장 전문이 바로 준비됩니다</span></div>
+      <div>${ic('reply')} <b>어떻게 답할까요?</b> ${tip('고르면 그 방향의 답장 전문이 바로 준비됩니다.')}</div>
       <div class="optrow">${opts.map((o, i) => `<button class="optchip" type="button" data-act="pickOpt" data-id="${m.id}" data-i="${i}" title="${esc(o.summary)}"><b>${esc(o.label)}</b><span>${esc(o.summary)}</span></button>`).join('')}</div>
     </div>`;
   const d = fixNames((m.reply && m.reply.draft) || (opts[m.replyChoice ?? 0] || {}).draft || '');
@@ -1893,18 +1900,15 @@ const fwdAddr = () => ((UI.ping && UI.ping.forward) || (localStorage.getItem('ga
 function renderFwdHint() {
   const h = $('fwdHint'); if (!h) return;
   h.hidden = !isIOS(); if (h.hidden) return;
-  { const it = $('mailIntro'); if (it) it.textContent = '메일을 맨 위 칸에 붙여넣거나, 메일 앱에서 아래 주소로 전달하면 여기에 쌓입니다.'; }
   let open = true; try { open = localStorage.getItem('fwdHintOpen') !== '0'; } catch {}
   h.open = open;
-  h.innerHTML = `<summary>${ic('inbox')} 아이폰에서 메일 넣기 · <code>${esc(fwdAddr())}</code>로 전달</summary>
-    <ol class="count steps"><li>아이폰 <b>메일</b> 앱에서 메일을 열고 아래 <b>↩︎ 답장</b> 버튼 → <b>전달</b>을 누릅니다.</li>
-    <li>받는 사람에 <b>${esc(fwdAddr())}</b>를 넣고 보냅니다. 연락처에 "대시보드"로 저장해 두면 이름만 쳐도 됩니다.</li>
-    <li>1~5분 안에 이 메일 목록에 <span class="pill done">전달</span> 표시로 들어옵니다. 바로 보려면 <b>메일 가져오기</b>를 누르세요.</li></ol>
+  h.innerHTML = `<summary>${ic('inbox')} 메일 넣기: <code>${esc(fwdAddr())}</code>로 전달 ${tip(`아이폰 메일 앱에서 메일을 열고 ↩︎ 답장 → 전달을 누른 뒤, 받는 사람에 ${fwdAddr()}를 넣어 보내면 1~5분 안에 이 목록에 "전달" 표시로 들어옵니다. 연락처에 "대시보드"로 저장해 두면 편합니다.`)}</summary>
     <div class="row"><button class="btn small" type="button" data-act="fwdCopy">${ic('copy')}주소 복사</button><button class="btn small" type="button" data-act="inboxRun">${ic('inbox')}메일 가져오기</button></div>`;
   h.ontoggle = () => { try { localStorage.setItem('fwdHintOpen', h.open ? '1' : '0'); } catch {} };
 }
 function renderMails() {
   renderFwdHint();
+  { const it = $('mailIntro'); if (it && !it.firstChild) it.innerHTML = tip(isIOS() ? `메일을 자동 처리 칸에 붙여넣거나, 메일 앱에서 ${fwdAddr()}로 전달하면 여기에 쌓입니다.` : '메일을 자동 처리 칸에 붙여넣거나 Thunderbird에서 "대시보드로 보내기"를 누르면 여기에 쌓입니다.'); }
   const rank = m => m.unanalyzed && isActive(m) ? -1 : askIgnore(m) ? 3 : needsChoice(m) ? 0 : needsReplyNow(m) ? 1 : 2;
   let list = S.emails.slice().sort((a, b) => rank(a) - rank(b) || (a.replyDeadline || '9999').localeCompare(b.replyDeadline || '9999') || (PRIO[a.priority] ?? 1) - (PRIO[b.priority] ?? 1) || (b.updatedAt || b.createdAt || '').localeCompare(a.updatedAt || a.createdAt || ''));
   const f = UI.mf;
@@ -1925,7 +1929,7 @@ function renderMails() {
   sel.innerHTML = '<option value="">새 메일로 등록</option>' + cand.map(m => `<option value="${m.id}">이어서: ${esc((m.subject || '').slice(0, 40))}</option>`).join('');
   if (cand.some(m => m.id === cur)) sel.value = cur;
   if (!list.length) {
-    $('mailList').innerHTML = `<div class="empty">${S.emails.length ? '이 목록은 비어 있습니다.' : '등록된 메일이 없습니다. 맨 위 칸에 메일을 붙여넣고 분석해 보세요.'}</div>`;
+    $('mailList').innerHTML = `<div class="empty">${S.emails.length ? '이 목록은 비어 있습니다.' : '등록된 메일이 없습니다.'}</div>`;
     return;
   }
   $('mailList').innerHTML = list.map(m => {
@@ -3219,7 +3223,7 @@ const UNDO_LABEL = {
   delRule: '아이콘 규칙 삭제', skipOcc: '반복 일정 한 번 빼기', edSave: '일정 편집', bdSave: '불가 시간 설정', saveSettings: '설정 변경', imSave: '아이콘 색·이름',
   pushG: '구글에 추가', fEvent: '일정 추가', fBlock: '불가 시간 추가', taskForm: '할 일 추가', importData: '파일 가져오기'
 };
-const UNDO_SKIP = new Set(['daySel', 'dayMode', 'dayNav', 'dayGo', 'fwdCopy', 'gemCancel', 'scriptCopy', 'scriptSetup', 'scriptTest', 'scriptOn', 'copyReply', 'copyDraft', 'gemEmbed', 'gemDockOpen', 'qTab', 'gemNew', 'gemTall', 'gemZoom', 'histUndo', 'histRedo', 'histOne', 'histGroup', 'histFold', 'stPing', 'pushAllG', 'aiKeySave', 'aiKeyClear', 'aiTest', 'aiMode', 'aiModelSel', 'relayClip', 'stOpen', 'tidyOpen', 'tidyDel', 'tidyTime', 'tidyMerge', 'inboxRun', 'analyzeMail', 'tgShow', 'tgHide', 'phoneLink', 'gDel', 'fltImp', 'fltIcons', 'fltTog', 'fltClear', 'fltClose', 'cmdToAI', 'cmdPick', 'cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
+const UNDO_SKIP = new Set(['tip', 'daySel', 'dayMode', 'dayNav', 'dayGo', 'fwdCopy', 'gemCancel', 'scriptCopy', 'scriptSetup', 'scriptTest', 'scriptOn', 'copyReply', 'copyDraft', 'gemEmbed', 'gemDockOpen', 'qTab', 'gemNew', 'gemTall', 'gemZoom', 'histUndo', 'histRedo', 'histOne', 'histGroup', 'histFold', 'stPing', 'pushAllG', 'aiKeySave', 'aiKeyClear', 'aiTest', 'aiMode', 'aiModelSel', 'relayClip', 'stOpen', 'tidyOpen', 'tidyDel', 'tidyTime', 'tidyMerge', 'inboxRun', 'analyzeMail', 'tgShow', 'tgHide', 'phoneLink', 'gDel', 'fltImp', 'fltIcons', 'fltTog', 'fltClear', 'fltClose', 'cmdToAI', 'cmdPick', 'cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
 function undoSnap() {
   const o = { settings: JSON.parse(JSON.stringify(S.settings)) };
   for (const c of COLS) o[c] = JSON.parse(JSON.stringify(S[c]));
@@ -4278,7 +4282,7 @@ function memoPanel(key) {
   return `<div class="memo" data-memo="${esc(key)}">
     <textarea class="field memot" data-memo-k="${esc(key)}" rows="3" placeholder="메모 — 구글 캘린더 일정의 '설명'과 함께 저장됩니다. 스크린샷은 Ctrl+V로 붙여넣기">${esc(t.memo.text || '')}</textarea>
     ${files.length ? `<div class="memofiles">${files.map((f, i) => /^image\//.test(f.type || '') && f.data ? `<span class="mthumb"><img src="${esc(f.data)}" alt="${esc(f.name)}" data-act="memoOpenF" data-k="${esc(key)}" data-i="${i}" title="${esc(f.name)} · 눌러서 크게 보기"><button class="x" type="button" data-act="memoDelF" data-k="${esc(key)}" data-i="${i}" aria-label="빼기">✕</button></span>` : `<span class="attchip">${ic('doc')}<b data-act="memoOpenF" data-k="${esc(key)}" data-i="${i}" style="cursor:pointer">${esc(f.name)}</b><span class="count">${fmtSize(f.size || 0)}</span><button class="x" type="button" data-act="memoDelF" data-k="${esc(key)}" data-i="${i}" aria-label="빼기">✕</button></span>`).join('')}</div>` : ''}
-    <div class="row"><button class="btn small" type="button" data-act="memoFile" data-k="${esc(key)}">${ic('plus')}이미지·파일</button><span class="count">끌어다 놓거나 Ctrl+V로 붙여넣기 · 구글에는 글만 들어갑니다</span><span class="count memost" style="margin-left:auto"></span></div>
+    <div class="row"><button class="btn small" type="button" data-act="memoFile" data-k="${esc(key)}">${ic('plus')}이미지·파일</button>${tip('이미지·파일은 끌어다 놓거나 Ctrl+V로 붙여넣어도 됩니다. 구글 캘린더에는 글만 들어갑니다.')}<span class="count memost" style="margin-left:auto"></span></div>
     <input type="file" class="memoinput" data-k="${esc(key)}" multiple hidden></div>`;
 }
 const memoBtn = key => `<button class="x memobtn ${memoHas(key) ? 'on' : ''}" type="button" data-act="memoT" data-k="${esc(key)}" title="${memoHas(key) ? '메모 보기' : '메모 쓰기'}" aria-pressed="${UI.memoOpen === key}">${ic('chat')}</button>`;
@@ -4706,6 +4710,23 @@ function fitIcons(g) {
   if (g.style.getPropertyValue('--cis') !== size + 'px') g.style.setProperty('--cis', size + 'px');
 }
 /* ---------- day panel ---------- */
+// guidance text lives in a small ⓘ that opens a speech bubble (hover on PC, tap on the phone)
+const tip = text => `<button type="button" class="tipq" data-act="tip" data-tip="${esc(text)}" aria-label="도움말: ${esc(text)}">${ic('info')}</button>`;
+function tipShow(el) {
+  let b = $('tipBubble'); if (!b) { b = document.createElement('div'); b.id = 'tipBubble'; b.setAttribute('role', 'tooltip'); document.body.appendChild(b); }
+  UI.tipAt = Date.now(); b.textContent = el.dataset.tip; b.hidden = false; b.dataset.for = el.dataset.tip;
+  const r = el.getBoundingClientRect(), w = Math.min(300, window.innerWidth - 24); b.style.maxWidth = w + 'px';
+  const bw = b.offsetWidth, bh = b.offsetHeight;
+  let x = r.left + r.width / 2 - bw / 2; x = Math.max(12, Math.min(x, window.innerWidth - bw - 12));
+  const up = r.top - bh - 10 > 8; const y = up ? r.top - bh - 10 : r.bottom + 10;
+  b.style.left = x + 'px'; b.style.top = y + 'px'; b.classList.toggle('below', !up);
+  b.style.setProperty('--ax', (r.left + r.width / 2 - x) + 'px');
+}
+function tipHide() { const b = $('tipBubble'); if (b) b.hidden = true; }
+document.addEventListener('pointerover', e => { const t = e.target.closest && e.target.closest('.tipq'); if (t && e.pointerType === 'mouse') tipShow(t); });
+document.addEventListener('pointerout', e => { const t = e.target.closest && e.target.closest('.tipq'); if (t && e.pointerType === 'mouse' && !(e.relatedTarget && t.contains(e.relatedTarget))) tipHide(); });
+document.addEventListener('pointerdown', e => { if (!(e.target.closest && e.target.closest('.tipq, #tipBubble'))) tipHide(); }, true);
+window.addEventListener('scroll', () => { if (Date.now() - (UI.tipAt || 0) > 400) tipHide(); }, true);
 function srow({ t, icon, kc, title, sub, cls, acts, tag, fixed, iconAct, memoKey, gs, chip }) {
   if (memoKey) { acts = memoBtn(memoKey) + (acts || ''); if (memoHas(memoKey)) tag = (tag || '') + ` <span class="memodot" title="메모 있음">${ic('chat')}</span>`; }
   if (!fixed && GENERIC_ICONS.has(icon) && icon !== '마감') { const k = iconFor(title, icon); if (k !== icon) { icon = k; kc = ICON_GROUP[k] || kc; } }
@@ -4787,7 +4808,7 @@ function renderRange(root, mode) {
     rows.push(`<div class="rday ${d === today ? 'rtoday' : ''} ${d === day ? 'sel' : ''} ${past ? 'past' : ''}"><button type="button" class="rhead" data-act="dayGo" data-day="${d}"><b class="${wk === 0 ? 'sun' : wk === 6 ? 'sat' : ''}">${dd.getMonth() + 1}/${dd.getDate()} (${WD[wk]})</b>${d === today ? '<span class="pill">오늘</span>' : ''}${past ? '<span class="pastlbl">지남</span>' : ''}<span class="count">${it.length ? it.length + '건' : '일정 없음'}</span></button>${it.length ? (d === day ? `<div class="sched">${it.join('')}</div>` : `<div class="sched ritems" data-act="daySel" data-day="${d}" title="눌러서 이 날 일정 편집">${it.join('')}</div>`) : ''}</div>`);
   }
   root.innerHTML = `${dayNavHtml()}
-    <div class="dayhead"><div class="eyebrow">${DAY_MODES.find(x => x[0] === mode)[1]} 보기</div><h3>${title}</h3><div class="count">일정·할 일 ${total}건${mode === 'month' && empty ? ` · 일정 없는 날 ${empty}일은 뺐습니다` : ''} · 고른 날(테두리)은 맨 위로 스크롤하고 편집 버튼을 보여 줍니다 · 다른 날 일정을 누르면 그 날을 고르고, 날짜를 누르면 하루 보기로 갑니다</div></div>
+    <div class="dayhead"><div class="eyebrow">${DAY_MODES.find(x => x[0] === mode)[1]} 보기</div><h3>${title}</h3><div class="count">일정·할 일 ${total}건${mode === 'month' && empty ? ` · 일정 없는 날 ${empty}일 생략` : ''} ${tip('고른 날(테두리)은 맨 위로 스크롤하고 편집 버튼을 보여 줍니다. 다른 날 일정을 누르면 그 날을 고르고, 날짜를 누르면 하루 보기로 갑니다. 지난 일정은 회색입니다.')}</div></div>
     <div class="rlist">${rows.join('') || '<div class="empty">이 기간에 일정이 없습니다.</div>'}</div>`;
   // the chosen day is scrolled to the top of the panel (days stay in order); a spacer below lets even the last day reach the top
   const key = mode + day;
@@ -4856,10 +4877,10 @@ function renderDay(force) {
     ${dayFormHtml(day)}
     ${ad.length ? `<div class="sgrp">종일 · 마감 · 할 일</div><div class="sched">${ad.join('')}</div>` : ''}
     <div class="sgrp">일정 목록</div>
-    <div class="sched">${timed.filter(x => !String(x.h).includes('freeslot')).length ? timed.filter(x => !String(x.h).includes('freeslot')).map(x => x.h).join('') : `<div class="empty">이 날 시간이 정해진 일정이 없습니다. 아래 시간표에서 눌러 바로 넣을 수 있습니다.</div>`}</div>
+    <div class="sched">${timed.filter(x => !String(x.h).includes('freeslot')).length ? timed.filter(x => !String(x.h).includes('freeslot')).map(x => x.h).join('') : `<div class="empty">시간이 정해진 일정이 없습니다.</div>`}</div>
     ${touchUI() && !UI.tgShow && !UI.qa
       ? `<button class="btn small tgopen" type="button" data-act="tgShow">${ic('cal')}시간표에서 눌러 일정 추가</button>`
-      : `<div class="sgrp">시간표 · 빈 시간 <span class="count">빈 칸을 누르거나 끌어서 바로 추가</span>${touchUI() ? '<button class="linkish" type="button" data-act="tgHide" style="margin-left:auto">접기</button>' : ''}</div>
+      : `<div class="sgrp">시간표 · 빈 시간 ${tip('빈 칸을 누르거나 끌어서 바로 일정을 넣습니다.')}${touchUI() ? '<button class="linkish" type="button" data-act="tgHide" style="margin-left:auto">접기</button>' : ''}</div>
     ${timeGridHtml(day)}
     ${qaFormHtml()}`}`;
 }
@@ -5708,6 +5729,7 @@ document.addEventListener('click', async ev0 => {
         return;
       }
       case 'rail': UI.rail = el.dataset.r; renderRail(); if (UI.rail === 'day') renderDay(true); return;
+      case 'tip': { const b = $('tipBubble'); if (b && !b.hidden && b.dataset.for === el.dataset.tip) tipHide(); else tipShow(el); return; }
       case 'dayMode': UI.dayMode = el.dataset.m; try { localStorage.setItem('dayMode', UI.dayMode); } catch {} UI.dayForm = null; renderDay(true); return;
       case 'dayNav': UI.rangeFromList = true; UI.selDay = dayStep(+el.dataset.d); UI.dayForm = null; renderCal(); renderDay(true); try { renderRail(); } catch {} return;
       case 'daySel': UI.rangeFromList = true; UI.selDay = el.dataset.day; UI.dayForm = null; renderCal(); renderDay(true); try { renderRail(); } catch {} return;
@@ -6327,14 +6349,14 @@ function renderGemPane() {
   if (isIOS()) { // no Chrome extension on the iPhone: Gemini runs through Scriptable instead
     const on = scriptableOn();
     box.innerHTML = `<div class="gemios">
-      <p><b>${ic('phone')} 아이폰에서는 Gemini를 이 칸에 띄울 수 없습니다.</b><br><span class="count">아이폰 사파리는 확장을 못 붙여서 Gemini 화면을 대시보드 안에 넣을 수 없습니다. 대신 <b>자동 처리 → AI로 처리</b>를 누르면 Scriptable이 Gemini에 물어보고 답을 대시보드로 가져옵니다.</span></p>
+      <p><b>${ic('phone')} 아이폰에서는 AI로 처리가 Scriptable로 갑니다</b> ${tip('아이폰 사파리는 확장을 못 붙여서 Gemini 화면을 대시보드 안에 넣을 수 없습니다. 대신 자동 처리 → AI로 처리를 누르면 Scriptable이 Gemini에 물어보고 답을 대시보드로 가져옵니다.')}</p>
       <p class="count">Scriptable 연결: <b class="${on ? 'ok' : 'warn'}">${on ? '이 아이폰에서 켜짐' : '꺼짐'}</b></p>
       <div class="row" style="flex-wrap:wrap">
         ${on ? `<button class="btn small" type="button" data-act="scriptTest">${ic('check')}연결 시험</button>` : `<button class="btn small primary" type="button" data-act="scriptSetup">${ic('link')}Scriptable 연결</button>`}
         <a class="btn small" href="https://gemini.google.com/app" target="_blank" rel="noopener">${ic('spark')}Gemini 직접 열기</a>
         <button class="btn small" type="button" data-act="qTab" data-k="auto">자동 처리로</button>
       </div>
-      <p class="count">Scriptable 설치·설정 방법은 설정 → 기본 → "아이폰에서 Gemini 쓰기 (Scriptable)"에 있습니다.</p></div>`;
+      <p class="count">설치 방법 ${tip('설정 → 기본 → "아이폰에서 Gemini 쓰기 (Scriptable)"에 있습니다.')}</p></div>`;
     return;
   }
   const v = document.documentElement.dataset.geminiBridge;
@@ -6441,9 +6463,9 @@ function renderHist() {
     return `<li class="hrow${inGroup ? ' sub' : ''}"><time>${histWhen(x.at)}</time><span><b>${esc(x.label)}</b>${x.dev ? ` <span class="pill">${esc(x.dev)}</span>` : ''}<span class="hd">${esc(histDiff(x.d) || '바뀐 것 없음')}</span></span><span class="hbtns"><button class="btn small" type="button" data-act="histOne" data-i="${i}" title="이 작업만 되돌립니다 (다른 작업은 그대로)">이것만 되돌리기</button>${back > 1 ? `<button class="btn small ghost" type="button" data-act="histUndo" data-n="${back}" title="가장 최근 작업부터 여기까지 ${back}개를 되돌립니다">여기까지 (${back})</button>` : ''}</span></li>`; };
   const body = [...groups.entries()].map(([k, ix]) => ix.length === 1 ? row(ix[0], false)
     : `<li class="hgroup"><div class="hghead"><span><b>${esc(histName(st[ix[0]]))}</b> <span class="hd" style="display:inline">작업 ${ix.length}개 · ${hhmm(new Date(st[ix[ix.length - 1]].at))}–${hhmm(new Date(st[ix[0]].at))}</span></span><span class="hbtns"><button class="btn small" type="button" data-act="histGroup" data-k="${esc(k)}">이 항목 작업 모두 되돌리기</button><button class="btn small ghost" type="button" data-act="histFold" data-k="${esc(k)}">${UI.histOpen && UI.histOpen[k] ? '접기' : '펼치기'}</button></span></div>${UI.histOpen && UI.histOpen[k] ? `<ol class="hlist">${ix.map(i => row(i, true)).join('')}</ol>` : `<div class="hd" style="padding:.15rem 0 0 3.8rem">${esc(ix.map(i => st[i].label).join(' · '))}</div>`}</li>`).join('');
-  el.innerHTML = `<div class="hhead"><b>이번에 한 작업</b><span>모든 기기에서 같이 보는 최근 ${HIST_KEEP.done}개 · 같은 일정·할 일에 한 작업은 묶어서 보여 줍니다 · "이것만 되돌리기"는 다른 작업을 건드리지 않습니다</span></div>
+  el.innerHTML = `<div class="hhead"><b>이번에 한 작업</b>${tip(`모든 기기에서 같이 보는 최근 ${HIST_KEEP.done}개입니다. 같은 일정·할 일에 한 작업은 묶어서 보여 줍니다. "이것만 되돌리기"는 다른 작업을 건드리지 않습니다.`)}</div>
     ${st.length ? `<ol class="hlist">${body}</ol>` : '<div class="count">아직 되돌릴 작업이 없습니다.</div>'}
-    ${rd.length ? `<div class="hhead"><b>되돌린 작업</b><span>다시 할 수 있습니다</span></div><ol class="hlist">${rd.slice().reverse().map((x, k) => `<li class="hrow redo"><time>${hhmm(new Date(x.at))}</time><span><b>${esc(x.label)}</b><span class="hd">${esc(histDiff(x.d))}</span></span><button class="btn small" type="button" data-act="histRedo" data-n="${k + 1}">${k ? `여기까지 다시 하기 (${k + 1})` : '다시 하기'}</button></li>`).join('')}</ol>` : ''}`;
+    ${rd.length ? `<div class="hhead"><b>되돌린 작업</b>${tip('다시 할 수 있습니다.')}</div><ol class="hlist">${rd.slice().reverse().map((x, k) => `<li class="hrow redo"><time>${hhmm(new Date(x.at))}</time><span><b>${esc(x.label)}</b><span class="hd">${esc(histDiff(x.d))}</span></span><button class="btn small" type="button" data-act="histRedo" data-n="${k + 1}">${k ? `여기까지 다시 하기 (${k + 1})` : '다시 하기'}</button></li>`).join('')}</ol>` : ''}`;
 }
 { let k = 'auto'; try { k = localStorage.getItem('qtab') || 'auto'; } catch {} qTab(k); }
 // when 자동 처리 shows its result (preview, answer, message), bring it into view
