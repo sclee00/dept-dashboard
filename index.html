@@ -3213,7 +3213,7 @@ const UNDO_LABEL = {
   delRule: '아이콘 규칙 삭제', skipOcc: '반복 일정 한 번 빼기', edSave: '일정 편집', bdSave: '불가 시간 설정', saveSettings: '설정 변경', imSave: '아이콘 색·이름',
   pushG: '구글에 추가', fEvent: '일정 추가', fBlock: '불가 시간 추가', taskForm: '할 일 추가', importData: '파일 가져오기'
 };
-const UNDO_SKIP = new Set(['dayMode', 'dayNav', 'dayGo', 'fwdCopy', 'gemCancel', 'scriptCopy', 'scriptSetup', 'scriptTest', 'scriptOn', 'copyReply', 'copyDraft', 'gemEmbed', 'gemDockOpen', 'qTab', 'gemNew', 'gemTall', 'gemZoom', 'histUndo', 'histRedo', 'histOne', 'histGroup', 'histFold', 'stPing', 'pushAllG', 'aiKeySave', 'aiKeyClear', 'aiTest', 'aiMode', 'aiModelSel', 'relayClip', 'stOpen', 'tidyOpen', 'tidyDel', 'tidyTime', 'tidyMerge', 'inboxRun', 'analyzeMail', 'tgShow', 'tgHide', 'phoneLink', 'gDel', 'fltImp', 'fltIcons', 'fltTog', 'fltClear', 'fltClose', 'cmdToAI', 'cmdPick', 'cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
+const UNDO_SKIP = new Set(['daySel', 'dayMode', 'dayNav', 'dayGo', 'fwdCopy', 'gemCancel', 'scriptCopy', 'scriptSetup', 'scriptTest', 'scriptOn', 'copyReply', 'copyDraft', 'gemEmbed', 'gemDockOpen', 'qTab', 'gemNew', 'gemTall', 'gemZoom', 'histUndo', 'histRedo', 'histOne', 'histGroup', 'histFold', 'stPing', 'pushAllG', 'aiKeySave', 'aiKeyClear', 'aiTest', 'aiMode', 'aiModelSel', 'relayClip', 'stOpen', 'tidyOpen', 'tidyDel', 'tidyTime', 'tidyMerge', 'inboxRun', 'analyzeMail', 'tgShow', 'tgHide', 'phoneLink', 'gDel', 'fltImp', 'fltIcons', 'fltTog', 'fltClear', 'fltClose', 'cmdToAI', 'cmdPick', 'cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
 function undoSnap() {
   const o = { settings: JSON.parse(JSON.stringify(S.settings)) };
   for (const c of COLS) o[c] = JSON.parse(JSON.stringify(S[c]));
@@ -4769,10 +4769,10 @@ function renderRange(root, mode) {
     const r = dayRows(d, evs, true), it = [...r.ad, ...r.timed.map(x => x.h)], dd = parse(d), wk = dd.getDay();
     total += it.length;
     if (!it.length && mode === 'month') { empty++; continue; }
-    rows.push(`<div class="rday ${d === today ? 'rtoday' : ''} ${d === day ? 'sel' : ''}"><button type="button" class="rhead" data-act="dayGo" data-day="${d}"><b class="${wk === 0 ? 'sun' : wk === 6 ? 'sat' : ''}">${dd.getMonth() + 1}/${dd.getDate()} (${WD[wk]})</b>${d === today ? '<span class="pill">오늘</span>' : ''}<span class="count">${it.length ? it.length + '건' : '일정 없음'}</span></button>${it.length ? `<div class="sched ritems" data-act="dayGo" data-day="${d}" title="눌러서 이 날 일정 편집">${it.join('')}</div>` : ''}</div>`);
+    rows.push(`<div class="rday ${d === today ? 'rtoday' : ''} ${d === day ? 'sel' : ''}"><button type="button" class="rhead" data-act="dayGo" data-day="${d}"><b class="${wk === 0 ? 'sun' : wk === 6 ? 'sat' : ''}">${dd.getMonth() + 1}/${dd.getDate()} (${WD[wk]})</b>${d === today ? '<span class="pill">오늘</span>' : ''}<span class="count">${it.length ? it.length + '건' : '일정 없음'}</span></button>${it.length ? (d === day ? `<div class="sched">${it.join('')}</div>` : `<div class="sched ritems" data-act="daySel" data-day="${d}" title="눌러서 이 날 일정 편집">${it.join('')}</div>`) : ''}</div>`);
   }
   root.innerHTML = `${dayNavHtml()}
-    <div class="dayhead"><div class="eyebrow">${DAY_MODES.find(x => x[0] === mode)[1]} 보기</div><h3>${title}</h3><div class="count">일정·할 일 ${total}건${mode === 'month' && empty ? ` · 일정 없는 날 ${empty}일은 뺐습니다` : ''} · 날짜나 일정을 누르면 그날로 가서 편집할 수 있습니다</div></div>
+    <div class="dayhead"><div class="eyebrow">${DAY_MODES.find(x => x[0] === mode)[1]} 보기</div><h3>${title}</h3><div class="count">일정·할 일 ${total}건${mode === 'month' && empty ? ` · 일정 없는 날 ${empty}일은 뺐습니다` : ''} · 고른 날(테두리)만 편집 버튼이 나옵니다 · 다른 날 일정을 누르면 그 날을 고르고, 날짜를 누르면 하루 보기로 갑니다</div></div>
     <div class="rlist">${rows.join('') || '<div class="empty">이 기간에 일정이 없습니다.</div>'}</div>`;
 }
 // the rows of one day, the same in the day view and the week / month lists (range: no weekly blocks, no free slots)
@@ -5677,6 +5677,7 @@ document.addEventListener('click', async ev0 => {
       case 'rail': UI.rail = el.dataset.r; renderRail(); if (UI.rail === 'day') renderDay(true); return;
       case 'dayMode': UI.dayMode = el.dataset.m; try { localStorage.setItem('dayMode', UI.dayMode); } catch {} UI.dayForm = null; renderDay(true); return;
       case 'dayNav': UI.selDay = dayStep(+el.dataset.d); UI.dayForm = null; renderCal(); renderDay(true); try { renderRail(); } catch {} return;
+      case 'daySel': UI.selDay = el.dataset.day; UI.dayForm = null; renderCal(); renderDay(true); try { renderRail(); } catch {} return;
       case 'dayGo': UI.selDay = el.dataset.day; UI.dayMode = 'day'; try { localStorage.setItem('dayMode', 'day'); } catch {} renderCal(); renderDay(true); try { renderRail(); } catch {} return;
       case 'dayForm': UI.dayForm = el.dataset.f || null; UI.prefill = null; renderDay(true); if (UI.dayForm) setTimeout(() => { const f = $(UI.dayForm === 'event' ? 'fTitle' : 'bLabel'); f && f.focus(); }, 0); return;
       case 'slotAdd': {
