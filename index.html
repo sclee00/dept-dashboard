@@ -4768,7 +4768,7 @@ function dayNavHtml() {
 function renderRange(root, mode) {
   const day = UI.selDay || todayStr(), [a, b] = dayRange(day, mode), today = todayStr(), da = parse(a), db = parse(b);
   const title = mode === 'month' ? `${da.getFullYear()}년 ${da.getMonth() + 1}월` : `${da.getMonth() + 1}월 ${da.getDate()}일 – ${db.getMonth() !== da.getMonth() ? db.getMonth() + 1 + '월 ' : ''}${db.getDate()}일`;
-  const rows = [], selRow = [], evs = expandEvents(); let total = 0, empty = 0;
+  const rows = [], evs = expandEvents(); let total = 0, empty = 0;
   for (let d = a; d <= b; d = addDays(d, 1)) {
     // past days, and today's items that have already ended, are greyed out
     const past = d < today, nowM = new Date().getHours() * 60 + new Date().getMinutes();
@@ -4776,23 +4776,27 @@ function renderRange(root, mode) {
     const it = [...r.ad, ...r.timed.map(x => d === today && x.end != null && x.end <= nowM ? x.h.replace('<div class="srow ', '<div class="srow pastrow ') : x.h)];
     total += it.length;
     if (!it.length && mode === 'month') { empty++; continue; }
-    (d === day ? selRow : rows).push(`<div class="rday ${d === today ? 'rtoday' : ''} ${d === day ? 'sel' : ''} ${past ? 'past' : ''}"><button type="button" class="rhead" data-act="dayGo" data-day="${d}"><b class="${wk === 0 ? 'sun' : wk === 6 ? 'sat' : ''}">${dd.getMonth() + 1}/${dd.getDate()} (${WD[wk]})</b>${d === today ? '<span class="pill">오늘</span>' : ''}${d === day ? '<span class="pill selp">고른 날</span>' : ''}${past ? '<span class="pastlbl">지남</span>' : ''}<span class="count">${it.length ? it.length + '건' : '일정 없음'}</span></button>${it.length ? (d === day ? `<div class="sched">${it.join('')}</div>` : `<div class="sched ritems" data-act="daySel" data-day="${d}" title="눌러서 이 날 일정 편집">${it.join('')}</div>`) : ''}</div>`);
+    rows.push(`<div class="rday ${d === today ? 'rtoday' : ''} ${d === day ? 'sel' : ''} ${past ? 'past' : ''}"><button type="button" class="rhead" data-act="dayGo" data-day="${d}"><b class="${wk === 0 ? 'sun' : wk === 6 ? 'sat' : ''}">${dd.getMonth() + 1}/${dd.getDate()} (${WD[wk]})</b>${d === today ? '<span class="pill">오늘</span>' : ''}${past ? '<span class="pastlbl">지남</span>' : ''}<span class="count">${it.length ? it.length + '건' : '일정 없음'}</span></button>${it.length ? (d === day ? `<div class="sched">${it.join('')}</div>` : `<div class="sched ritems" data-act="daySel" data-day="${d}" title="눌러서 이 날 일정 편집">${it.join('')}</div>`) : ''}</div>`);
   }
   root.innerHTML = `${dayNavHtml()}
-    <div class="dayhead"><div class="eyebrow">${DAY_MODES.find(x => x[0] === mode)[1]} 보기</div><h3>${title}</h3><div class="count">일정·할 일 ${total}건${mode === 'month' && empty ? ` · 일정 없는 날 ${empty}일은 뺐습니다` : ''} · 고른 날은 맨 위에 두고 편집 버튼을 보여 줍니다 · 다른 날 일정을 누르면 그 날을 고르고, 날짜를 누르면 하루 보기로 갑니다</div></div>
-    <div class="rlist">${[...selRow, ...rows].join('') || '<div class="empty">이 기간에 일정이 없습니다.</div>'}</div>`;
-  // the chosen day goes to the top of the list (in the panel's own scroll; on the phone page only when chosen from the list)
+    <div class="dayhead"><div class="eyebrow">${DAY_MODES.find(x => x[0] === mode)[1]} 보기</div><h3>${title}</h3><div class="count">일정·할 일 ${total}건${mode === 'month' && empty ? ` · 일정 없는 날 ${empty}일은 뺐습니다` : ''} · 고른 날(테두리)은 맨 위로 스크롤하고 편집 버튼을 보여 줍니다 · 다른 날 일정을 누르면 그 날을 고르고, 날짜를 누르면 하루 보기로 갑니다</div></div>
+    <div class="rlist">${rows.join('') || '<div class="empty">이 기간에 일정이 없습니다.</div>'}</div>`;
+  // the chosen day is scrolled to the top of the panel (days stay in order); a spacer below lets even the last day reach the top
   const key = mode + day;
   if (UI.rangeTop !== key) {
     UI.rangeTop = key;
     const fromList = UI.rangeFromList; UI.rangeFromList = false;
     requestAnimationFrame(() => {
-      const sel = root.querySelector('.rlist'); if (!sel) return;
-      let sc = root; while (sc && !(/(auto|scroll)/.test(getComputedStyle(sc).overflowY) && sc.scrollHeight > sc.clientHeight)) sc = sc.parentElement;
-      if (sc && sc !== document.body && sc !== document.documentElement) sc.scrollTo({ top: sc.scrollTop + sel.getBoundingClientRect().top - sc.getBoundingClientRect().top - 4, behavior: 'smooth' });
-      else if (fromList) window.scrollTo({ top: window.scrollY + sel.getBoundingClientRect().top - 8, behavior: 'smooth' });
+      const sel = root.querySelector('.rday.sel'), list = root.querySelector('.rlist'); if (!sel || !list) return;
+      let sc = root; while (sc && sc !== document.body && !/(auto|scroll)/.test(getComputedStyle(sc).overflowY)) sc = sc.parentElement;
+      if (sc && sc !== document.body && sc !== document.documentElement) {
+        const below = list.getBoundingClientRect().bottom - sel.getBoundingClientRect().top;
+        list.style.paddingBottom = Math.max(0, sc.clientHeight - below - 8) + 'px';
+        sc.scrollTo({ top: sc.scrollTop + sel.getBoundingClientRect().top - sc.getBoundingClientRect().top - 4, behavior: 'smooth' });
+      } else if (fromList) window.scrollTo({ top: window.scrollY + sel.getBoundingClientRect().top - 8, behavior: 'smooth' });
     });
-  }
+  } else { const list = root.querySelector('.rlist'), old = UI.rangePad; if (list && old) list.style.paddingBottom = old; }
+  { const list = root.querySelector('.rlist'); if (list) requestAnimationFrame(() => { UI.rangePad = list.style.paddingBottom; }); }
 }
 // the rows of one day, the same in the day view and the week / month lists (range: no weekly blocks, no free slots)
 function dayRows(day, evs, range) {
