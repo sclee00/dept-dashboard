@@ -518,7 +518,10 @@ a.btn{text-decoration:none;color:inherit}
 .sheet{width:min(var(--sheetw,46rem),100%)}
 .gutter.sgrip{display:block;position:absolute;left:-5px;top:0;bottom:0;width:10px;z-index:2}
 .gutter.sgrip::after{top:45%;bottom:45%;left:50%;width:4px;transform:translateX(-50%);opacity:.5}
-.quick.sized{height:var(--qh);flex:none;overflow:auto;box-sizing:border-box}
+.quick.sized{height:auto;min-height:0;flex:none;overflow:hidden;box-sizing:border-box}
+/* the whole bottom row takes the dragged height: both boxes reach the bottom, and their contents scroll */
+.qrow:has(.quick.sized){height:var(--qh);grid-template-rows:minmax(0,1fr)}
+.qrow:has(.quick.sized)>.toolgrid{min-height:0;overflow:auto}
 .quick.sized .qbody{flex:1 0 auto;min-height:0;grid-template-rows:minmax(0,1fr)}
 .quick.sized #rawMail{height:100%;min-height:2.6rem;resize:none;box-sizing:border-box}
 body.resizing{user-select:none} body.rs-col,body.rs-col *{cursor:col-resize!important} body.rs-row,body.rs-row *{cursor:row-resize!important}
@@ -4002,11 +4005,12 @@ function applyLayout() {
   const hd = document.querySelector('header.top');
   if (LAY.head && hd && hd.querySelector('.tools')) { r.setProperty('--hw', LAY.head + 'px'); hd.classList.add('sized'); } else { r.removeProperty('--hw'); hd && hd.classList.remove('sized'); }
 }
-// the auto-processing box never gets smaller than its title row + buttons, so nothing spills over its border
+// the bottom row can shrink down to the tab row plus a little
 function quickMin() {
   const q = document.querySelector('.quick'); if (!q) return 140;
-  const cs = getComputedStyle(q), h = q.querySelector('.qhead'), c = q.querySelector('.qctl');
-  return Math.ceil((h ? h.offsetHeight : 24) + (c ? c.offsetHeight : 90) + parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom) + 2 * (parseFloat(cs.rowGap) || 8) + 4);
+  // only the tab row has to stay visible: what is under it scrolls
+  const cs = getComputedStyle(q), h = q.querySelector('.qhead');
+  return Math.ceil((h ? h.offsetHeight : 24) + 40 + parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom) + (parseFloat(cs.rowGap) || 8));
 }
 const saveLayout = () => { try { localStorage.setItem('dashLayout', JSON.stringify(LAY)); } catch {} };
 function splitSizes(kind) {
