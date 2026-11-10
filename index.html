@@ -5731,7 +5731,7 @@ document.addEventListener('click', async ev0 => {
         try { localStorage.setItem('calView', UI.view); } catch {}
         renderCal(); watchGoogle(); return;
       }
-      case 'pickDay': {
+      case 'pickDay': { UI.rangeTop = null; // picking the same day again still brings it back to the top
         const day = el.dataset.day; if (!isDate(day)) return;
         UI.selDay = day; UI.rail = 'day'; UI.dayForm = null; UI.prefill = null;
         const dm = parse(day); if (UI.view === 'month' && (dm.getMonth() !== UI.month.getMonth() || dm.getFullYear() !== UI.month.getFullYear())) { UI.month = new Date(dm.getFullYear(), dm.getMonth(), 1); watchGoogle(); }
@@ -5743,7 +5743,7 @@ document.addEventListener('click', async ev0 => {
       case 'tip': { const b = $('tipBubble'); if (b && !b.hidden && b.dataset.for === el.dataset.tip) tipHide(); else tipShow(el); return; }
       case 'dayMode': UI.dayMode = el.dataset.m; try { localStorage.setItem('dayMode', UI.dayMode); } catch {} UI.dayForm = null; renderDay(true); return;
       case 'dayNav': UI.rangeFromList = true; UI.selDay = dayStep(+el.dataset.d); UI.dayForm = null; renderCal(); renderDay(true); try { renderRail(); } catch {} return;
-      case 'daySel': UI.rangeFromList = true; UI.selDay = el.dataset.day; UI.dayForm = null; renderCal(); renderDay(true); try { renderRail(); } catch {} return;
+      case 'daySel': UI.rangeTop = null; UI.rangeFromList = true; UI.selDay = el.dataset.day; UI.dayForm = null; renderCal(); renderDay(true); try { renderRail(); } catch {} return;
       case 'dayGo': UI.selDay = el.dataset.day; UI.dayMode = 'day'; try { localStorage.setItem('dayMode', 'day'); } catch {} renderCal(); renderDay(true); try { renderRail(); } catch {} return;
       case 'dayForm': UI.dayForm = el.dataset.f || null; UI.prefill = null; renderDay(true); if (UI.dayForm) setTimeout(() => { const f = $(UI.dayForm === 'event' ? 'fTitle' : 'bLabel'); f && f.focus(); }, 0); return;
       case 'slotAdd': {
