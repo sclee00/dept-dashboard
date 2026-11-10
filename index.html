@@ -847,6 +847,10 @@ label.inl{display:inline-flex;align-items:center;gap:.3rem;font-size:.85rem} lab
 }
 
 @media (prefers-reduced-motion:no-preference){.sheet{animation:slide .18s ease-out}@keyframes slide{from{transform:translateX(24px);opacity:.6}}}
+.fwdhint{margin:.3rem 0 .5rem;padding:.45rem .6rem;border:1px solid var(--line, #333);border-radius:10px;font-size:.85rem}
+.fwdhint summary{cursor:pointer;font-weight:600}
+.fwdhint summary code{font-weight:400;user-select:all}
+.fwdhint ol{margin:.4rem 0 .4rem 1.1rem;padding:0}
 </style>
 
 </head>
@@ -894,7 +898,7 @@ label.inl{display:inline-flex;align-items:center;gap:.3rem;font-size:.85rem} lab
 
       <div class="railbody" id="pane-mail" role="tabpanel" hidden>
         <div class="panehead"><b>이메일 처리</b><span class="count" id="mailCount"></span></div>
-        <div class="count">메일을 맨 위 칸에 붙여넣거나 Thunderbird에서 "대시보드로 보내기"를 누르면 여기에 쌓입니다.</div>
+        <div class="count" id="mailIntro">메일을 맨 위 칸에 붙여넣거나 Thunderbird에서 "대시보드로 보내기"를 누르면 여기에 쌓입니다.</div>
         <div class="tabs" id="mailTabs">
           <button class="tab" data-mf="open" aria-pressed="true" type="button">처리 중</button>
           <button class="tab" data-mf="reply" aria-pressed="false" type="button">답장 대기</button>
@@ -902,6 +906,7 @@ label.inl{display:inline-flex;align-items:center;gap:.3rem;font-size:.85rem} lab
           <button class="tab" data-mf="done" aria-pressed="false" type="button">처리 완료</button>
           <button class="tab" data-mf="archived" aria-pressed="false" type="button">보관·무시</button>
         </div>
+        <details class="fwdhint" id="fwdHint" hidden></details>
         <div class="mails" id="mailList"></div>
       </div>
 
@@ -1857,7 +1862,23 @@ function replyBlock(m) {
     </div>`;
   return `<div class="mbox draft"><div class="row" style="justify-content:space-between"><span>${ic('reply')} <b>답장 필요</b> <span class="count">초안이 아직 없습니다</span></span><button class="btn small primary" type="button" data-act="quickDraft" data-id="${m.id}">${ic('spark')}초안 만들기</button></div></div>`;
 }
+const fwdAddr = () => ((UI.ping && UI.ping.forward) || (localStorage.getItem('gasEmail') || 'sclee00@gmail.com').replace('@', '+dash@'));
+// on the iPhone there is no Thunderbird: mail comes in by forwarding it to the +dash address
+function renderFwdHint() {
+  const h = $('fwdHint'); if (!h) return;
+  h.hidden = !isIOS(); if (h.hidden) return;
+  { const it = $('mailIntro'); if (it) it.textContent = '메일을 맨 위 칸에 붙여넣거나, 메일 앱에서 아래 주소로 전달하면 여기에 쌓입니다.'; }
+  let open = true; try { open = localStorage.getItem('fwdHintOpen') !== '0'; } catch {}
+  h.open = open;
+  h.innerHTML = `<summary>${ic('inbox')} 아이폰에서 메일 넣기 · <code>${esc(fwdAddr())}</code>로 전달</summary>
+    <ol class="count steps"><li>아이폰 <b>메일</b> 앱에서 메일을 열고 아래 <b>↩︎ 답장</b> 버튼 → <b>전달</b>을 누릅니다.</li>
+    <li>받는 사람에 <b>${esc(fwdAddr())}</b>를 넣고 보냅니다. 연락처에 "대시보드"로 저장해 두면 이름만 쳐도 됩니다.</li>
+    <li>1~5분 안에 이 메일 목록에 <span class="pill done">전달</span> 표시로 들어옵니다. 바로 보려면 <b>메일 가져오기</b>를 누르세요.</li></ol>
+    <div class="row"><button class="btn small" type="button" data-act="fwdCopy">${ic('copy')}주소 복사</button><button class="btn small" type="button" data-act="inboxRun">${ic('inbox')}메일 가져오기</button></div>`;
+  h.ontoggle = () => { try { localStorage.setItem('fwdHintOpen', h.open ? '1' : '0'); } catch {} };
+}
 function renderMails() {
+  renderFwdHint();
   const rank = m => m.unanalyzed && isActive(m) ? -1 : askIgnore(m) ? 3 : needsChoice(m) ? 0 : needsReplyNow(m) ? 1 : 2;
   let list = S.emails.slice().sort((a, b) => rank(a) - rank(b) || (a.replyDeadline || '9999').localeCompare(b.replyDeadline || '9999') || (PRIO[a.priority] ?? 1) - (PRIO[b.priority] ?? 1) || (b.updatedAt || b.createdAt || '').localeCompare(a.updatedAt || a.createdAt || ''));
   const f = UI.mf;
@@ -3172,7 +3193,7 @@ const UNDO_LABEL = {
   delRule: '아이콘 규칙 삭제', skipOcc: '반복 일정 한 번 빼기', edSave: '일정 편집', bdSave: '불가 시간 설정', saveSettings: '설정 변경', imSave: '아이콘 색·이름',
   pushG: '구글에 추가', fEvent: '일정 추가', fBlock: '불가 시간 추가', taskForm: '할 일 추가', importData: '파일 가져오기'
 };
-const UNDO_SKIP = new Set(['gemCancel', 'scriptCopy', 'scriptSetup', 'scriptTest', 'scriptOn', 'copyReply', 'copyDraft', 'gemEmbed', 'gemDockOpen', 'qTab', 'gemNew', 'gemTall', 'gemZoom', 'histUndo', 'histRedo', 'histOne', 'histGroup', 'histFold', 'stPing', 'pushAllG', 'aiKeySave', 'aiKeyClear', 'aiTest', 'aiMode', 'aiModelSel', 'relayClip', 'stOpen', 'tidyOpen', 'tidyDel', 'tidyTime', 'tidyMerge', 'inboxRun', 'analyzeMail', 'tgShow', 'tgHide', 'phoneLink', 'gDel', 'fltImp', 'fltIcons', 'fltTog', 'fltClear', 'fltClose', 'cmdToAI', 'cmdPick', 'cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
+const UNDO_SKIP = new Set(['fwdCopy', 'gemCancel', 'scriptCopy', 'scriptSetup', 'scriptTest', 'scriptOn', 'copyReply', 'copyDraft', 'gemEmbed', 'gemDockOpen', 'qTab', 'gemNew', 'gemTall', 'gemZoom', 'histUndo', 'histRedo', 'histOne', 'histGroup', 'histFold', 'stPing', 'pushAllG', 'aiKeySave', 'aiKeyClear', 'aiTest', 'aiMode', 'aiModelSel', 'relayClip', 'stOpen', 'tidyOpen', 'tidyDel', 'tidyTime', 'tidyMerge', 'inboxRun', 'analyzeMail', 'tgShow', 'tgHide', 'phoneLink', 'gDel', 'fltImp', 'fltIcons', 'fltTog', 'fltClear', 'fltClose', 'cmdToAI', 'cmdPick', 'cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
 function undoSnap() {
   const o = { settings: JSON.parse(JSON.stringify(S.settings)) };
   for (const c of COLS) o[c] = JSON.parse(JSON.stringify(S[c]));
@@ -5680,6 +5701,7 @@ document.addEventListener('click', async ev0 => {
       case 'tgShow': UI.tgShow = true; return renderDay(true);
       case 'tgHide': UI.tgShow = false; UI.qa = null; return renderDay(true);
       case 'phoneLink': return linkPhoneFile(true);
+      case 'fwdCopy': { const a = fwdAddr(); try { await navigator.clipboard.writeText(a); toast('전달 주소를 복사했습니다: ' + a); } catch { prompt('전달 주소', a); } return; }
       case 'copyConnect': { const l = connectLink(); try { await navigator.clipboard.writeText(l); toast('연결 링크를 복사했습니다. 휴대폰으로 보내 사파리에서 여세요.'); } catch { prompt('이 링크를 휴대폰에서 여세요', l); } return; }
       case 'setTab': UI.setTab = el.dataset.t; document.querySelectorAll('.stab').forEach(x => x.hidden = x.dataset.tab !== el.dataset.t); document.querySelectorAll('.settabs [data-act="setTab"]').forEach(x => x.setAttribute('aria-selected', String(x.dataset.t === el.dataset.t))); return;
       case 'wcAdd': { UI.wcDraft = [...wcReadForm(), { w: '', color: '#ff6b6b', bold: false }]; const box = document.querySelector('.wclist'); if (box) { const t = document.createElement('div'); t.innerHTML = wordSettingsHtml(); box.replaceWith(t.querySelector('.wclist')); const ins = document.querySelectorAll('.wcrow [data-wc="w"]'); ins.length && ins[ins.length - 1].focus(); } return; }
