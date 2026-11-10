@@ -851,6 +851,9 @@ label.inl{display:inline-flex;align-items:center;gap:.3rem;font-size:.85rem} lab
 .fwdhint summary{cursor:pointer;font-weight:600}
 .fwdhint summary code{font-weight:400;user-select:all}
 .fwdhint ol{margin:.4rem 0 .4rem 1.1rem;padding:0}
+.gemios{padding:.8rem;display:grid;gap:.5rem;align-content:start}
+.gemios p{margin:0}
+.gemios .ok{color:var(--ok, #6c6)}.gemios .warn{color:var(--warn, #e9a)}
 </style>
 
 </head>
@@ -6226,6 +6229,20 @@ function renderGemPane() {
   const box = $('qGemBox'); if (!box) return;
   if (aiFrame() && aiWeb()) { const f = $('gemFrame') || gemDock(); if (f && !f.getAttribute('src') && UI.qtab === 'gem') f.src = GEM_APP; return; }
   if ($('gemFrame')) return;
+  { const bar = document.querySelector('#qGem .qgbar'); if (bar) bar.hidden = isIOS(); }
+  if (isIOS()) { // no Chrome extension on the iPhone: Gemini runs through Scriptable instead
+    const on = scriptableOn();
+    box.innerHTML = `<div class="gemios">
+      <p><b>${ic('phone')} 아이폰에서는 Gemini를 이 칸에 띄울 수 없습니다.</b><br><span class="count">아이폰 사파리는 확장을 못 붙여서 Gemini 화면을 대시보드 안에 넣을 수 없습니다. 대신 <b>자동 처리 → AI로 처리</b>를 누르면 Scriptable이 Gemini에 물어보고 답을 대시보드로 가져옵니다.</span></p>
+      <p class="count">Scriptable 연결: <b class="${on ? 'ok' : 'warn'}">${on ? '이 아이폰에서 켜짐' : '꺼짐'}</b></p>
+      <div class="row" style="flex-wrap:wrap">
+        ${on ? `<button class="btn small" type="button" data-act="scriptTest">${ic('check')}연결 시험</button>` : `<button class="btn small primary" type="button" data-act="scriptSetup">${ic('link')}Scriptable 연결</button>`}
+        <a class="btn small" href="https://gemini.google.com/app" target="_blank" rel="noopener">${ic('spark')}Gemini 직접 열기</a>
+        <button class="btn small" type="button" data-act="qTab" data-k="auto">자동 처리로</button>
+      </div>
+      <p class="count">Scriptable 설치·설정 방법은 설정 → 기본 → "아이폰에서 Gemini 쓰기 (Scriptable)"에 있습니다.</p></div>`;
+    return;
+  }
   const v = document.documentElement.dataset.geminiBridge;
   box.innerHTML = `<div class="empty">${!v ? 'Gemini를 여기에 띄우려면 PC 크롬에 "Gemini 연결" 확장(1.1 이상)을 설치해야 합니다. 설정 → 기본 → AI에 설치 방법이 있습니다.'
     : !frameOK() ? `지금 확장은 ${esc(v)} 버전입니다. 1.1 이상으로 바꾸면 Gemini가 이 탭에 뜹니다. (확장 zip을 받아 같은 폴더에 덮어쓰고, chrome://extensions에서 새로고침)`
