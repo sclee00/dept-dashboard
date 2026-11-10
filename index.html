@@ -875,6 +875,8 @@ label.inl{display:inline-flex;align-items:center;gap:.3rem;font-size:.85rem} lab
 .srow.pastrow{opacity:.5;filter:grayscale(1)}
 .rhead .pastlbl{font-size:.75rem;opacity:.8}
 .rhead .selp{background:var(--accent,#7aa2ff);color:#0b1020}
+.chipbtn{--cis:1.6rem;display:grid;place-items:center;margin-right:.3rem}
+.chipbtn .ci2 .ic{width:1rem;height:1rem}
 </style>
 
 </head>
@@ -4595,23 +4597,28 @@ function expandEvents() {
   _expMemo = { key, out };
   return out;
 }
+// the calendar's icon chip (importance blinking, Google colour, status, effects), also used in the day panel
+function calChip(x, extra) {
+  const fa = x.tr ? fxAttrs(x.tr) : { cls: '', st: '', data: '' }, sty = [x.gc ? `--gc:${esc(x.gc)}` : '', fa.st].filter(Boolean).join(';');
+  return `<span class="ci2 ${x.cls || ''} ${fa.cls}"${sty ? ` style="${sty}"` : ''}${fa.data}${extra || ''}>${ic(x.ic, x.kc || '')}</span>`;
+}
 function cellItems(day) {
   const items = [], grp = (k, d) => ICON_GROUP[k] || d;
   for (const e of expandEvents().filter(e => e.date === day)) {
     const due = e.kind === '마감', timed = !e.span && toMin(e.time) != null, k = iconOfEvent(e), dk = (e.occ ? 'r:' : 'e:') + e.id;
-    items.push({ o: due ? 0 : timed ? 20 + toMin(e.time) / 1440 : 10, ic: k, kc: grp(k, 'kc-' + (e.kind || '학사')), tm: timed ? e.time : '', nm: withSt(e.title, statusOfE(e)), tx: (impOfEvent(e) === 'high' ? '[중요] ' : '') + withSt(e.title, statusOfE(e)) + (e.googleId ? ' (구글에도 있음)' : ''), cls: (due ? 'hot' : (e.googleId || e.googleSent) ? 'synced' : '') + (statusOfE(e) ? stCls(statusOfE(e)) : impOfEvent(e) === 'high' ? ' imp' : ''), dk, tr: itemTraits({ kind: 'event', absent: absentOfEvent(e), timed, s: toMin(e.time), e: timed ? evEnd(e) : 0, days: e.span && isDate(e.endDate) ? Math.round((parse(e.endDate) - parse(e.date)) / 86400000) + 1 : 1, recur: !!(e.occ || repDays(e)) }) });
+    items.push({ ky: 'e:' + e.id, o: due ? 0 : timed ? 20 + toMin(e.time) / 1440 : 10, ic: k, kc: grp(k, 'kc-' + (e.kind || '학사')), tm: timed ? e.time : '', nm: withSt(e.title, statusOfE(e)), tx: (impOfEvent(e) === 'high' ? '[중요] ' : '') + withSt(e.title, statusOfE(e)) + (e.googleId ? ' (구글에도 있음)' : ''), cls: (due ? 'hot' : (e.googleId || e.googleSent) ? 'synced' : '') + (statusOfE(e) ? stCls(statusOfE(e)) : impOfEvent(e) === 'high' ? ' imp' : ''), dk, tr: itemTraits({ kind: 'event', absent: absentOfEvent(e), timed, s: toMin(e.time), e: timed ? evEnd(e) : 0, days: e.span && isDate(e.endDate) ? Math.round((parse(e.endDate) - parse(e.date)) / 86400000) + 1 : 1, recur: !!(e.occ || repDays(e)) }) });
   }
   for (const t of S.tasks.filter(t => !t.done && t.due === day)) {
     const k = iconOfTask(t);
-    items.push({ o: t.priority === 'high' ? 1 : 5, ic: k, kc: grp(k, 'kc-할일'), nm: t.title, tx: '할 일 · ' + t.title, dk: 't:' + t.id, cls: 'task' + (t.priority === 'high' ? ' hot' : t.priority === 'low' ? ' dim' : ''), tr: itemTraits({ kind: 'task' }) });
+    items.push({ ky: 't:' + t.id, o: t.priority === 'high' ? 1 : 5, ic: k, kc: grp(k, 'kc-할일'), nm: t.title, tx: '할 일 · ' + t.title, dk: 't:' + t.id, cls: 'task' + (t.priority === 'high' ? ' hot' : t.priority === 'low' ? ' dim' : ''), tr: itemTraits({ kind: 'task' }) });
   }
   for (const m of S.emails.filter(m => needsReplyNow(m) && m.replyDeadline === day))
-    items.push({ o: 2, ic: 'reply', nm: '답장 · ' + (m.subject || ''), tx: '답장 기한 · ' + (m.subject || ''), cls: 'warn' });
-  for (const g of gAllDayOn(day)) { const k = iconOfG(g); items.push({ o: 9, ic: k, kc: grp(k, 'kc-g'), nm: withSt(g.title, statusOfG(g)), tx: `${impOfG(g) === 'high' ? '[중요] ' : ''}${withSt(g.title, statusOfG(g))} (구글 · ${g.calName || ''})`, cls: 'g' + (g.free ? ' dim' : '') + (statusOfG(g) ? stCls(statusOfG(g)) : impOfG(g) === 'high' ? ' imp' : ''), gc: g.color, dk: 'g:' + gKey(g), tr: itemTraits({ kind: 'google', absent: absentOfG(g), timed: false, days: g.endDate && g.endDate > g.date ? Math.round((parse(g.endDate) - parse(g.date)) / 86400000) + 1 : 1, recur: g.recurring }) }); }
-  for (const g of gOn(day)) { const k = iconOfG(g); items.push({ o: 20 + g.s / 1440, ic: k, kc: grp(k, 'kc-g'), tm: g.time, nm: withSt(g.title, statusOfG(g)), tx: `${impOfG(g) === 'high' ? '[중요] ' : ''}${withSt(g.title, statusOfG(g))} (구글 · ${g.calName || ''})`, cls: 'g' + (g.free ? ' dim' : '') + (statusOfG(g) ? stCls(statusOfG(g)) : impOfG(g) === 'high' ? ' imp' : ''), gc: g.color, dk: 'g:' + gKey(g), tr: itemTraits({ kind: 'google', absent: absentOfG(g), timed: true, s: g.s, e: g.e, recur: g.recurring }) }); }
+    items.push({ ky: 'm:' + m.id, o: 2, ic: 'reply', nm: '답장 · ' + (m.subject || ''), tx: '답장 기한 · ' + (m.subject || ''), cls: 'warn' });
+  for (const g of gAllDayOn(day)) { const k = iconOfG(g); items.push({ ky: 'g:' + gKey(g), o: 9, ic: k, kc: grp(k, 'kc-g'), nm: withSt(g.title, statusOfG(g)), tx: `${impOfG(g) === 'high' ? '[중요] ' : ''}${withSt(g.title, statusOfG(g))} (구글 · ${g.calName || ''})`, cls: 'g' + (g.free ? ' dim' : '') + (statusOfG(g) ? stCls(statusOfG(g)) : impOfG(g) === 'high' ? ' imp' : ''), gc: g.color, dk: 'g:' + gKey(g), tr: itemTraits({ kind: 'google', absent: absentOfG(g), timed: false, days: g.endDate && g.endDate > g.date ? Math.round((parse(g.endDate) - parse(g.date)) / 86400000) + 1 : 1, recur: g.recurring }) }); }
+  for (const g of gOn(day)) { const k = iconOfG(g); items.push({ ky: 'g:' + gKey(g), o: 20 + g.s / 1440, ic: k, kc: grp(k, 'kc-g'), tm: g.time, nm: withSt(g.title, statusOfG(g)), tx: `${impOfG(g) === 'high' ? '[중요] ' : ''}${withSt(g.title, statusOfG(g))} (구글 · ${g.calName || ''})`, cls: 'g' + (g.free ? ' dim' : '') + (statusOfG(g) ? stCls(statusOfG(g)) : impOfG(g) === 'high' ? ' imp' : ''), gc: g.color, dk: 'g:' + gKey(g), tr: itemTraits({ kind: 'google', absent: absentOfG(g), timed: true, s: g.s, e: g.e, recur: g.recurring }) }); }
   if (day >= todayStr()) for (const b of [...blocksOn(day), ...weeklyOn(day)]) {
     const k = iconOfBlock(b);
-    items.push({ o: 40 + b.s / 1440, ic: k, tm: b.allDay ? '종일' : fromMin(b.s) + '–' + fromMin(b.e), nm: b.label, tx: '불가 · ' + b.label, cls: 'busy', tr: itemTraits({ kind: 'busy' }) });
+    items.push({ ky: 'b:' + (b.id || b.label + b.s), o: 40 + b.s / 1440, ic: k, tm: b.allDay ? '종일' : fromMin(b.s) + '–' + fromMin(b.e), nm: b.label, tx: '불가 · ' + b.label, cls: 'busy', tr: itemTraits({ kind: 'busy' }) });
   }
   return items.sort((a, b) => a.o - b.o);
 }
@@ -4699,10 +4706,11 @@ function fitIcons(g) {
   if (g.style.getPropertyValue('--cis') !== size + 'px') g.style.setProperty('--cis', size + 'px');
 }
 /* ---------- day panel ---------- */
-function srow({ t, icon, kc, title, sub, cls, acts, tag, fixed, iconAct, memoKey, gs }) {
+function srow({ t, icon, kc, title, sub, cls, acts, tag, fixed, iconAct, memoKey, gs, chip }) {
   if (memoKey) { acts = memoBtn(memoKey) + (acts || ''); if (memoHas(memoKey)) tag = (tag || '') + ` <span class="memodot" title="메모 있음">${ic('chat')}</span>`; }
   if (!fixed && GENERIC_ICONS.has(icon) && icon !== '마감') { const k = iconFor(title, icon); if (k !== icon) { icon = k; kc = ICON_GROUP[k] || kc; } }
-  const icHtml = iconAct ? `<button type="button" class="icbtn" ${iconAct} title="아이콘 바꾸기" aria-label="아이콘 바꾸기">${ic(icon, kc || '')}</button>` : ic(icon, kc || '');
+  const inner = chip ? calChip(chip) : ic(icon, kc || '');
+  const icHtml = iconAct ? `<button type="button" class="icbtn${chip ? ' chipbtn' : ''}" ${iconAct} title="아이콘 바꾸기" aria-label="아이콘 바꾸기">${inner}</button>` : chip ? `<span class="chipbtn">${inner}</span>` : inner;
   // start and end on two lines so the title gets the width
   const tp = String(t || '').split('–');
   const tHtml = tp.length === 2 ? `<span class="t t2"><b>${colorTimes(tp[0])}</b><span>${colorTimes(tp[1])}</span></span>` : `<span class="t">${colorTimes(t || '')}</span>`;
@@ -4800,30 +4808,32 @@ function renderRange(root, mode) {
 }
 // the rows of one day, the same in the day view and the week / month lists (range: no weekly blocks, no free slots)
 function dayRows(day, evs, range) {
+  const chips = new Map(cellItems(day).map(x => [x.ky, x])), ch = k => chips.get(k);
   const ad = [];
   for (const e of (evs || expandEvents()).filter(e => e.date === day && (e.span || toMin(e.time) == null))) {
     const range = e.span ? `${fmtShort(e.endDate === day ? e.date : e.date)}–${fmtShort(e.endDate)}` : '종일';
-    ad.push(srow({ t: e.kind === '마감' ? '마감' : range, icon: iconOfEvent(e), kc: iconKc(iconOfEvent(e), 'kc-' + (e.kind || '학사')), fixed: true, iconAct: `data-act="ipOpen" data-kind="e" data-id="${e.id}"`, memoKey: 'e:' + e.id, gs: gSyncIcon(e), title: e.title, sub: esc([repText(e), e.location].filter(Boolean).join(' · ')), cls: (e.kind === '마감' ? 'hot' : '') + (statusOfE(e) ? stCls(statusOfE(e)) : impOfEvent(e) === 'high' ? ' improw' : ''), acts: eventActs(e), tag: (statusOfE(e) ? ` <span class="tag st st-${statusOfE(e)}">${ST_KO[statusOfE(e)]}</span>` : '') + (e.example ? ' <span class="tag ex">예시</span>' : '') }));
+    ad.push(srow({ t: e.kind === '마감' ? '마감' : range, chip: ch('e:' + e.id), icon: iconOfEvent(e), kc: iconKc(iconOfEvent(e), 'kc-' + (e.kind || '학사')), fixed: true, iconAct: `data-act="ipOpen" data-kind="e" data-id="${e.id}"`, memoKey: 'e:' + e.id, gs: gSyncIcon(e), title: e.title, sub: esc([repText(e), e.location].filter(Boolean).join(' · ')), cls: (e.kind === '마감' ? 'hot' : '') + (statusOfE(e) ? stCls(statusOfE(e)) : impOfEvent(e) === 'high' ? ' improw' : ''), acts: eventActs(e), tag: (statusOfE(e) ? ` <span class="tag st st-${statusOfE(e)}">${ST_KO[statusOfE(e)]}</span>` : '') + (e.example ? ' <span class="tag ex">예시</span>' : '') }));
   }
   for (const t of S.tasks.filter(t => !t.done && t.due === day))
-    ad.push(srow({ t: '할 일', icon: iconOfTask(t), kc: iconKc(iconOfTask(t), 'kc-할일'), fixed: true, iconAct: `data-act="ipOpen" data-kind="t" data-id="${t.id}"`, title: t.title, cls: t.priority === 'high' ? 'hot' : '', sub: t.emailId ? '메일에서 나온 할 일' : '', acts: `<button class="x" type="button" data-act="toggleTask" data-id="${t.id}" aria-label="완료" title="완료">${ic('check')}</button>`, tag: t.example ? ' <span class="tag ex">예시</span>' : '' }));
+    ad.push(srow({ t: '할 일', chip: ch('t:' + t.id), icon: iconOfTask(t), kc: iconKc(iconOfTask(t), 'kc-할일'), fixed: true, iconAct: `data-act="ipOpen" data-kind="t" data-id="${t.id}"`, title: t.title, cls: t.priority === 'high' ? 'hot' : '', sub: t.emailId ? '메일에서 나온 할 일' : '', acts: `<button class="x" type="button" data-act="toggleTask" data-id="${t.id}" aria-label="완료" title="완료">${ic('check')}</button>`, tag: t.example ? ' <span class="tag ex">예시</span>' : '' }));
   for (const m of S.emails.filter(m => needsReplyNow(m) && m.replyDeadline === day))
-    ad.push(srow({ t: '답장 기한', icon: 'reply', kc: 'kc-reply', title: m.subject, cls: 'warn', acts: `<button class="btn small" type="button" data-act="openMail" data-id="${m.id}">열기</button>` }));
+    ad.push(srow({ t: '답장 기한', chip: ch('m:' + m.id), icon: 'reply', kc: 'kc-reply', title: m.subject, cls: 'warn', acts: `<button class="btn small" type="button" data-act="openMail" data-id="${m.id}">열기</button>` }));
   for (const g of gAllDayOn(day))
-    ad.push(srow({ t: '종일', icon: iconOfG(g), kc: iconKc(iconOfG(g), 'kc-g'), fixed: true, iconAct: `data-act="ipOpen" data-kind="g" data-id="${esc(gKey(g))}"`, memoKey: gKey(g), gs: `<span class="gst on gin" title="구글 캘린더에서 가져온 일정">${gMark('gin')}</span>`, title: g.title, sub: '구글 캘린더' + (g.calName ? ' · ' + esc(String(g.calName).replace(/@.*$/, '')) : '') + (g.free ? ' · 바쁨 아님' : ''), cls: statusOfG(g) ? stCls(statusOfG(g)) : impOfG(g) === 'high' ? 'improw' : '', acts: `<button class="x" type="button" data-act="edOpen" data-kind="g" data-id="${esc(gKey(g))}" title="편집" aria-label="편집">${ic('pen')}</button>` + impBtn(impOfG(g) === 'high', 'impG', `data-k="${esc(gKey(g))}"`) + statusBtn(statusOfG(g), `data-kind="g" data-id="${esc(gKey(g))}"`) + `<button class="x" type="button" data-act="gDel" data-k="${esc(gKey(g))}" title="구글 캘린더에서 삭제 (확인 후)" aria-label="구글 캘린더에서 삭제">✕</button>` + (g.link ? `<a class="ext" href="${esc(g.link)}" target="_blank" rel="noopener">${ic('ext')}</a>` : '') }));
+    ad.push(srow({ t: '종일', icon: iconOfG(g), chip: ch('g:' + gKey(g)), kc: iconKc(iconOfG(g), 'kc-g'), fixed: true, iconAct: `data-act="ipOpen" data-kind="g" data-id="${esc(gKey(g))}"`, memoKey: gKey(g), gs: `<span class="gst on gin" title="구글 캘린더에서 가져온 일정">${gMark('gin')}</span>`, title: g.title, sub: '구글 캘린더' + (g.calName ? ' · ' + esc(String(g.calName).replace(/@.*$/, '')) : '') + (g.free ? ' · 바쁨 아님' : ''), cls: statusOfG(g) ? stCls(statusOfG(g)) : impOfG(g) === 'high' ? 'improw' : '', acts: `<button class="x" type="button" data-act="edOpen" data-kind="g" data-id="${esc(gKey(g))}" title="편집" aria-label="편집">${ic('pen')}</button>` + impBtn(impOfG(g) === 'high', 'impG', `data-k="${esc(gKey(g))}"`) + statusBtn(statusOfG(g), `data-kind="g" data-id="${esc(gKey(g))}"`) + `<button class="x" type="button" data-act="gDel" data-k="${esc(gKey(g))}" title="구글 캘린더에서 삭제 (확인 후)" aria-label="구글 캘린더에서 삭제">✕</button>` + (g.link ? `<a class="ext" href="${esc(g.link)}" target="_blank" rel="noopener">${ic('ext')}</a>` : '') }));
   for (const b of blocksOn(day).filter(b => b.allDay))
     ad.push(srow({ t: '종일', icon: iconOfBlock(b), fixed: true, iconAct: `data-act="ipOpen" data-kind="b" data-id="${b.id}"`, title: b.label, sub: '불가 시간', cls: 'busy', acts: `<button class="x" type="button" data-act="delBlock" data-id="${b.id}" aria-label="삭제">✕</button>` }));
 
   const timed = [];
   if (!range) for (const b of weeklyOn(day)) timed.push({ s: b.s, h: srow({ t: `${fromMin(b.s)}–${fromMin(b.e)}`, icon: iconOfBlock(b), fixed: true, iconAct: b.id ? `data-act="ipOpen" data-kind="w" data-id="${esc(b.id)}"` : '', title: b.label, sub: '매주 반복 불가 시간', cls: 'busy', acts: `<button class="btn small" type="button" data-act="openBusy">편집</button>`, tag: b.example ? ' <span class="tag ex">예시</span>' : '' }) });
   for (const b of blocksOn(day).filter(b => !b.allDay)) timed.push({ s: b.s, h: srow({ t: `${fromMin(b.s)}–${fromMin(b.e)}`, icon: iconOfBlock(b), fixed: true, iconAct: `data-act="ipOpen" data-kind="b" data-id="${b.id}"`, title: b.label, sub: '불가 시간', cls: 'busy', acts: `<button class="x" type="button" data-act="delBlock" data-id="${b.id}" aria-label="삭제">✕</button>`, tag: b.example ? ' <span class="tag ex">예시</span>' : '' }) });
-  for (const x of localTimedOn(day)) { const e = x.ev; timed.push({ s: x.s, end: x.e, h: srow({ t: `${fromMin(x.s)}–${fromMin(x.e)}`, icon: iconOfEvent(e), kc: iconKc(iconOfEvent(e), 'kc-' + (e.kind || '회의')), fixed: true, iconAct: `data-act="ipOpen" data-kind="e" data-id="${e.id}"`, memoKey: 'e:' + e.id, gs: gSyncIcon(e), title: e.title, sub: esc([repText(e), e.location, e.emailId ? '메일에서 추가' : ''].filter(Boolean).join(' · ')), cls: (e.kind === '마감' ? 'hot' : '') + (statusOfE(e) ? stCls(statusOfE(e)) : impOfEvent(e) === 'high' ? ' improw' : ''), acts: eventActs(e), tag: (statusOfE(e) ? ` <span class="tag st st-${statusOfE(e)}">${ST_KO[statusOfE(e)]}</span>` : '') + (e.example ? ' <span class="tag ex">예시</span>' : '') }) }); }
-  for (const g of gOn(day)) timed.push({ s: g.s, end: g.e, h: srow({ t: `${g.time}–${g.endTime}`, icon: iconOfG(g), kc: iconKc(iconOfG(g), 'kc-g'), fixed: true, iconAct: `data-act="ipOpen" data-kind="g" data-id="${esc(gKey(g))}"`, memoKey: gKey(g), gs: `<span class="gst on gin" title="구글 캘린더에서 가져온 일정">${gMark('gin')}</span>`, title: g.title, sub: '구글 캘린더' + (g.calName ? ' · ' + esc(String(g.calName).replace(/@.*$/, '')) : '') + (g.free ? ' · 바쁨 아님' : '') + (g.loc ? ' · ' + esc(g.loc) : ''), cls: statusOfG(g) ? stCls(statusOfG(g)) : impOfG(g) === 'high' ? 'improw' : '', acts: `<button class="x" type="button" data-act="edOpen" data-kind="g" data-id="${esc(gKey(g))}" title="편집" aria-label="편집">${ic('pen')}</button>` + impBtn(impOfG(g) === 'high', 'impG', `data-k="${esc(gKey(g))}"`) + statusBtn(statusOfG(g), `data-kind="g" data-id="${esc(gKey(g))}"`) + `<button class="x" type="button" data-act="gDel" data-k="${esc(gKey(g))}" title="구글 캘린더에서 삭제 (확인 후)" aria-label="구글 캘린더에서 삭제">✕</button>` + (g.link ? `<a class="ext" href="${esc(g.link)}" target="_blank" rel="noopener" title="구글 캘린더에서 열기">${ic('ext')}</a>` : '') }) });
+  for (const x of localTimedOn(day)) { const e = x.ev; timed.push({ s: x.s, end: x.e, h: srow({ chip: ch('e:' + e.id), t: `${fromMin(x.s)}–${fromMin(x.e)}`, icon: iconOfEvent(e), kc: iconKc(iconOfEvent(e), 'kc-' + (e.kind || '회의')), fixed: true, iconAct: `data-act="ipOpen" data-kind="e" data-id="${e.id}"`, memoKey: 'e:' + e.id, gs: gSyncIcon(e), title: e.title, sub: esc([repText(e), e.location, e.emailId ? '메일에서 추가' : ''].filter(Boolean).join(' · ')), cls: (e.kind === '마감' ? 'hot' : '') + (statusOfE(e) ? stCls(statusOfE(e)) : impOfEvent(e) === 'high' ? ' improw' : ''), acts: eventActs(e), tag: (statusOfE(e) ? ` <span class="tag st st-${statusOfE(e)}">${ST_KO[statusOfE(e)]}</span>` : '') + (e.example ? ' <span class="tag ex">예시</span>' : '') }) }); }
+  for (const g of gOn(day)) timed.push({ s: g.s, end: g.e, h: srow({ chip: ch('g:' + gKey(g)), t: `${g.time}–${g.endTime}`, icon: iconOfG(g), kc: iconKc(iconOfG(g), 'kc-g'), fixed: true, iconAct: `data-act="ipOpen" data-kind="g" data-id="${esc(gKey(g))}"`, memoKey: gKey(g), gs: `<span class="gst on gin" title="구글 캘린더에서 가져온 일정">${gMark('gin')}</span>`, title: g.title, sub: '구글 캘린더' + (g.calName ? ' · ' + esc(String(g.calName).replace(/@.*$/, '')) : '') + (g.free ? ' · 바쁨 아님' : '') + (g.loc ? ' · ' + esc(g.loc) : ''), cls: statusOfG(g) ? stCls(statusOfG(g)) : impOfG(g) === 'high' ? 'improw' : '', acts: `<button class="x" type="button" data-act="edOpen" data-kind="g" data-id="${esc(gKey(g))}" title="편집" aria-label="편집">${ic('pen')}</button>` + impBtn(impOfG(g) === 'high', 'impG', `data-k="${esc(gKey(g))}"`) + statusBtn(statusOfG(g), `data-kind="g" data-id="${esc(gKey(g))}"`) + `<button class="x" type="button" data-act="gDel" data-k="${esc(gKey(g))}" title="구글 캘린더에서 삭제 (확인 후)" aria-label="구글 캘린더에서 삭제">✕</button>` + (g.link ? `<a class="ext" href="${esc(g.link)}" target="_blank" rel="noopener" title="구글 캘린더에서 열기">${ic('ext')}</a>` : '') }) });
   if (!range) for (const [s, e] of freeSlots(day, 30)) timed.push({ s: s + 0.5, h: `<button type="button" class="srow freeslot" data-act="slotAdd" data-s="${s}" data-e="${e}"><span class="t">${colorTimes(fromMin(s) + '–' + fromMin(e))}</span>${ic('free')}<span class="tt">빈 시간 · ${durKo(e - s)}<span class="sub3">눌러서 이 시간에 일정 넣기</span></span><span class="acts"></span></button>` });
   timed.sort((a, b) => a.s - b.s);
   return { ad, timed };
 }
 function renderDay(force) {
+  queueMicrotask(() => paintFx($('dayPanel')));
   const root = $('dayPanel'); if (!root) return;
   if (UI.qa && UI.qa.day !== (UI.selDay || todayStr())) UI.qa = null;
   if (!force && root.contains(document.activeElement) && document.activeElement.matches('input,select,textarea')) return;
