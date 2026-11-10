@@ -890,10 +890,32 @@ label.inl{display:inline-flex;align-items:center;gap:.3rem;font-size:.85rem} lab
 #tipBubble{position:fixed;z-index:9999;background:var(--surface-2,#222838);color:var(--text,#eee);border:1px solid var(--line,#333);border-radius:10px;padding:.5rem .7rem;font-size:.82rem;line-height:1.5;box-shadow:0 8px 24px rgb(0 0 0 / .35);pointer-events:none;white-space:normal}
 #tipBubble::after{content:'';position:absolute;left:calc(var(--ax,50%) - 6px);bottom:-6px;width:10px;height:10px;background:inherit;border-right:1px solid var(--line,#333);border-bottom:1px solid var(--line,#333);transform:rotate(45deg)}
 #tipBubble.below::after{bottom:auto;top:-6px;transform:rotate(225deg)}
+/* screen lock */
+.lockbtn{position:fixed;top:.6rem;right:.7rem;z-index:50;width:2.1rem;height:2.1rem;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--muted);display:grid;place-items:center;cursor:pointer;box-shadow:0 2px 8px rgb(0 0 0 / .25)}
+.lockbtn:hover{color:var(--accent);border-color:var(--accent)}
+.lockbtn .ic{width:1.05rem;height:1.05rem}
+.lockscreen{position:fixed;inset:0;z-index:100000;background:var(--bg);display:grid;place-items:center;padding:16px}
+.lockbox{display:grid;gap:.7rem;justify-items:center;width:min(320px,100%);text-align:center}
+.lockbox h2{margin:0;font-size:1.1rem}
+.lockbox .field{width:100%;text-align:center}
+.lockbox .btn{width:100%;justify-content:center}
+.lockic,.lockic svg{width:2.4rem!important;height:2.4rem!important;color:var(--accent)}
+body.locked .app,body.locked .lockbtn,body.locked #tipBubble,body.locked #dlgRoot,body.locked .toast{visibility:hidden!important}
+@media print{body.locked *{display:none!important}}
 </style>
 
 </head>
 <body>
+  <button type="button" class="lockbtn" id="lockBtn" data-act="lockNow" hidden title="화면 잠금 (Ctrl+Shift+L)" aria-label="화면 잠금"><span data-ic="lock"></span></button>
+  <div class="lockscreen" id="lockScreen" hidden role="dialog" aria-modal="true" aria-labelledby="lockTitle">
+    <form class="lockbox" id="lockForm" autocomplete="off">
+      <span class="lockic" data-ic="lock"></span>
+      <h2 id="lockTitle">업무 대시보드 잠김</h2>
+      <input class="field" type="password" id="lockPw" placeholder="비밀번호" aria-label="비밀번호" autocomplete="current-password">
+      <button class="btn primary" type="submit">잠금 해제</button>
+      <div class="status" id="lockMsg" role="status"></div>
+    </form>
+  </div>
 <div class="app">
   <header class="top">
     <div>
@@ -2390,6 +2412,7 @@ function mergeIn(r) {
   }
   if (r.gcache && gCacheAdopt(r.gcache)) changed = true;
   if (r.hist && histMerge(r.hist)) changed = true;
+  if (changed) setTimeout(applyLock, 0);
   return changed;
 }
 function cacheLocal() { try { const o = snapshot(); delete o.gcache; localStorage.setItem('deptDash', JSON.stringify(o)); if (gasOn()) localStorage.setItem('gasConn', JSON.stringify({ u: S.settings.gasUrl, k: S.settings.gasKey })); else localStorage.removeItem('gasConn'); } catch {} }
@@ -3229,7 +3252,7 @@ const UNDO_LABEL = {
   delRule: '아이콘 규칙 삭제', skipOcc: '반복 일정 한 번 빼기', edSave: '일정 편집', bdSave: '불가 시간 설정', saveSettings: '설정 변경', imSave: '아이콘 색·이름',
   pushG: '구글에 추가', fEvent: '일정 추가', fBlock: '불가 시간 추가', taskForm: '할 일 추가', importData: '파일 가져오기'
 };
-const UNDO_SKIP = new Set(['tip', 'daySel', 'dayMode', 'dayNav', 'dayGo', 'fwdCopy', 'gemCancel', 'scriptCopy', 'scriptSetup', 'scriptTest', 'scriptOn', 'copyReply', 'copyDraft', 'gemEmbed', 'gemDockOpen', 'qTab', 'gemNew', 'gemTall', 'gemZoom', 'histUndo', 'histRedo', 'histOne', 'histGroup', 'histFold', 'stPing', 'pushAllG', 'aiKeySave', 'aiKeyClear', 'aiTest', 'aiMode', 'aiModelSel', 'relayClip', 'stOpen', 'tidyOpen', 'tidyDel', 'tidyTime', 'tidyMerge', 'inboxRun', 'analyzeMail', 'tgShow', 'tgHide', 'phoneLink', 'gDel', 'fltImp', 'fltIcons', 'fltTog', 'fltClear', 'fltClose', 'cmdToAI', 'cmdPick', 'cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
+const UNDO_SKIP = new Set(['lockNow', 'lockSave', 'tip', 'daySel', 'dayMode', 'dayNav', 'dayGo', 'fwdCopy', 'gemCancel', 'scriptCopy', 'scriptSetup', 'scriptTest', 'scriptOn', 'copyReply', 'copyDraft', 'gemEmbed', 'gemDockOpen', 'qTab', 'gemNew', 'gemTall', 'gemZoom', 'histUndo', 'histRedo', 'histOne', 'histGroup', 'histFold', 'stPing', 'pushAllG', 'aiKeySave', 'aiKeyClear', 'aiTest', 'aiMode', 'aiModelSel', 'relayClip', 'stOpen', 'tidyOpen', 'tidyDel', 'tidyTime', 'tidyMerge', 'inboxRun', 'analyzeMail', 'tgShow', 'tgHide', 'phoneLink', 'gDel', 'fltImp', 'fltIcons', 'fltTog', 'fltClear', 'fltClose', 'cmdToAI', 'cmdPick', 'cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
 function undoSnap() {
   const o = { settings: JSON.parse(JSON.stringify(S.settings)) };
   for (const c of COLS) o[c] = JSON.parse(JSON.stringify(S[c]));
@@ -5004,6 +5027,52 @@ async function addAttToMail(m, files) {
   renderSheet(true);
   toast(`첨부파일 ${rec.length}개를 넣었습니다. "다시 분석"을 누르면 내용이 분석에 반영됩니다.`);
 }
+/* ---------- screen lock: a password asked when the dashboard opens and after the lock button ---------- */
+// only a salted PBKDF2 hash is kept (in the synced settings, so every device uses the same password)
+async function pwHash(pw, salt) {
+  const enc = new TextEncoder(), key = await crypto.subtle.importKey('raw', enc.encode(pw), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: enc.encode(salt), iterations: 150000, hash: 'SHA-256' }, key, 256);
+  return [...new Uint8Array(bits)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+const lockCfg = () => (S.settings && S.settings.lock) || {};
+const lockOn = () => !!(lockCfg().on && lockCfg().hash);
+let LOCKED = false;
+function lockUnlockedThisTab() { try { return sessionStorage.getItem('dashUnlocked') === '1'; } catch { return false; } }
+function applyLock() {
+  const btn = $('lockBtn'); if (btn) btn.hidden = !lockOn();
+  if (lockOn() && !LOCKED && !lockUnlockedThisTab()) lockNow();
+  if (!lockOn() && LOCKED) unlockShow();
+}
+function lockNow() {
+  if (!lockOn()) return;
+  LOCKED = true; try { sessionStorage.removeItem('dashUnlocked'); } catch {}
+  document.body.classList.add('locked');
+  const app = document.querySelector('.app'); if (app) app.inert = true;
+  const ls = $('lockScreen'); ls.hidden = false; $('lockMsg').textContent = ''; $('lockPw').value = '';
+  try { tipHide(); } catch {}
+  setTimeout(() => $('lockPw').focus(), 30);
+}
+function unlockShow() {
+  LOCKED = false; try { sessionStorage.setItem('dashUnlocked', '1'); } catch {}
+  document.body.classList.remove('locked');
+  const app = document.querySelector('.app'); if (app) app.inert = false;
+  $('lockScreen').hidden = true; $('lockPw').value = '';
+}
+document.addEventListener('submit', async e => {
+  if (e.target.id !== 'lockForm') return; e.preventDefault();
+  const c = lockCfg(), pw = $('lockPw').value;
+  if (!pw) return;
+  if (await pwHash(pw, c.salt) === c.hash) { unlockShow(); return; }
+  $('lockMsg').className = 'status err'; $('lockMsg').textContent = '비밀번호가 다릅니다.'; $('lockPw').select();
+});
+document.addEventListener('keydown', e => { if (e.ctrlKey && e.shiftKey && (e.key === 'L' || e.key === 'l') && lockOn()) { e.preventDefault(); lockNow(); } }, true);
+function lockSettingsHtml(s) {
+  const c = (s && s.lock) || {};
+  return `<div class="bsec"><b>${ic('lock')} 화면 잠금</b>
+    <label class="chk"><input type="checkbox" id="lockOnChk" ${c.on && c.hash ? 'checked' : ''}> 대시보드를 열 때 비밀번호 묻기 · 오른쪽 위 자물쇠로 언제든 잠그기</label>
+    <div class="row" style="flex-wrap:wrap;align-items:center"><input class="field" type="password" id="lockPw1" placeholder="${c.hash ? '새 비밀번호 (바꿀 때만)' : '비밀번호'}" autocomplete="new-password" style="width:auto;flex:1 1 9rem"><input class="field" type="password" id="lockPw2" placeholder="한 번 더" autocomplete="new-password" style="width:auto;flex:1 1 9rem"><button class="btn small" type="button" data-act="lockSave">저장</button></div>
+    <span class="count">${c.hash ? '비밀번호가 정해져 있습니다.' : '아직 비밀번호가 없습니다.'} ${tip('비밀번호는 그대로 저장하지 않고 풀 수 없는 값(해시)으로만 남기며, 모든 기기에서 같은 비밀번호를 씁니다. 같은 탭에서 새로고침할 때는 다시 묻지 않습니다. 남이 잠깐 화면을 보지 못하게 하는 용도이고, 데이터 파일 자체를 암호화하지는 않습니다.')}</span></div>`;
+}
 function renderSheet(force) {
   const root = $('sheetRoot');
   if (!UI.openId) { root.innerHTML = ''; return; }
@@ -5740,6 +5809,18 @@ document.addEventListener('click', async ev0 => {
         return;
       }
       case 'rail': UI.rail = el.dataset.r; renderRail(); if (UI.rail === 'day') renderDay(true); return;
+      case 'lockNow': lockNow(); return;
+      case 'lockSave': {
+        const on = $('lockOnChk').checked, p1 = $('lockPw1').value, p2 = $('lockPw2').value, c = lockCfg();
+        if (p1 || p2) { if (p1 !== p2) return toast('두 비밀번호가 다릅니다.'); if (p1.length < 4) return toast('비밀번호는 4자 이상으로 해 주세요.'); }
+        if (on && !p1 && !c.hash) return toast('잠금을 켜려면 비밀번호를 정해 주세요.');
+        let lock = { ...c, on };
+        if (p1) { const salt = uid() + uid(); lock = { on, salt, hash: await pwHash(p1, salt) }; }
+        await saveSettings({ ...S.settings, lock });
+        try { sessionStorage.setItem('dashUnlocked', '1'); } catch {}
+        $('lockPw1').value = $('lockPw2').value = '';
+        applyLock(); toast(on ? '화면 잠금을 켰습니다. 오른쪽 위 자물쇠로 잠글 수 있습니다.' : p1 ? '비밀번호를 바꿨습니다. 잠금은 꺼져 있습니다.' : '화면 잠금을 껐습니다.'); return;
+      }
       case 'tip': { const b = $('tipBubble'); if (b && !b.hidden && b.dataset.for === el.dataset.tip) tipHide(); else tipShow(el); return; }
       case 'dayMode': UI.dayMode = el.dataset.m; try { localStorage.setItem('dayMode', UI.dayMode); } catch {} UI.dayForm = null; renderDay(true); return;
       case 'dayNav': UI.rangeFromList = true; UI.selDay = dayStep(+el.dataset.d); UI.dayForm = null; renderCal(); renderDay(true); try { renderRail(); } catch {} return;
@@ -6231,6 +6312,7 @@ function openSettings() {
     <div class="settabs" role="tablist">${SET_TABS.map(([k, l, i]) => `<button type="button" role="tab" data-act="setTab" data-t="${k}" aria-selected="${tab === k}">${ic(i)}${l}</button>`).join('')}</div>
     <div class="setbody">
     <div class="stab" data-tab="general" ${tab === 'general' ? '' : 'hidden'}>
+    ${lockSettingsHtml(s)}
     ${aiSettingsHtml(s)}
     <label>학기 이름<input class="field" id="sLabel" value="${esc(s.semesterLabel)}"></label>
     <label>개강 주 월요일 (주차 계산 기준)<input class="field" type="date" id="sStart" value="${esc(s.semesterStart)}"></label>
@@ -6295,6 +6377,7 @@ setInterval(() => { renderHeader(); if (UI.selDay === todayStr()) renderDay(fals
 /* ---------- boot ---------- */
 applyOrder(document.querySelector('.tools'), 'tools');
 loadLocal();
+applyLock();
 histViews();
 if (UNDO.migrated) { cacheLocal(); try { localStorage.removeItem('dashUndo'); } catch {} DRIVE.dirty = true; }
 takeConnectLink();
