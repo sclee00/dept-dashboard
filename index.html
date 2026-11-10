@@ -854,6 +854,21 @@ label.inl{display:inline-flex;align-items:center;gap:.3rem;font-size:.85rem} lab
 .gemios{padding:.8rem;display:grid;gap:.5rem;align-content:start}
 .gemios p{margin:0}
 .gemios .ok{color:var(--ok, #6c6)}.gemios .warn{color:var(--warn, #e9a)}
+.daynav{display:flex;justify-content:space-between;align-items:center;gap:.4rem;margin-bottom:.5rem;flex-wrap:wrap}
+.daynav .seg{display:inline-flex;border:1px solid var(--line,#333);border-radius:8px;overflow:hidden}
+.daynav .seg button{background:none;border:0;color:inherit;padding:.25rem .65rem;font:inherit;font-size:.82rem;cursor:pointer}
+.daynav .seg button.on{background:var(--accent,#7aa2ff);color:#0b1020;font-weight:700}
+.daynav .dnbtns{display:inline-flex;gap:.25rem}.daynav .dnbtns .btn{min-width:2.2rem;justify-content:center}
+.rlist{display:grid;gap:.45rem}
+.rday{border:1px solid var(--line,#2a2f3a);border-radius:10px;padding:.35rem .5rem}
+.rday.rtoday{border-color:var(--accent,#7aa2ff)}.rday.sel{box-shadow:0 0 0 1px var(--accent,#7aa2ff) inset}
+.rhead{display:flex;gap:.45rem;align-items:center;width:100%;background:none;border:0;color:inherit;font:inherit;padding:.1rem 0;cursor:pointer;text-align:left}
+.rhead .count{margin-left:auto}.rhead .sun{color:#ff7b7b}.rhead .sat{color:#7ab0ff}
+.ritems{display:grid;gap:.15rem;margin-top:.25rem}
+.ritem{display:grid;grid-template-columns:3.2rem 1.3rem 1fr;gap:.35rem;align-items:center;background:none;border:0;color:inherit;font:inherit;font-size:.85rem;text-align:left;padding:.15rem .1rem;border-radius:6px;cursor:pointer}
+.ritem:hover{background:rgba(127,127,127,.12)}.ritem .t{opacity:.7;font-size:.78rem}.ritem .tt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ritem.absent .tt{text-decoration:line-through;opacity:.6}.ritem.busy{opacity:.65}.ritem.hot .tt{font-weight:700}
+.ritem .ic svg{width:1rem;height:1rem}
 </style>
 
 </head>
@@ -3196,7 +3211,7 @@ const UNDO_LABEL = {
   delRule: '아이콘 규칙 삭제', skipOcc: '반복 일정 한 번 빼기', edSave: '일정 편집', bdSave: '불가 시간 설정', saveSettings: '설정 변경', imSave: '아이콘 색·이름',
   pushG: '구글에 추가', fEvent: '일정 추가', fBlock: '불가 시간 추가', taskForm: '할 일 추가', importData: '파일 가져오기'
 };
-const UNDO_SKIP = new Set(['fwdCopy', 'gemCancel', 'scriptCopy', 'scriptSetup', 'scriptTest', 'scriptOn', 'copyReply', 'copyDraft', 'gemEmbed', 'gemDockOpen', 'qTab', 'gemNew', 'gemTall', 'gemZoom', 'histUndo', 'histRedo', 'histOne', 'histGroup', 'histFold', 'stPing', 'pushAllG', 'aiKeySave', 'aiKeyClear', 'aiTest', 'aiMode', 'aiModelSel', 'relayClip', 'stOpen', 'tidyOpen', 'tidyDel', 'tidyTime', 'tidyMerge', 'inboxRun', 'analyzeMail', 'tgShow', 'tgHide', 'phoneLink', 'gDel', 'fltImp', 'fltIcons', 'fltTog', 'fltClear', 'fltClose', 'cmdToAI', 'cmdPick', 'cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
+const UNDO_SKIP = new Set(['dayMode', 'dayNav', 'dayGo', 'fwdCopy', 'gemCancel', 'scriptCopy', 'scriptSetup', 'scriptTest', 'scriptOn', 'copyReply', 'copyDraft', 'gemEmbed', 'gemDockOpen', 'qTab', 'gemNew', 'gemTall', 'gemZoom', 'histUndo', 'histRedo', 'histOne', 'histGroup', 'histFold', 'stPing', 'pushAllG', 'aiKeySave', 'aiKeyClear', 'aiTest', 'aiMode', 'aiModelSel', 'relayClip', 'stOpen', 'tidyOpen', 'tidyDel', 'tidyTime', 'tidyMerge', 'inboxRun', 'analyzeMail', 'tgShow', 'tgHide', 'phoneLink', 'gDel', 'fltImp', 'fltIcons', 'fltTog', 'fltClear', 'fltClose', 'cmdToAI', 'cmdPick', 'cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
 function undoSnap() {
   const o = { settings: JSON.parse(JSON.stringify(S.settings)) };
   for (const c of COLS) o[c] = JSON.parse(JSON.stringify(S[c]));
@@ -4724,10 +4739,58 @@ function dayFormHtml(day) {
     </form>`;
   return '';
 }
+// 일 / 주 / 2주 / 월 보기: the day panel can also list a whole range, and step back and forth
+const DAY_MODES = [['day', '일'], ['week', '주'], ['2week', '2주'], ['month', '월']];
+function dayMode() { if (!UI.dayMode) { try { UI.dayMode = localStorage.getItem('dayMode') || 'day'; } catch { UI.dayMode = 'day'; } } return DAY_MODES.some(m => m[0] === UI.dayMode) ? UI.dayMode : 'day'; }
+function dayRange(day, mode) {
+  const d = parse(day);
+  if (mode === 'month') { const a = new Date(d.getFullYear(), d.getMonth(), 1), b = new Date(d.getFullYear(), d.getMonth() + 1, 0); return [ymd(a), ymd(b)]; }
+  const start = addDays(day, -d.getDay()); return [start, addDays(start, mode === '2week' ? 13 : 6)];
+}
+function dayStep(dir) {
+  const m = dayMode(), day = UI.selDay || todayStr();
+  if (!dir) return todayStr();
+  if (m === 'day') return addDays(day, dir);
+  if (m === 'month') { const d = parse(day); return ymd(new Date(d.getFullYear(), d.getMonth() + dir, 1)); }
+  return addDays(day, dir * (m === '2week' ? 14 : 7));
+}
+function dayNavHtml() {
+  const m = dayMode();
+  return `<div class="daynav"><div class="seg">${DAY_MODES.map(([k, l]) => `<button type="button" class="${m === k ? 'on' : ''}" data-act="dayMode" data-m="${k}">${l}</button>`).join('')}</div>
+    <div class="dnbtns"><button class="btn small" type="button" data-act="dayNav" data-d="-1" aria-label="이전" title="이전 ${DAY_MODES.find(x => x[0] === m)[1]}">‹</button><button class="btn small" type="button" data-act="dayNav" data-d="0">오늘</button><button class="btn small" type="button" data-act="dayNav" data-d="1" aria-label="다음" title="다음 ${DAY_MODES.find(x => x[0] === m)[1]}">›</button></div></div>`;
+}
+// everything on one day as short rows (for the week / month lists)
+function rangeItems(day, evs) {
+  const out = [], mk = (s, t, icon, kc, title, act, cls) => out.push({ s, h: `<button type="button" class="ritem ${cls || ''}" ${act}><span class="t">${esc(t)}</span><span class="ic ${kc || ''}">${ic(icon)}</span><span class="tt">${esc(title || '')}</span></button>` });
+  for (const e of (evs || expandEvents()).filter(e => e.date === day || (e.span && e.date <= day && day <= e.endDate))) {
+    const timed = !e.span && toMin(e.time) != null, ab = absentOfEvent(e);
+    mk(timed ? toMin(e.time) : -1, timed ? e.time : e.kind === '마감' ? '마감' : '종일', iconOfEvent(e), iconKc(iconOfEvent(e), 'kc-' + (e.kind || '회의')), (ab ? '(불참) ' : '') + e.title, `data-act="ipOpen" data-kind="e" data-id="${e.id}"`, ab ? 'absent' : '');
+  }
+  for (const g of [...gAllDayOn(day), ...gOn(day)]) { const ab = absentOfG(g); mk(g.allDay ? -1 : g.s, g.allDay ? '종일' : g.time, iconOfG(g), iconKc(iconOfG(g), 'kc-g'), (ab ? '(불참) ' : '') + g.title, `data-act="ipOpen" data-kind="g" data-id="${esc(gKey(g))}"`, 'gin' + (ab ? ' absent' : '')); }
+  for (const t of S.tasks.filter(t => !t.done && t.due === day)) mk(-0.5, '할 일', iconOfTask(t), iconKc(iconOfTask(t), 'kc-할일'), t.title, `data-act="ipOpen" data-kind="t" data-id="${t.id}"`, t.priority === 'high' ? 'hot' : '');
+  for (const m of S.emails.filter(m => needsReplyNow(m) && m.replyDeadline === day)) mk(-0.4, '답장', 'reply', 'kc-reply', m.subject, `data-act="openMail" data-id="${m.id}"`, 'warn');
+  for (const b of blocksOn(day)) mk(b.allDay ? -0.3 : b.s, b.allDay ? '종일' : fromMin(b.s), iconOfBlock(b), '', b.label + ' · 불가', `data-act="ipOpen" data-kind="b" data-id="${b.id}"`, 'busy');
+  return out.sort((a, b) => a.s - b.s).map(x => x.h);
+}
+function renderRange(root, mode) {
+  const day = UI.selDay || todayStr(), [a, b] = dayRange(day, mode), today = todayStr(), da = parse(a), db = parse(b);
+  const title = mode === 'month' ? `${da.getFullYear()}년 ${da.getMonth() + 1}월` : `${da.getMonth() + 1}월 ${da.getDate()}일 – ${db.getMonth() !== da.getMonth() ? db.getMonth() + 1 + '월 ' : ''}${db.getDate()}일`;
+  const rows = [], evs = expandEvents(); let total = 0, empty = 0;
+  for (let d = a; d <= b; d = addDays(d, 1)) {
+    const it = rangeItems(d, evs), dd = parse(d), wk = dd.getDay();
+    total += it.length;
+    if (!it.length && mode === 'month') { empty++; continue; }
+    rows.push(`<div class="rday ${d === today ? 'rtoday' : ''} ${d === day ? 'sel' : ''}"><button type="button" class="rhead" data-act="dayGo" data-day="${d}"><b class="${wk === 0 ? 'sun' : wk === 6 ? 'sat' : ''}">${dd.getMonth() + 1}/${dd.getDate()} (${WD[wk]})</b>${d === today ? '<span class="pill">오늘</span>' : ''}<span class="count">${it.length ? it.length + '건' : '일정 없음'}</span></button>${it.length ? `<div class="ritems">${it.join('')}</div>` : ''}</div>`);
+  }
+  root.innerHTML = `${dayNavHtml()}
+    <div class="dayhead"><div class="eyebrow">${DAY_MODES.find(x => x[0] === mode)[1]} 보기</div><h3>${title}</h3><div class="count">일정·할 일 ${total}건${mode === 'month' && empty ? ` · 일정 없는 날 ${empty}일은 뺐습니다` : ''} · 날짜를 누르면 그날로 갑니다</div></div>
+    <div class="rlist">${rows.join('') || '<div class="empty">이 기간에 일정이 없습니다.</div>'}</div>`;
+}
 function renderDay(force) {
   const root = $('dayPanel'); if (!root) return;
   if (UI.qa && UI.qa.day !== (UI.selDay || todayStr())) UI.qa = null;
   if (!force && root.contains(document.activeElement) && document.activeElement.matches('input,select,textarea')) return;
+  if (dayMode() !== 'day') return renderRange(root, dayMode());
   const day = UI.selDay || todayStr(), d = parse(day), w = workWin(day), n = diff(day);
   const ad = [];
   for (const e of expandEvents().filter(e => e.date === day && (e.span || toMin(e.time) == null))) {
@@ -4752,7 +4815,7 @@ function renderDay(force) {
   timed.sort((a, b) => a.s - b.s);
 
   const fm = w && day >= todayStr() ? freeMinutes(day) : null;
-  root.innerHTML = `
+  root.innerHTML = `${dayNavHtml()}
     <div class="dayhead">
       <div class="eyebrow">${n === 0 ? '오늘' : n === 1 ? '내일' : n > 0 ? n + '일 뒤' : -n + '일 전'}</div>
       <h3>${d.getMonth() + 1}월 ${d.getDate()}일 ${WD[d.getDay()]}요일 ${fm != null ? freeBadge(day) : ''}</h3>
@@ -5618,6 +5681,9 @@ document.addEventListener('click', async ev0 => {
         return;
       }
       case 'rail': UI.rail = el.dataset.r; renderRail(); if (UI.rail === 'day') renderDay(true); return;
+      case 'dayMode': UI.dayMode = el.dataset.m; try { localStorage.setItem('dayMode', UI.dayMode); } catch {} UI.dayForm = null; renderDay(true); return;
+      case 'dayNav': UI.selDay = dayStep(+el.dataset.d); UI.dayForm = null; renderCal(); renderDay(true); try { renderRail(); } catch {} return;
+      case 'dayGo': UI.selDay = el.dataset.day; UI.dayMode = 'day'; try { localStorage.setItem('dayMode', 'day'); } catch {} renderCal(); renderDay(true); try { renderRail(); } catch {} return;
       case 'dayForm': UI.dayForm = el.dataset.f || null; UI.prefill = null; renderDay(true); if (UI.dayForm) setTimeout(() => { const f = $(UI.dayForm === 'event' ? 'fTitle' : 'bLabel'); f && f.focus(); }, 0); return;
       case 'slotAdd': {
         const s = +el.dataset.s, e = +el.dataset.e;
