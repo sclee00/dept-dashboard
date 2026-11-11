@@ -5972,7 +5972,8 @@ async function analyzeNew(mode) {
     return;
   }
   // a pasted schedule (many "MM.DD." lines, not a mail): list it for picking, without AI
-  if (!UI.att.length && text.length >= 60 && !/^(보낸\s*사람|From|받는\s*사람|To|제목|Subject)\s*:/im.test(text)) {
+  // (a file left in the box from before does not turn a pasted schedule into a mail)
+  if (text.length >= 60 && !/^(보낸\s*사람|From|받는\s*사람|To|제목|Subject)\s*:/im.test(text)) {
     const all = parseScheduleText(text);
     if (all && all.length >= 4) {
       const t0 = todayStr(), list = all.filter(a => (a.endDate || a.date) >= t0), past = all.length - list.length;
