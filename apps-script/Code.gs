@@ -16,6 +16,7 @@
  *               일정 설명(메모) 읽기·쓰기, 내 드라이브의 dashboard-data.json 읽기·쓰기 (아이폰 등 폴더 저장이 안 되는 기기용)
  * 버전 4부터 드라이브 권한이 추가되었습니다. 코드를 바꾼 뒤 authorize를 한 번 더 실행해 권한을 허용하세요.
  * 버전 15: 대시보드가 웹페이지(학사일정 등)를 읽어 올 수 있게 webGet — 브라우저는 다른 사이트를 직접 못 읽어서 스크립트가 대신 가져옴
+ *          ai에 search: true면 Gemini가 구글 검색으로 찾아봄 (웹페이지 주소 찾기)
  * 버전 14: 아이폰에서 Scriptable이 Gemini에 대신 물어보는 작업함 (aiPut / aiGet / aiDone / aiResult)
  * 버전 13: Gemini API로 그림(캡처)도 함께 보냄 (ai: images)
  * 버전 12: 대시보드에서 "Thunderbird로 답장"을 누르면 Thunderbird 애드온이 원본을 인용한 답장 창을 엽니다 (replyPut / replyTake)
@@ -119,7 +120,9 @@ function aiAsk(b) {
   (Array.isArray(b.images) ? b.images : []).slice(0, 6).forEach(function (im) { if (im && im.b64) parts.push({ inline_data: { mime_type: String(im.mime || 'image/jpeg'), data: String(im.b64) } }); });
   parts.push({ text: String(b.prompt || '') });
   const body = { contents: [{ role: 'user', parts: parts }], generationConfig: { temperature: 0.3 } };
-  if (b.json) body.generationConfig.responseMimeType = 'application/json';
+  // search: let Gemini look things up on Google (JSON mode cannot be used together with search)
+  if (b.search) body.tools = [{ google_search: {} }];
+  else if (b.json) body.generationConfig.responseMimeType = 'application/json';
   const j = gemFetch('models/' + model + ':generateContent', body);
   const c = (j.candidates || [])[0];
   const text = c && c.content && (c.content.parts || []).map(function (p) { return p.text || ''; }).join('');

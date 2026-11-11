@@ -2870,10 +2870,11 @@ function describeAction(a) {
 }
 function renderCmdPreview(actions, sourceText, fromAI, note) {
   UI.cmd = { actions, text: sourceText };
-  const st = $('pasteStatus');
+  const st = $('pasteStatus'), src = UI.webSrc; UI.webSrc = null;
   st.className = 'status';
   st.innerHTML = `<div class="cmdbox">
     <div class="cmdhead">${ic('spark')}<b>${fromAI ? 'AI가 해석한 내용 · 확인 후 실행하세요' : '이렇게 처리할까요?'}</b>${!fromAI && UI.cmdFixed ? `<span class="count">"${esc(UI.cmdFixed)}"(으)로 알아들었습니다</span>` : ''}</div>
+    ${src ? `<div class="cmdnote">${ic('link')}<span>읽은 페이지: <a href="${esc(src.url)}" target="_blank" rel="noopener">${esc(src.title)}</a>${src.note ? ` · ${esc(src.note)}` : ''}</span></div>` : ''}
     ${note ? `<div class="cmdnote">${ic('chat')}<span>${esc(note)}</span></div>` : ''}
     ${actions.map((a, i) => { const d = describeAction(a); const k = a.type === 'update' ? 'pen' : a.type === 'done' ? 'check' : a.type === 'skip' ? 'dash' : a.type === 'delete' ? 'ban' : a.type === 'block' ? 'lock' : a.type === 'task' ? iconFor(a.title, '할일') : iconFor(a.title, a.kind || '회의');
       return `<div class="cmdrow">${actions.length > 1 ? `<input type="checkbox" class="cmdpick" data-i="${i}" checked aria-label="${esc(d.title)} 넣기">` : ''}${ic(k, ICON_GROUP[k] || '')}<span class="pill ${a.type === 'delete' ? 'del' : 'pend'}">${d.typeKo}</span><b>${esc(d.title)}</b><span class="count">${colorTimes(esc(d.when))}</span>${a.repeat ? `<span class="count nextocc">다음: ${nextOccurrences({ date: a.date, repeat: a.repeat }, 4, todayStr()).map(fmtShort).join(', ')}</span>` : ''}${a.type === 'event' && a.imp === 'high' ? '<span class="impbtn on">중요</span>' : ''}${(a.notes || []).map(n => `<span class="warnline">${esc(n)}</span>`).join('')}</div>`; }).join('')}
@@ -3144,8 +3145,8 @@ function aiProgress(title, run, json, who) {
       .catch(e => { if (done) return; close(); reject(e); });
   });
 }
-function geminiAsk(prompt, title, json, images) {
-  return aiProgress(title, () => gasPost({ action: 'ai', prompt, json: !!json, model: S.settings.aiModel || 'gemini-2.5-flash', ...(images && images.length ? { images } : {}) }).then(j => j.text)
+function geminiAsk(prompt, title, json, images, search) {
+  return aiProgress(title, () => gasPost({ action: 'ai', prompt, json: !!json, ...(search ? { search: true } : {}), model: S.settings.aiModel || 'gemini-2.5-flash', ...(images && images.length ? { images } : {}) }).then(j => j.text)
     .catch(e => { throw (e && e.code === 'action' ? { code: 'old', message: '스크립트를 버전 10으로 다시 배포해야 Gemini를 쓸 수 있습니다.' } : e); }), json, 'Gemini');
 }
 // automatic first; if it cannot (no key, limit reached, network), the copy-and-paste window opens instead
@@ -3180,7 +3181,7 @@ async function aiRun(prompt, opts, json) {
     catch (e) { if (e && e.code === 'cancelled') throw e; why = 'Gemini 웹 자동 처리 실패: ' + ((e && e.message) || '알 수 없는 오류'); if (e && e.text) { pre = e.text; why += ' Gemini의 답을 아래 칸에 넣어 두었습니다. 고칠 곳이 있으면 고친 뒤 [적용]을 누르세요.'; glog('받은 답(JSON 아님): ' + String(e.text).slice(0, 160)); } }
   } else if (aiWeb() && images.length) why = '그림을 Gemini에 자동으로 넣으려면 Gemini 연결 확장을 1.2 이상으로 바꿔야 합니다.';
   if (aiAuto()) {
-    try { return await geminiAsk(prompt, opts.title, json, images); }
+    try { return await geminiAsk(prompt, opts.title, json, images, opts.search); }
     catch (e) { if (e && e.code === 'cancelled') throw e; why = 'Gemini API 실패: ' + ((e && e.message) || ''); }
   }
   if (!bridgeOn() && scriptableOn() && gasOn()) {
@@ -3768,14 +3769,36 @@ function extractPrompt(source, text, ask) {
 ----- 문서 내용 -----
 ${String(text).slice(0, 14000)}`;
 }
+// no address given: Gemini searches for the official page, the dashboard reads it and lists the dates
+async function webFind(ask) {
+  const st = $('pasteStatus');
+  const known = (S.settings.sites || []).slice(-10).map(x => `- ${x.title} : ${x.url}`).join('\n');
+  st.className = 'status'; st.textContent = 'Gemini가 웹페이지 주소를 찾는 중…';
+  let j;
+  try {
+    const t = await sample.json(`아래 요청에 맞는 공식 웹페이지 주소를 구글에서 검색해서 찾아 줘. 실제로 있는 주소만, 지어내지 말고.
+요청: "${ask}"
+- 학교·기관의 공식 사이트(예: ○○.ac.kr) 안의 페이지를 우선. 학사일정이면 학사일정이 표로 나오는 페이지.
+- 페이지가 연도별로 나뉘어 있으면 요청한 연도의 페이지. 아직 그 연도 것이 없으면 가장 최근 페이지와 그 사실을 note에.
+${known ? `- 예전에 쓴 주소 (맞으면 그대로 써도 됨):\n${known}\n` : ''}형식: {"url":"https://…","title":"페이지 이름","note":"알려 줄 말 또는 null"}`, { title: '웹페이지 주소 찾기', search: true });
+    j = typeof t === 'string' ? (() => { try { return JSON.parse((t.match(/\{[\s\S]*\}/) || ['null'])[0]); } catch { return null; } })() : t;
+  } catch (e) { if (e && e.code === 'cancelled') { st.textContent = ''; return; } st.className = 'status err'; st.textContent = `주소를 찾지 못했습니다: ${(e && e.message) || e} — 주소(https://…)를 같이 적어 주세요.`; return; }
+  const url = j && typeof j.url === 'string' && (j.url.match(/https?:\/\/[^\s<>"')]+/) || [])[0];
+  if (!url) { st.className = 'status err'; st.textContent = 'Gemini가 주소를 찾지 못했습니다' + (j && j.note ? ` (${j.note})` : '') + '. 주소(https://…)를 같이 적어 주세요.'; return; }
+  UI.webFound = { url, title: j.title || '', note: j.note || '' };
+  return webEvents(url, ask, true);
+}
 // a web page the dashboard cannot read itself: the Apps Script fetches it, then the AI lists the dates
-async function webEvents(url, ask) {
+async function webEvents(url, ask, found) {
   const st = $('pasteStatus');
   if (!gasOn()) { st.className = 'status err'; st.textContent = '웹페이지를 읽으려면 Apps Script 연결이 필요합니다 (설정 → 기본).'; return; }
   st.className = 'status'; st.textContent = '웹페이지를 읽는 중…';
   let r;
   try { r = await gas({ action: 'webGet', url }); }
-  catch (e) { st.className = 'status err'; st.textContent = e && e.code === 'action' ? 'Apps Script를 버전 15로 올려야 웹페이지를 읽을 수 있습니다 (설정 → 기본의 안내 참고).' : `웹페이지를 읽지 못했습니다: ${(e && e.message) || e}`; return; }
+  catch (e) { st.className = 'status err'; st.textContent = (e && e.code === 'action' ? 'Apps Script를 버전 15로 올려야 웹페이지를 읽을 수 있습니다 (설정 → 기본의 안내 참고).' : `웹페이지를 읽지 못했습니다: ${(e && e.message) || e}`) + (found ? ` · Gemini가 찾은 주소: ${url} — 주소가 틀렸으면 맞는 주소를 같이 적어 주세요.` : ''); return; }
+  // remember pages that worked, so the next search can reuse them
+  if (found) { const sites = (S.settings.sites || []).filter(x => x.url !== url).concat({ url, title: r.title || (UI.webFound && UI.webFound.title) || url }).slice(-20); saveSettings({ ...S.settings, sites }).catch(() => {}); }
+  UI.webSrc = { url, title: r.title || url, note: found && UI.webFound ? UI.webFound.note : '' };
   if (r.type === 'pdf') { st.className = 'status err'; st.textContent = '이 주소는 PDF 파일입니다. 내려받아 자동 처리 칸에 파일로 넣어 주세요.'; return; }
   if (!r.text || r.text.length < 40) { st.className = 'status err'; st.textContent = '페이지에 글이 거의 없습니다. 일정이 그림이거나 로그인이 필요한 페이지일 수 있습니다.'; return; }
   return runCommandAI(extractPrompt(`웹페이지 "${r.title || url}" (${url})`, r.text + (r.links && r.links.length ? '\n\n(페이지 안 링크: ' + r.links.map(l => l.text).join(', ') + ')' : ''), ask));
@@ -5623,10 +5646,7 @@ async function analyzeNew(mode) {
   // "이 페이지에서 일정 뽑아 줘 https://…": the Apps Script reads the page for us (Gemini cannot open sites from here)
   const urlM = !UI.att.length && text.length < 600 && text.match(/https?:\/\/[^\s<>"')]+/);
   if (urlM && /(일정|학사|캘린더|달력|스케줄|뽑|추가|넣)/.test(text)) { $('rawMail').value = ''; return webEvents(urlM[0], text.replace(urlM[0], '').trim()); }
-  if (!UI.att.length && !urlM && text.length < 200 && /(홈페이지|사이트|웹사이트|웹페이지|누리집)/.test(text) && /(일정|학사)/.test(text)) {
-    st.className = 'status'; st.innerHTML = `<div class="cmdbox"><div class="cmdnote">${ic('chat')}<span>웹페이지는 주소(https://…)를 같이 적어 주세요. 예: "여기서 2027년 학사일정 뽑아 줘 https://www.inha.ac.kr/…" — 대시보드가 페이지를 읽어 일정 목록을 보여 주고, 고른 것만 넣습니다.</span></div></div>`;
-    return;
-  }
+  if (!UI.att.length && !urlM && text.length < 200 && /(홈페이지|사이트|웹사이트|웹페이지|누리집)/.test(text) && /(일정|학사)/.test(text)) { $('rawMail').value = ''; return webFind(text); }
   // things the dashboard already knows how to do by itself (each one still asks before changing anything)
   if (!UI.att.length && mode === 'local' && text.length < 80) {
     const t = text.replace(/\s+/g, '');
