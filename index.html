@@ -5842,6 +5842,8 @@ ${String(m.raw).slice(0, 20000)}
       a.events.push({ title, date: e.date, time, endTime, location, kind: '회의', important: doc.imp === 'high', forHead: true, added: true });
       added.push(`${fmtShort(e.date)} ${time} ${title}`.trim());
     }
+    // I have decided the dates: the candidates the analysis guessed from the mail are no longer waiting to be reflected
+    if (added.length) a.events.forEach(x => { if (!x.added && !x.skipped) x.skipped = true; });
     await patch('emails', m.id, { reply: { draft: fixed }, needsReply: true, ...(added.length ? { analysis: a } : {}) });
     st.textContent = '초안을 저장했습니다. 대괄호 부분을 채운 뒤 복사해서 보내세요.' + (wantEv ? (added.length ? ` 일정 ${added.length}개를 캘린더에 넣었습니다: ${added.join(' / ')}` : ' 넣을 일정은 찾지 못했습니다(이미 있거나 날짜가 없음).') : '');
     if (added.length) { try { renderSheet(true); const t = $('draft'); if (t) t.value = fixed; const s2 = $('draftStatus'); if (s2) { s2.className = 'status'; s2.textContent = `초안을 저장했고, 일정 ${added.length}개를 캘린더에 넣었습니다: ${added.join(' / ')}`; } } catch {} }
