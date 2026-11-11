@@ -5773,6 +5773,39 @@ async function imagesFrom(list) {
   return out;
 }
 // mode 'local': the dashboard handles it alone (commands, registering a mail) · 'ai': hand it to Gemini
+/* ---------- a pasted schedule table (학사일정 etc.): read by the dashboard itself, no AI ---------- */
+// "01.06.(수) ~ 01.07.(목)" / "2027-1학기 재입학 신청" (title on the same line or the next), month headers like "* 1 월" or "12월 (2025)"
+const SCHED_RE = /^(\d{1,2})\s*[./]\s*(\d{1,2})\s*\.?\s*(?:\([월화수목금토일]\))?(?:\s*[~∼～\-–]\s*(?:(\d{1,2})\s*[./]\s*)?(\d{1,2})\s*\.?\s*(?:\([월화수목금토일]\))?)?\s*[|:]?\s*(.*)$/;
+function parseScheduleText(text) {
+  const lines = String(text).split('\n').map(l => l.replace(/\|\s*$/, '').trim()).filter(Boolean);
+  const isHead = l => /^[*•#-]?\s*\d{1,2}\s*월\s*(\(\s*20\d{2}\s*\))?\s*\|?$/.test(l);
+  const items = []; let headYear = null;
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
+    if (isHead(l)) { const y = l.match(/20\d{2}/); headYear = y ? +y[0] : null; continue; }
+    const m = l.match(SCHED_RE); if (!m) continue;
+    const mo = +m[1], d = +m[2]; if (mo < 1 || mo > 12 || d < 1 || d > 31) continue;
+    let title = (m[5] || '').replace(/^[|:\s]+|[|\s]+$/g, '').replace(/\s*\|\s*/g, ' ').trim();
+    if (!title) { const nx = lines[i + 1]; if (nx && !SCHED_RE.test(nx) && !isHead(nx)) { title = nx.replace(/\s*\|\s*/g, ' ').replace(/\|$/, '').trim(); i++; } }
+    if (!title || title.length > 120) continue;
+    items.push({ mo, d, emo: m[4] ? +(m[3] || mo) : null, ed: m[4] ? +m[4] : null, title, headYear });
+  }
+  if (items.length < 3) return null;
+  // the year: the one the text talks about most (2027-1학기 …); a list that runs Dec → Jan crosses into the next year
+  const ys = {}; (String(text).match(/20\d{2}/g) || []).forEach(y => { ys[y] = (ys[y] || 0) + 1; });
+  const Y = +(Object.entries(ys).sort((a, b) => b[1] - a[1])[0] || [new Date().getFullYear()])[0];
+  const assign = start => { let y = start, prev = 0; return items.map(it => { if (it.headYear) { y = it.headYear; } else if (prev && it.mo < prev - 6) y++; prev = it.mo; return y; }); };
+  const a1 = assign(Y), a0 = assign(Y - 1), score = a => a.filter(y => y === Y).length;
+  const years = score(a0) > score(a1) ? a0 : a1;
+  const p2 = n => String(n).padStart(2, '0');
+  return items.map((it, k) => {
+    const y = years[k], date = `${y}-${p2(it.mo)}-${p2(it.d)}`;
+    let endDate = '';
+    if (it.ed) { const ey = it.emo < it.mo ? y + 1 : y; endDate = `${ey}-${p2(it.emo)}-${p2(it.ed)}`; if (!isDate(endDate) || endDate <= date) endDate = ''; }
+    const kind = /(신청|접수|마감|제출|포기|등록 ?기간|변경)/.test(it.title) ? '마감' : '학사';
+    return { type: 'event', title: it.title, date, ...(endDate ? { endDate } : {}), allDay: true, time: '', endTime: '', kind };
+  }).filter(a => isDate(a.date));
+}
 async function analyzeNew(mode) {
   mode = mode === 'ai' ? 'ai' : 'local';
   const text = $('rawMail').value.trim();
@@ -5818,6 +5851,19 @@ async function analyzeNew(mode) {
     else if (r.title && (r.date || r.repeat || r.due) && !(r.notes || []).some(n => /찾지 못해/.test(n))) renderCmdPreview([r], text, false, '이렇게 이해했는데 확실하지 않습니다. 다르면 아래 "다르게 이해했어요 · AI에게 맡기기"를 누르세요.');
     else aiHint('대시보드가 혼자서는 이해하지 못한 명령입니다.');
     return;
+  }
+  // a pasted schedule (many "MM.DD." lines, not a mail): list it for picking, without AI
+  if (!UI.att.length && text.length >= 60 && !/^(보낸\s*사람|From|받는\s*사람|To|제목|Subject)\s*:/im.test(text)) {
+    const all = parseScheduleText(text);
+    if (all && all.length >= 4) {
+      const t0 = todayStr(), list = all.filter(a => (a.endDate || a.date) >= t0), past = all.length - list.length;
+      const dup = list.filter(a => S.events.some(e => e.date === a.date && e.title === a.title)).length;
+      const fresh = list.filter(a => !S.events.some(e => e.date === a.date && e.title === a.title));
+      $('rawMail').value = '';
+      if (!fresh.length) { st.className = 'status'; st.textContent = `붙여넣은 일정 ${all.length}개를 읽었는데, ${past ? `지난 ${past}개 · ` : ''}${dup ? `이미 있는 ${dup}개` : ''}라 넣을 것이 없습니다.`; return; }
+      renderCmdPreview(fresh, text, false, `붙여넣은 일정표에서 ${fresh.length}개를 읽었습니다 (AI 없이 대시보드가 직접 읽음${past ? ` · 이미 지난 ${past}개 뺌` : ''}${dup ? ` · 이미 있는 ${dup}개 뺌` : ''}). 넣을 것만 남기고 체크를 빼세요.`);
+      return;
+    }
   }
   if (text.length < 10 && !UI.att.length) { st.className = 'status err'; st.textContent = '메일 내용을 붙여넣어 주세요.'; return; }
   const cat = $('mailCat').value;
