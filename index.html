@@ -3755,6 +3755,31 @@ function dateCount(text) {
   return seen.size;
 }
 const datesOf = x => x.dates != null ? x.dates : (x.dates = dateCount(x.text));
+// "find every dated item in this document" — for attachments and web pages; the list comes back for picking
+function extractPrompt(source, text, ask) {
+  return `${source}에 있는 날짜 있는 일정을 빠짐없이 뽑아 줘. 내가 목록에서 필요한 것만 고를 거니까 많아도 괜찮아.${ask ? `\n내가 원래 한 말: "${ask}" — 여기서 범위(연도·학기 등)를 말했으면 그 범위만.` : ''}
+- 하나하나 type "event"로. 학사일정·행사는 kind "학사", 신청·제출·마감 기한은 kind "마감".
+- 기간(예: 11. 2.(월) ~ 11. 6.(금))이면 date에 시작일, endDate에 마지막 날을 넣은 하나의 일정으로.
+- 제목은 문서에 쓰인 이름 그대로 짧게. 연도가 안 쓰여 있으면 문서의 학년도·학기로 판단해.
+- 오늘(${todayStr()}) 이전에 이미 끝난 일정은 빼.
+- 시간이 쓰여 있으면 time·endTime, 없으면 allDay true.
+- 찾는 범위의 일정이 문서에 없으면 actions는 빈 배열로 두고 note에 문서에 실제로 있는 것(예: "2026학년도 일정만 있음")을 적어.
+
+----- 문서 내용 -----
+${String(text).slice(0, 14000)}`;
+}
+// a web page the dashboard cannot read itself: the Apps Script fetches it, then the AI lists the dates
+async function webEvents(url, ask) {
+  const st = $('pasteStatus');
+  if (!gasOn()) { st.className = 'status err'; st.textContent = '웹페이지를 읽으려면 Apps Script 연결이 필요합니다 (설정 → 기본).'; return; }
+  st.className = 'status'; st.textContent = '웹페이지를 읽는 중…';
+  let r;
+  try { r = await gas({ action: 'webGet', url }); }
+  catch (e) { st.className = 'status err'; st.textContent = e && e.code === 'action' ? 'Apps Script를 버전 15로 올려야 웹페이지를 읽을 수 있습니다 (설정 → 기본의 안내 참고).' : `웹페이지를 읽지 못했습니다: ${(e && e.message) || e}`; return; }
+  if (r.type === 'pdf') { st.className = 'status err'; st.textContent = '이 주소는 PDF 파일입니다. 내려받아 자동 처리 칸에 파일로 넣어 주세요.'; return; }
+  if (!r.text || r.text.length < 40) { st.className = 'status err'; st.textContent = '페이지에 글이 거의 없습니다. 일정이 그림이거나 로그인이 필요한 페이지일 수 있습니다.'; return; }
+  return runCommandAI(extractPrompt(`웹페이지 "${r.title || url}" (${url})`, r.text + (r.links && r.links.length ? '\n\n(페이지 안 링크: ' + r.links.map(l => l.text).join(', ') + ')' : ''), ask));
+}
 function attEvBtn(m, x) {
   if (!x.text || x.text.length < 30 || x.noEv) return '';
   const n = datesOf(x), hot = n >= 2;
@@ -5595,6 +5620,13 @@ async function analyzeNew(mode) {
     UI.att = []; renderAttList(); $('rawMail').value = '';
     return runCommandAI(text, images);
   }
+  // "이 페이지에서 일정 뽑아 줘 https://…": the Apps Script reads the page for us (Gemini cannot open sites from here)
+  const urlM = !UI.att.length && text.length < 600 && text.match(/https?:\/\/[^\s<>"')]+/);
+  if (urlM && /(일정|학사|캘린더|달력|스케줄|뽑|추가|넣)/.test(text)) { $('rawMail').value = ''; return webEvents(urlM[0], text.replace(urlM[0], '').trim()); }
+  if (!UI.att.length && !urlM && text.length < 200 && /(홈페이지|사이트|웹사이트|웹페이지|누리집)/.test(text) && /(일정|학사)/.test(text)) {
+    st.className = 'status'; st.innerHTML = `<div class="cmdbox"><div class="cmdnote">${ic('chat')}<span>웹페이지는 주소(https://…)를 같이 적어 주세요. 예: "여기서 2027년 학사일정 뽑아 줘 https://www.inha.ac.kr/…" — 대시보드가 페이지를 읽어 일정 목록을 보여 주고, 고른 것만 넣습니다.</span></div></div>`;
+    return;
+  }
   // things the dashboard already knows how to do by itself (each one still asks before changing anything)
   if (!UI.att.length && mode === 'local' && text.length < 80) {
     const t = text.replace(/\s+/g, '');
@@ -6036,15 +6068,7 @@ document.addEventListener('click', async ev0 => {
         try { qTab('auto'); } catch {}
         const q = document.querySelector('.qrow') || $('pasteStatus'); try { q.scrollIntoView({ block: 'nearest' }); } catch {}
         toast('첨부파일에서 일정을 찾는 중입니다. 자동 처리 칸에 목록이 나오면 넣을 것만 고르세요.');
-        return runCommandAI(`첨부파일 "${a.name}"(메일 제목: ${m.subject || ''})에 있는 날짜 있는 일정을 빠짐없이 뽑아 줘. 내가 목록에서 필요한 것만 고를 거니까 많아도 괜찮아.
-- 하나하나 type "event"로. 학사일정·행사는 kind "학사", 신청·제출·마감 기한은 kind "마감".
-- 기간(예: 11. 2.(월) ~ 11. 6.(금))이면 date에 시작일, endDate에 마지막 날을 넣은 하나의 일정으로.
-- 제목은 문서에 쓰인 이름 그대로 짧게. 연도가 안 쓰여 있으면 문서의 학년도·학기로 판단해.
-- 오늘(${todayStr()}) 이전에 이미 끝난 일정은 빼.
-- 시간이 쓰여 있으면 time·endTime, 없으면 allDay true.
-
------ 문서 내용 -----
-${a.text.slice(0, 14000)}`);
+        return runCommandAI(extractPrompt(`첨부파일 "${a.name}"(메일 제목: ${m.subject || ''})`, a.text));
       }
       case 'attAddMail': return $('attInput2') && $('attInput2').click();
       case 'sheetView': UI.sheetView = el.dataset.v; try { localStorage.setItem('sheetView', el.dataset.v); } catch {} return renderSheet(true);

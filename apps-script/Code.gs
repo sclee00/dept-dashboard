@@ -15,6 +15,7 @@
  * 할 수 있는 일: 캘린더 목록, 일정 읽기, 일정 만들기·고치기·지우기 (반복 일정은 이 날만 또는 전체),
  *               일정 설명(메모) 읽기·쓰기, 내 드라이브의 dashboard-data.json 읽기·쓰기 (아이폰 등 폴더 저장이 안 되는 기기용)
  * 버전 4부터 드라이브 권한이 추가되었습니다. 코드를 바꾼 뒤 authorize를 한 번 더 실행해 권한을 허용하세요.
+ * 버전 15: 대시보드가 웹페이지(학사일정 등)를 읽어 올 수 있게 webGet — 브라우저는 다른 사이트를 직접 못 읽어서 스크립트가 대신 가져옴
  * 버전 14: 아이폰에서 Scriptable이 Gemini에 대신 물어보는 작업함 (aiPut / aiGet / aiDone / aiResult)
  * 버전 13: Gemini API로 그림(캡처)도 함께 보냄 (ai: images)
  * 버전 12: 대시보드에서 "Thunderbird로 답장"을 누르면 Thunderbird 애드온이 원본을 인용한 답장 창을 엽니다 (replyPut / replyTake)
@@ -46,7 +47,7 @@ function doGet(e) {
   if (p.key !== KEY) return out({ ok: false, error: 'key' });
   try {
     switch (p.action) {
-      case 'ping': return out({ ok: true, email: Session.getEffectiveUser().getEmail(), tz: Session.getScriptTimeZone(), version: 14, forward: dashAddress(), gemini: !!PropertiesService.getScriptProperties().getProperty('GEMINI_KEY'), advanced: typeof Calendar !== 'undefined' });
+      case 'ping': return out({ ok: true, email: Session.getEffectiveUser().getEmail(), tz: Session.getScriptTimeZone(), version: 15, forward: dashAddress(), gemini: !!PropertiesService.getScriptProperties().getProperty('GEMINI_KEY'), advanced: typeof Calendar !== 'undefined' });
       case 'dataGet': return out(Object.assign({ ok: true }, dataGet(p)));
       case 'dataFiles': return out({ ok: true, current: PropertiesService.getScriptProperties().getProperty('DATA_FILE_ID') || '', files: dataFiles() });
       case 'dataUse': return out(Object.assign({ ok: true }, dataUse(p)));
@@ -54,6 +55,7 @@ function doGet(e) {
       case 'inboxGet': return out({ ok: true, mail: inboxGet(p.id) });
       case 'inboxDone': return out({ ok: true, done: inboxDone(p.id, p.gdel) });
       case 'replyTake': return out({ ok: true, items: replyTake() });
+      case 'webGet': return out(Object.assign({ ok: true }, webGet(p.url)));
       case 'aiGet': return out(Object.assign({ ok: true }, aiJobGet(p.id)));
       case 'aiResult': return out(Object.assign({ ok: true }, aiJobResult(p.id)));
       case 'calendars': return out({ ok: true, calendars: listCalendars() });
@@ -253,6 +255,29 @@ function aiJobResult(id) {
   if (!f) return { done: false };
   const r = JSON.parse(f.getBlob().getDataAsString('UTF-8')); f.setTrashed(true);
   return { done: true, text: r.text, error: r.error, message: r.message };
+}
+
+/* ---------- a web page as plain text (tables kept as rows) for the dashboard ---------- */
+function webGet(url) {
+  url = String(url || '').trim();
+  if (!/^https?:\/\/[^\s]+$/i.test(url)) throw new Error('주소가 올바르지 않습니다.');
+  if (/^https?:\/\/(localhost|127\.|10\.|192\.168\.|169\.254\.)/i.test(url)) throw new Error('이 주소는 읽을 수 없습니다.');
+  const r = UrlFetchApp.fetch(url, { muteHttpExceptions: true, followRedirects: true, headers: { 'User-Agent': 'Mozilla/5.0 (dashboard)' } });
+  const code = r.getResponseCode();
+  if (code >= 400) throw new Error('페이지를 열지 못했습니다 (응답 ' + code + ').');
+  const type = String(r.getHeaders()['Content-Type'] || r.getHeaders()['content-type'] || '');
+  if (/pdf/i.test(type)) return { url: url, type: 'pdf', b64: Utilities.base64Encode(r.getContent()).slice(0, 14000000) };
+  let html = r.getContentText('UTF-8');
+  if (/charset=(euc-kr|ks_c_5601|cp949)/i.test(type + html.slice(0, 2000))) html = r.getContentText('EUC-KR');
+  const title = (html.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1] || '';
+  let t = html.replace(/<(script|style|noscript|svg|head)[\s\S]*?<\/\1>/gi, ' ')
+    .replace(/<\/(td|th)>/gi, ' | ').replace(/<(br|\/tr|\/p|\/li|\/h\d|\/div|\/dt|\/dd)[^>]*>/gi, '\n')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&')
+    .replace(/[ \t]+/g, ' ').replace(/ *\n */g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+  const links = [];
+  html.replace(/<a[^>]+href="([^"#][^"]*)"[^>]*>([\s\S]*?)<\/a>/gi, function (m, h, txt) { txt = txt.replace(/<[^>]+>/g, '').trim(); if (txt && /학사|일정|calendar|schedule|\.pdf/i.test(txt + h) && links.length < 40) links.push({ text: txt.slice(0, 80), href: h }); return m; });
+  return { url: url, type: 'html', title: title.replace(/\s+/g, ' ').trim(), text: t.slice(0, 80000), links: links };
 }
 
 /* ---------- replies the dashboard asks Thunderbird to open (kept 15 minutes in the script cache) ---------- */
