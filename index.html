@@ -1128,7 +1128,11 @@ const DEFAULTS = { semesterLabel: '2026학년도 2학기', semesterStart: '2026-
   mf: { dtBlock: true, name: '', title: '', greet: '안녕하세요. {이름}입니다.', close: '감사합니다.', tone: 'formal', len: 'normal', rules: '', style: '- 결론·답은 "~할 것 같습니다", "~하기 어려울 것 같습니다"처럼 부드럽게 쓴다. "~하게 되었음을 알려드립니다", "~임을 알려드립니다" 같은 통보체는 쓰지 않는다.\n- "~건 확인하였습니다", "메일 잘 받았습니다"처럼 받은 내용을 되풀이하는 문장은 쓰지 않고 바로 용건을 쓴다.\n- 같은 뜻의 문장을 두 번 쓰지 않는다.', dGreet: '{조교}님, 수고 많으십니다.', dSig: '{이름}', dTone: 'polite', dRules: '' },
   workStart: '09:00', workEnd: '18:00', workDays: [1, 2, 3, 4, 5], weekly: [], googleShow: true, googleBusy: true, googlePush: false, gAutoPush: true, gCals: null, gPushCal: 'primary' };
 const G_LOGO = '<svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>';
-const S = { tasks: [], events: [], emails: [], blocks: [], marks: [], settings: { ...DEFAULTS }, settingsU: 0, deleted: {} };
+const S = { tasks: [], events: [], emails: [], blocks: [], marks: [], settings: { ...DEFAULTS }, settingsU: 0, deleted: {}, lists: {} };
+// D-day, 상용구, 연락처: kept apart from the settings, each with its own time, merged by the newer one
+const LISTS = ['ddayPins', 'snippets', 'contacts'];
+function lst(k) { const x = S.lists && S.lists[k]; if (x && Array.isArray(x.v)) return x.v; const old = S.settings && S.settings[k]; return Array.isArray(old) ? old : []; }
+function lstSet(k, v) { S.lists = { ...(S.lists || {}), [k]: { v, u: Date.now() } }; changed(); }
 const UI = { view: 'weeks', wOff: 0, tf: 'open', mf: 'open', month: null, selDay: null, rail: 'day', dayForm: null, prefill: null, finder: null, bd: null, dlg: null, cap: 9, openId: null, edits: {}, analyzeCtl: null, draftCtl: null, confirmDel: false };
 
 
@@ -1900,7 +1904,7 @@ function upcoming(days) {
 // the dates I pinned (any number), nearest first; older single-pin / list settings are read too
 function ddayPins() {
   const t = todayStr(), s0 = S.settings;
-  const list = Array.isArray(s0.ddayPins) ? s0.ddayPins : [...(s0.ddayPin ? [s0.ddayPin] : []), ...((s0.ddays || []).filter(d => d.date >= t))];
+  const list = (S.lists && S.lists.ddayPins) || Array.isArray(s0.ddayPins) ? lst('ddayPins') : [...(s0.ddayPin ? [s0.ddayPin] : []), ...((s0.ddays || []).filter(d => d.date >= t))];
   const seen = new Set();
   // coming dates nearest first; dates already past go to the end
   return list.filter(d => d && isDate(d.date) && d.title && !seen.has(d.date + d.title) && seen.add(d.date + d.title)).sort((a, b) => ((a.date < t) - (b.date < t)) || (a.date < t ? b.date.localeCompare(a.date) : a.date.localeCompare(b.date)));
@@ -1925,7 +1929,7 @@ function renderWidgets() {
   const ddRow = x => { const n = diff(x.date); return `<button type="button" class="ddrow" ${x.pin ? 'data-act="pickDay" data-day="' + x.date + '"' : `data-act="ipOpen" data-kind="${x.kind}" data-id="${esc(x.id)}"`} title="${esc(x.title)} · ${fmtShort(x.date)}"><b class="${n < 0 ? '' : n <= 3 ? 'hot' : n <= 7 ? 'warm' : ''}">${n === 0 ? 'D-day' : n < 0 ? 'D+' + -n : 'D-' + n}</b><span>${esc(x.title)}</span></button>`; };
   const ddRowX = x => `<div class="ddwrap">${ddRow(x)}<button type="button" class="ddx" data-act="ddayX" data-date="${x.date}" data-title="${esc(x.title)}" data-pin="${x.pin ? 1 : ''}" title="${x.pin ? 'D-day에서 빼기' : '이 일정은 D-day에 안 보이기 (다음 중요 일정이 나옴)'}" aria-label="${esc(x.title)} D-day에서 빼기">✕</button></div>`;
   const dd = `<div class="hw ddhw"><span class="hwl">${ic('flag')}D-day <button type="button" class="hwedit" data-act="ddayEdit" title="내가 지정하는 D-day 고르기" aria-label="D-day 지정">${ic('pen')}</button></span><div class="ddlist">${dl.map(ddRowX).join('')}<button type="button" class="ddrow add" data-act="ddayEdit"><b>＋</b><span>D-day ${hasPin ? '더 ' : ''}추가하기</span></button></div></div>`;
-  const sn = S.settings.snippets || [];
+  const sn = lst('snippets');
   const sp = `<div class="hw snhw"><span class="hwl">${ic('copy')}상용구 <button type="button" class="hwedit" data-act="snipEdit" title="상용구 추가·편집" aria-label="상용구 편집">${ic('pen')}</button></span><div class="snlist">${sn.length ? sn.map((x, i) => `<button type="button" class="snchip" data-act="snipCopy" data-i="${i}" title="${esc(x.text)}">${esc(x.label || x.text)}${ic('copy')}</button>`).join('') : '<button type="button" class="snchip" data-act="snipEdit">+ 이메일·전화번호 등 추가</button>'}</div></div>`;
   const cl = contactsAll(); if (UI.ctIdx == null || UI.ctIdx >= cl.length) UI.ctIdx = 0;
   const c = cl[UI.ctIdx];
@@ -1957,7 +1961,7 @@ function ddayDlg() {
   $('ddPick').onchange = e => { const x = opts[+e.target.value]; if (x) { $('ddDate').value = x.date; $('ddTitle').value = x.title; } };
 }
 function listEditDlg(kind) {
-  const isSn = kind === 'snip', list = isSn ? (S.settings.snippets || []) : (S.settings.ddays || []);
+  const isSn = kind === 'snip', list = isSn ? lst('snippets') : (S.settings.ddays || []);
   const text = list.map(x => isSn ? `${x.label} | ${x.text}` : `${x.date} | ${x.title}`).join('\n');
   $('dlgRoot').innerHTML = `<div class="scrim" data-act="closeDlg"></div><div class="dlg"><div class="dlgbox" role="dialog" aria-modal="true" aria-labelledby="dlgT">
     <h3 id="dlgT">${isSn ? `${ic('copy')}상용구` : `${ic('flag')}D-day 직접 추가`}</h3>
@@ -2663,8 +2667,8 @@ const DRIVE = { folderId: null, fileId: null, remoteMod: null, dirty: false, sav
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 const isObj = v => v && typeof v === 'object' && !Array.isArray(v);
 function deepMerge(t, s) { for (const k of Object.keys(s)) { if (isObj(s[k]) && isObj(t[k])) deepMerge(t[k], s[k]); else t[k] = s[k]; } }
-function snapshot() { return { app: 'dept-dashboard', version: 2, savedAt: new Date().toISOString(), settings: S.settings, settingsU: S.settingsU || 0, tasks: S.tasks, events: S.events, emails: S.emails, blocks: S.blocks, marks: S.marks, deleted: S.deleted, hist: S.hist || { entries: [] }, gcache: gCacheObj() }; }
-function dataOnly(d) { const o = {}; for (const c of COLS) o[c] = (d && d[c]) || []; o.settings = d && d.settings; o.deleted = d && d.deleted; o.hist = d && d.hist; return JSON.stringify(o); }
+function snapshot() { return { app: 'dept-dashboard', version: 2, savedAt: new Date().toISOString(), settings: S.settings, settingsU: S.settingsU || 0, lists: S.lists || {}, tasks: S.tasks, events: S.events, emails: S.emails, blocks: S.blocks, marks: S.marks, deleted: S.deleted, hist: S.hist || { entries: [] }, gcache: gCacheObj() }; }
+function dataOnly(d) { const o = {}; for (const c of COLS) o[c] = (d && d[c]) || []; o.settings = d && d.settings; o.deleted = d && d.deleted; o.hist = d && d.hist; o.lists = d && d.lists; return JSON.stringify(o); }
 function mergeIn(r) {
   if (!isObj(r)) return false;
   let changed = false;
@@ -2687,6 +2691,7 @@ function mergeIn(r) {
     S.settings = { ...DEFAULTS, ...r.settings }; S.settingsU = r.settingsU; changed = true;
     if (conn && !(S.settings.gasUrl && S.settings.gasKey)) { S.settings.gasUrl = conn.u; S.settings.gasKey = conn.k; }
   }
+  if (isObj(r.lists)) for (const k of LISTS) { const o = r.lists[k], cur = (S.lists || {})[k]; if (o && Array.isArray(o.v) && (o.u || 0) > ((cur && cur.u) || 0)) { S.lists = { ...(S.lists || {}), [k]: o }; changed = true; } }
   if (r.gcache && gCacheAdopt(r.gcache)) changed = true;
   if (r.hist && histMerge(r.hist)) changed = true;
   if (changed) setTimeout(applyLock, 0);
@@ -5713,8 +5718,8 @@ function cleanContacts(arr) {
   return (Array.isArray(arr) ? arr : []).map(c => ({ name: cut(c && c.name, 40), title: cut(c && c.title, 40), org: cut(c && c.org, 60), phone: cut(c && c.phone, 30), email: (cut(c && c.email, 80).match(/[\w.+-]+@[\w-]+(\.[\w-]+)+/) || [''])[0] }))
     .filter(c => c.name && (c.phone || c.email) && !/^(이름|name)$/i.test(c.name)).slice(0, 8);
 }
-const contactsAll = () => (S.settings.contacts || []).slice().sort((a, b) => a.name.localeCompare(b.name, 'ko'));
-const contactKnown = c => (S.settings.contacts || []).find(x => ctKey(x) === ctKey(c) || (c.email && x.email && x.email.toLowerCase() === c.email.toLowerCase()) || (x.name === c.name && c.phone && String(x.phone).replace(/\D/g, '') === String(c.phone).replace(/\D/g, '')));
+const contactsAll = () => lst('contacts').slice().sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+const contactKnown = c => lst('contacts').find(x => ctKey(x) === ctKey(c) || (c.email && x.email && x.email.toLowerCase() === c.email.toLowerCase()) || (x.name === c.name && c.phone && String(x.phone).replace(/\D/g, '') === String(c.phone).replace(/\D/g, '')));
 // read without AI: the header ("보낸 사람: 이름/직책/소속 <메일>", also 받는 사람·참조) + phone numbers in the signature
 const PH_RE = /(0\d{1,2})\s*[-.)\s]\s*(\d{3,4})\s*[-.\s]\s*(\d{4})/;
 function personParts(str) {
@@ -6403,7 +6408,7 @@ document.addEventListener('click', async ev0 => {
       case 'rail': UI.rail = el.dataset.r; renderRail(); if (UI.rail === 'day') renderDay(true); return;
       case 'verReload': try { await syncNow(); } catch {} location.reload(); return;
       case 'lockNow': lockNow(); return;
-      case 'snipCopy': { const x = (S.settings.snippets || [])[+el.dataset.i]; if (!x) return; try { await navigator.clipboard.writeText(x.text); } catch { prompt('복사할 내용', x.text); return; } el.classList.add('done'); setTimeout(() => el.classList.remove('done'), 900); toast(`복사했습니다: ${x.label || x.text}`); return; }
+      case 'snipCopy': { const x = lst('snippets')[+el.dataset.i]; if (!x) return; try { await navigator.clipboard.writeText(x.text); } catch { prompt('복사할 내용', x.text); return; } el.classList.add('done'); setTimeout(() => el.classList.remove('done'), 900); toast(`복사했습니다: ${x.label || x.text}`); return; }
       case 'snipEdit': listEditDlg('snip'); return;
       case 'ddayEdit': ddayDlg(); return;
       case 'gGone': { el.disabled = true; try { await gGoneCheck(true); } finally { el.disabled = false; } return; }
@@ -6413,57 +6418,36 @@ document.addEventListener('click', async ev0 => {
       case 'ctNav': { const n = contactsAll().length; if (n) UI.ctIdx = ((UI.ctIdx || 0) + (+el.dataset.d) + n) % n; renderWidgets(); return; }
       case 'ctCopy': { try { await navigator.clipboard.writeText(el.dataset.v); toast('복사했습니다: ' + el.dataset.v); } catch { prompt('복사할 내용', el.dataset.v); } return; }
       case 'ctNew': ctDlg(); return;
-      case 'ctEdit': { const c = contactsAll()[UI.ctIdx || 0]; if (c) ctDlg(c, (S.settings.contacts || []).indexOf((S.settings.contacts || []).find(x => ctKey(x) === ctKey(c)))); return; }
+      case 'ctEdit': { const c = contactsAll()[UI.ctIdx || 0]; if (c) ctDlg(c, lst('contacts').indexOf(lst('contacts').find(x => ctKey(x) === ctKey(c)))); return; }
       case 'ctAdd': { // from a mail: always shown for checking before it is saved
         const m = S.emails.find(x => x.id === UI.openId), c = m && mailContacts(m).find(x => ctKey(x) === el.dataset.k); if (!c) return;
-        const k = contactKnown(c); ctDlg(k ? { ...k, ...Object.fromEntries(Object.entries(c).filter(([, v]) => v)) } : c, k ? (S.settings.contacts || []).indexOf(k) : null); return;
+        const k = contactKnown(c); ctDlg(k ? { ...k, ...Object.fromEntries(Object.entries(c).filter(([, v]) => v)) } : c, k ? lst('contacts').indexOf(k) : null); return;
       }
       case 'ctSkip': { const m = S.emails.find(x => x.id === UI.openId); if (!m) return; await patch('emails', m.id, { ctSkip: [...(m.ctSkip || []), el.dataset.k] }); return; }
       case 'ctSave': {
         const c = cleanContacts([{ name: $('ctName').value, title: $('ctTitle').value, org: $('ctOrg').value, phone: $('ctPhone').value, email: $('ctEmail').value }])[0];
         if (!c) return toast('이름과, 전화번호나 이메일 중 하나는 넣어 주세요.');
-        const list = (S.settings.contacts || []).slice(), i = el.dataset.i === '' ? -1 : +el.dataset.i;
+        const list = lst('contacts').slice(), i = el.dataset.i === '' ? -1 : +el.dataset.i;
         if (i >= 0 && list[i]) list[i] = c; else { const dup = list.findIndex(x => ctKey(x) === ctKey(c)); if (dup >= 0) list[dup] = c; else list.push(c); }
-        await saveSettings({ ...S.settings, contacts: list });
+        lstSet('contacts', list);
         $('dlgRoot').innerHTML = ''; UI.dlg = null; UI.ctIdx = contactsAll().findIndex(x => ctKey(x) === ctKey(c)); renderHeader(); if (UI.openId) { try { renderSheet(true); } catch {} }
         toast(`연락처에 저장했습니다: ${c.name}`); return;
       }
-      case 'ctDel': { const list = (S.settings.contacts || []).slice(); list.splice(+el.dataset.i, 1); await saveSettings({ ...S.settings, contacts: list }); $('dlgRoot').innerHTML = ''; UI.dlg = null; renderHeader(); toast('연락처를 지웠습니다.'); return; }
-      case 'ddaySave': { const date = $('ddDate').value, title = $('ddTitle').value.trim(); if (!isDate(date) || !title) return toast('날짜와 이름을 넣어 주세요.'); await saveSettings({ ...S.settings, ddayPins: [...ddayPins().filter(x => !(x.date === date && x.title === title)), { date, title }], ddayPin: null, ddays: [] }); renderHeader(); ddayDlg(); toast('D-day를 추가했습니다.'); return; }
+      case 'ctDel': { const list = lst('contacts').slice(); list.splice(+el.dataset.i, 1); lstSet('contacts', list); $('dlgRoot').innerHTML = ''; UI.dlg = null; renderHeader(); toast('연락처를 지웠습니다.'); return; }
+      case 'ddaySave': { const date = $('ddDate').value, title = $('ddTitle').value.trim(); if (!isDate(date) || !title) return toast('날짜와 이름을 넣어 주세요.'); lstSet('ddayPins', [...ddayPins().filter(x => !(x.date === date && x.title === title)), { date, title }]); renderHeader(); ddayDlg(); toast('D-day를 추가했습니다.'); return; }
       case 'ddayX': {
         const date = el.dataset.date, title = el.dataset.title;
-        if (el.dataset.pin) await saveSettings({ ...S.settings, ddayPins: ddayPins().filter(x => !(x.date === date && x.title === title)), ddayPin: null, ddays: [] });
+        if (el.dataset.pin) lstSet('ddayPins', ddayPins().filter(x => !(x.date === date && x.title === title)));
         else await saveSettings({ ...S.settings, ddayHide: [...(S.settings.ddayHide || []), date + '|' + title].slice(-100) });
         renderHeader(); if (UI.dlg === 'dday' && $('ddPick')) ddayDlg(); toast(el.dataset.pin ? 'D-day에서 뺐습니다.' : '이 일정은 D-day에 안 보이게 했습니다. 다음 중요 일정이 나옵니다.'); return;
       }
       case 'ddayUnhide': await saveSettings({ ...S.settings, ddayHide: [] }); renderHeader(); ddayDlg(); return;
-      case 'ddayDel': { const list = ddayPins(); list.splice(+el.dataset.i, 1); await saveSettings({ ...S.settings, ddayPins: list, ddayPin: null, ddays: [] }); renderHeader(); ddayDlg(); return; }
-      case 'ctNav': { const n = contactsAll().length; if (n) UI.ctIdx = ((UI.ctIdx || 0) + (+el.dataset.d) + n) % n; renderWidgets(); return; }
-      case 'ctCopy': { try { await navigator.clipboard.writeText(el.dataset.v); toast('복사했습니다: ' + el.dataset.v); } catch { prompt('복사할 내용', el.dataset.v); } return; }
-      case 'ctNew': ctDlg(); return;
-      case 'ctEdit': { const c = contactsAll()[UI.ctIdx || 0]; if (c) ctDlg(c, (S.settings.contacts || []).indexOf((S.settings.contacts || []).find(x => ctKey(x) === ctKey(c)))); return; }
-      case 'ctAdd': { // from a mail: always shown for checking before it is saved
-        const m = S.emails.find(x => x.id === UI.openId), c = m && mailContacts(m).find(x => ctKey(x) === el.dataset.k); if (!c) return;
-        const k = contactKnown(c); ctDlg(k ? { ...k, ...Object.fromEntries(Object.entries(c).filter(([, v]) => v)) } : c, k ? (S.settings.contacts || []).indexOf(k) : null); return;
-      }
-      case 'ctSkip': { const m = S.emails.find(x => x.id === UI.openId); if (!m) return; await patch('emails', m.id, { ctSkip: [...(m.ctSkip || []), el.dataset.k] }); return; }
-      case 'ctSave': {
-        const c = cleanContacts([{ name: $('ctName').value, title: $('ctTitle').value, org: $('ctOrg').value, phone: $('ctPhone').value, email: $('ctEmail').value }])[0];
-        if (!c) return toast('이름과, 전화번호나 이메일 중 하나는 넣어 주세요.');
-        const list = (S.settings.contacts || []).slice(), i = el.dataset.i === '' ? -1 : +el.dataset.i;
-        if (i >= 0 && list[i]) list[i] = c; else { const dup = list.findIndex(x => ctKey(x) === ctKey(c)); if (dup >= 0) list[dup] = c; else list.push(c); }
-        await saveSettings({ ...S.settings, contacts: list });
-        $('dlgRoot').innerHTML = ''; UI.dlg = null; UI.ctIdx = contactsAll().findIndex(x => ctKey(x) === ctKey(c)); renderHeader(); if (UI.openId) { try { renderSheet(true); } catch {} }
-        toast(`연락처에 저장했습니다: ${c.name}`); return;
-      }
-      case 'ctDel': { const list = (S.settings.contacts || []).slice(); list.splice(+el.dataset.i, 1); await saveSettings({ ...S.settings, contacts: list }); $('dlgRoot').innerHTML = ''; UI.dlg = null; renderHeader(); toast('연락처를 지웠습니다.'); return; }
-      case 'ddaySave': { const date = $('ddDate').value, title = $('ddTitle').value.trim(); if (!isDate(date) || !title) return toast('날짜와 이름을 넣어 주세요.'); await saveSettings({ ...S.settings, ddayPin: { date, title }, ddays: [] }); $('dlgRoot').innerHTML = ''; UI.dlg = null; renderHeader(); toast('D-day를 지정했습니다.'); return; }
-      case 'ddayClear': await saveSettings({ ...S.settings, ddayPin: null, ddays: [] }); $('dlgRoot').innerHTML = ''; UI.dlg = null; renderHeader(); toast('지정한 D-day를 뺐습니다.'); return;
+      case 'ddayDel': { const list = ddayPins(); list.splice(+el.dataset.i, 1); lstSet('ddayPins', list); renderHeader(); ddayDlg(); return; }
       case 'leSave': {
         const lines = $('leText').value.split('\n').map(l => l.trim()).filter(Boolean), bad = [];
         if (el.dataset.k === 'snip') {
           const snippets = lines.map(l => { const i = l.indexOf('|'); return i < 0 ? { label: '', text: l } : { label: l.slice(0, i).trim(), text: l.slice(i + 1).trim() }; }).filter(x => x.text);
-          await saveSettings({ ...S.settings, snippets });
+          lstSet('snippets', snippets);
         } else {
           const ddays = [];
           for (const l of lines) { const [a, ...r] = l.split('|'); const d = normDate(a.trim()); if (d && r.join('|').trim()) ddays.push({ date: d, title: r.join('|').trim() }); else bad.push(l); }
