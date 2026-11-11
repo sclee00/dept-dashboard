@@ -3258,7 +3258,7 @@ async function aiRun(prompt, opts, json) {
   let why = '', pre = '';
   if (aiWeb() && (!images.length || imgOK())) {
     try { return await bridgeAsk(prompt, opts.title, json, images); }
-    catch (e) { if (e && e.code === 'cancelled') throw e; why = 'Gemini 웹 자동 처리 실패: ' + ((e && e.message) || '알 수 없는 오류'); if (e && e.text) { pre = e.text; why += ' Gemini의 답을 아래 칸에 넣어 두었습니다. 고칠 곳이 있으면 고친 뒤 [적용]을 누르세요.'; glog('받은 답(JSON 아님): ' + String(e.text).slice(0, 160)); } }
+    catch (e) { if (e && e.code === 'cancelled') throw e; why = 'Gemini 웹 자동 처리 실패: ' + ((e && e.message) || '알 수 없는 오류'); { const v = bridgeVer(); if (/기다리다 시간이|보내지지 않은/.test(why) && !(v[0] > 1 || v[1] > 2 || (v[1] === 2 && (v[2] || 0) >= 5))) why += ' — Gemini 연결 확장을 1.2.5로 올리면 답을 제대로 읽습니다 (설정 → 기본 → AI에서 내려받아 다시 설치).'; } if (e && e.text) { pre = e.text; why += ' Gemini의 답을 아래 칸에 넣어 두었습니다. 고칠 곳이 있으면 고친 뒤 [적용]을 누르세요.'; glog('받은 답(JSON 아님): ' + String(e.text).slice(0, 160)); } }
   } else if (aiWeb() && images.length) why = '그림을 Gemini에 자동으로 넣으려면 Gemini 연결 확장을 1.2 이상으로 바꿔야 합니다.';
   if (aiAuto()) {
     try { return await geminiAsk(prompt, opts.title, json, images, opts.search); }
@@ -5783,7 +5783,10 @@ async function analyzeNew(mode) {
   // "이 페이지에서 일정 뽑아 줘 https://…": the Apps Script reads the page for us (Gemini cannot open sites from here)
   const urlM = !UI.att.length && text.length < 600 && text.match(/https?:\/\/[^\s<>"')]+/);
   if (urlM && /(일정|학사|캘린더|달력|스케줄|뽑|추가|넣)/.test(text)) { $('rawMail').value = ''; return webEvents(urlM[0], text.replace(urlM[0], '').trim()); }
-  if (!UI.att.length && !urlM && text.length < 200 && /(홈페이지|사이트|웹사이트|웹페이지|누리집)/.test(text) && /(일정|학사)/.test(text)) { $('rawMail').value = ''; return webFind(text); }
+  // "○○대 2027년 학사일정 추가해": the dates are not in what I typed, so they have to come from the school's page
+  const wantsWeb = /(홈페이지|사이트|웹사이트|웹페이지|누리집|인터넷|검색)/.test(text) && /(일정|학사)/.test(text);
+  const wantsCal = /(학사\s*일정|학사력|학사\s*캘린더)/.test(text) && /(추가|넣|가져|뽑|등록|찾)/.test(text) && !/\d{1,2}\s*[\/.월]\s*\d{1,2}/.test(text);
+  if (!UI.att.length && !urlM && text.length < 200 && (wantsWeb || wantsCal)) { $('rawMail').value = ''; return webFind(text); }
   // things the dashboard already knows how to do by itself (each one still asks before changing anything)
   if (!UI.att.length && mode === 'local' && text.length < 80) {
     const t = text.replace(/\s+/g, '');

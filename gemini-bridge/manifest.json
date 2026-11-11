@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "업무 대시보드 · Gemini 연결",
   "description": "대시보드가 보낸 질문을 내 Gemini 웹 화면(대시보드 안 작은 창 또는 따로 창)에 넣고 답을 받아 대시보드로 돌려줍니다.",
-  "version": "1.2.4",
+  "version": "1.2.5",
   "icons": {
     "128": "icons/icon128.png"
   },

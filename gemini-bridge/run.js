@@ -15,8 +15,12 @@ async function runInGemini(prompt, wantJson, maxMs, images) {
   const jsonOK = t => { try { const m = String(t).match(/[\[{][\s\S]*[\]}]/); if (!m) return false; JSON.parse(m[0]); return true; } catch (e) { return false; } };
   const textOf = r => {
     if (wantJson) { const codes = [...r.querySelectorAll('pre code, code-block code, code-block pre, [data-test-id="code-content"]')]; const good = codes.map(c => c.textContent).filter(t => /^\s*[\[{]/.test(t)); if (good.length) return good[good.length - 1]; if (codes.length) return codes.map(c => c.textContent).join('\n'); }
-    const box = r.querySelector('message-content .markdown, .markdown, message-content, .model-response-text') || r;
-    return box.innerText;
+    // the answer box: not the (often hidden, empty) "thinking" panel — take the candidate that really has text
+    const texts = [...r.querySelectorAll('message-content .markdown, .markdown, message-content, .model-response-text')]
+      .filter(b => !b.closest('model-thoughts, .thoughts-container, [data-test-id*="thought"]')).map(b => (b.innerText || '').trim()).filter(Boolean);
+    if (wantJson) { const j = texts.filter(jsonOK); if (j.length) return j[j.length - 1]; }
+    if (texts.length) return texts.sort((a, b) => b.length - a.length)[0];
+    return (r.innerText || '').trim();
   };
 
   // pictures first: through Gemini's own file input (as "Upload & tools → Files" does), else paste, else drop
@@ -70,7 +74,8 @@ async function runInGemini(prompt, wantJson, maxMs, images) {
   const sendBtn = () => [...document.querySelectorAll('button.send-button, button[aria-label*="Send" i], button[aria-label*="보내기"], button[aria-label*="전송"], button[data-test-id="send-button"]')].find(b => !b.disabled && b.getAttribute('aria-disabled') !== 'true');
   // send one message and wait for its answer
   const turn = async (text, label) => {
-    const before = responses().length;
+    const seen = new Set(responses());   // by element, not by count: the page may start a new conversation under us
+    const fresh = () => [...responses()].filter(r => !seen.has(r));
     const typed = await typeIn(text);
     say(typed ? `${label} 입력함 · 보내는 중` : `${label} 입력이 잘 안 됨 · 그래도 보냄`);
     await sleep(400);
@@ -82,14 +87,16 @@ async function runInGemini(prompt, wantJson, maxMs, images) {
     const ts = Date.now(); let last = '', since = 0;
     while (Date.now() - t0 < maxMs) {
       await sleep(700);
-      const rs = responses();
-      if (rs.length <= before) { if (Date.now() - ts > 45000 && !busy()) return { error: 'nosend', message: 'Gemini에 질문이 보내지지 않은 것 같습니다. Gemini 창을 확인해 주세요.' }; continue; }
+      const rs = fresh();
+      if (!rs.length) { if (Date.now() - ts > 45000 && !busy()) return { error: 'nosend', message: 'Gemini에 질문이 보내지지 않은 것 같습니다. Gemini 창을 확인해 주세요.' }; continue; }
       const t = (textOf(rs[rs.length - 1]) || '').trim();
       // with JSON wanted (and with pictures Gemini "thinks" first) wait for JSON, or for the text to stay still a long time
       if (t && t === last && !busy()) { if (!since) since = Date.now(); if (Date.now() - since > (wantJson && !jsonOK(t) ? (/[{\[]/.test(t) ? 20000 : 7000) : 2500)) return { text: t }; }
       else { since = 0; last = t; }
     }
-    return last ? { text: last, partial: true } : { error: 'timeout', message: 'Gemini 답을 기다리다 시간이 지났습니다.' };
+    // out of time: whatever the newest answer shows is better than nothing
+    const end = fresh(), tail = end.length ? ((end[end.length - 1].innerText || '').trim()) : '';
+    return last ? { text: last, partial: true } : tail ? { text: tail, partial: true } : { error: 'timeout', message: 'Gemini 답을 기다리다 시간이 지났습니다.' };
   };
 
   let r = await turn(prompt, '질문');
