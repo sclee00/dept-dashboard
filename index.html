@@ -5556,27 +5556,62 @@ function cleanContacts(arr) {
 }
 const contactsAll = () => (S.settings.contacts || []).slice().sort((a, b) => a.name.localeCompare(b.name, 'ko'));
 const contactKnown = c => (S.settings.contacts || []).find(x => ctKey(x) === ctKey(c) || (c.email && x.email && x.email.toLowerCase() === c.email.toLowerCase()) || (x.name === c.name && c.phone && String(x.phone).replace(/\D/g, '') === String(c.phone).replace(/\D/g, '')));
-// a signature block read without AI (when the analysis gave no contacts): a line with a phone or an e-mail and the name line just above
-function contactsFromText(text) {
-  const lines = String(text || '').split('\n').map(l => l.replace(/^>+\s*/, '').trim());
-  const out = [];
-  for (let i = 0; i < lines.length; i++) {
-    const em = lines[i].match(/[\w.+-]+@[\w-]+(\.[\w-]+)+/); if (!em || /^(보낸|받는|from|to|cc|참조)\b/i.test(lines[i]) || /(보낸 사람|받는 사람|From:|To:|Cc:)/i.test(lines[i])) continue;
-    const blk = lines.slice(Math.max(0, i - 4), i + 3), all = blk.join('\n');
-    const ph = (all.match(/(?:T\.?|Tel\.?|전화|☎|M\.?|HP)?\s*:?\s*(0\d{1,2}[-.\s)]\s?\d{3,4}[-.\s]\d{4})/i) || [])[1] || '';
-    const nl = blk.find(l => /^[가-힣]{2,4}\s*[\/|·,]/.test(l) || /^[가-힣]{2,4}\s+(교수|박사|선생|담당|팀장|과장|주무관|조교|대표|이사|연구원)/.test(l)) || '';
-    if (!nl) continue;
-    const parts = nl.split(/\s*[\/|·,]\s*|\s+/).filter(Boolean);
-    out.push({ name: parts[0], title: parts[1] || '', org: parts.slice(2).join(' '), phone: ph.replace(/\s+/g, ''), email: em[0] });
-  }
-  return cleanContacts(out);
+// read without AI: the header ("보낸 사람: 이름/직책/소속 <메일>", also 받는 사람·참조) + phone numbers in the signature
+const PH_RE = /(0\d{1,2})\s*[-.)\s]\s*(\d{3,4})\s*[-.\s]\s*(\d{4})/;
+function personParts(str) {
+  const em = (str.match(/<\s*([\w.+-]+@[\w-]+(?:\.[\w-]+)+)\s*>/) || str.match(/([\w.+-]+@[\w-]+(?:\.[\w-]+)+)/) || [])[1] || '';
+  const label = str.replace(/<[^>]*>/g, '').replace(/[\w.+-]+@[\w-]+(\.[\w-]+)+/g, '').replace(/["']/g, '').trim();
+  const parts = label.split(/\s*\/\s*/).filter(Boolean);
+  return { name: (parts[0] || '').replace(/\s+/g, ' ').trim(), title: parts.length > 2 ? parts[1] : parts.length === 2 && parts[1].length <= 6 ? parts[1] : '', org: parts.length > 2 ? parts.slice(2).join(' ') : parts.length === 2 && parts[1].length > 6 ? parts[1] : '', phone: '', email: em };
 }
-const mailContacts = m => { const a = m.analysis || {}; const list = (a.contacts && a.contacts.length ? cleanContacts(a.contacts) : contactsFromText(m.raw)); const me = (mfOf().name || '').trim(); return list.filter(c => c.name !== me && !/^sclee/i.test(c.email || '')); };
+function contactsFromText(text) {
+  const raw = String(text || ''), lines = raw.split('\n').map(l => l.replace(/^>+\s*/, '').replace(/\*/g, '').trim());
+  const out = [], push = (c, extra) => {
+    if (!c || !c.name || !(c.email || c.phone)) return;
+    const same = out.find(x => (x.email && x.email === c.email) || (x.name.replace(/\s+/g, '') === c.name.replace(/\s+/g, '') && (!x.phone || !c.phone || x.phone === c.phone)));
+    if (same) { for (const f of ['title', 'org', 'phone', 'email']) if (!same[f] && c[f]) same[f] = c[f]; return; }
+    out.push({ ...c, extra: !!extra });
+  };
+  const head = k => { const l = lines.find(x => new RegExp('^(' + k + ')\\s*:', 'i').test(x)); return l ? l.replace(/^[^:]+:\s*/, '') : ''; };
+  const split = v => v ? v.split(/,\s*(?=[^,<>]*<)|;\s*/).map(x => x.trim()).filter(Boolean) : [];
+  // the sender, with a phone from the signature (after "--", or near the sender's name / e-mail); FAX numbers are not phones
+  const from = split(head('보낸\\s*사람|From'))[0];
+  if (from) {
+    const c = personParts(from), nm = c.name.replace(/\s+/g, '');
+    let start = lines.findIndex((l, i) => i > 3 && (/^--\s*$/.test(l) || (nm && l.replace(/\s+/g, '') === nm)));
+    if (start < 0) start = Math.max(0, lines.length - 15);
+    const tail = lines.slice(start);
+    const pl = tail.find(l => PH_RE.test(l) && !/fax|팩스/i.test(l) && /(전화|tel|phone|☎|^t[.\s:]|^m[.\s:]|hp|휴대|핸드폰|연락처)/i.test(l)) || tail.find(l => PH_RE.test(l) && !/fax|팩스/i.test(l));
+    if (pl) { const m = pl.match(PH_RE); c.phone = `${m[1]}-${m[2]}-${m[3]}`; }
+    if (!c.email) { const el = tail.find(l => /@/.test(l)); const m = el && el.match(/[\w.+-]+@[\w-]+(\.[\w-]+)+/); if (m) c.email = m[0]; }
+    push(c);
+  }
+  // other signature blocks: "이름/직책/소속" with a phone or an e-mail just below
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i]; if (!/^[가-힣]{2,4}\s*\/\s*\S/.test(l) || /:/.test(l)) continue;
+    const near = lines.slice(i + 1, i + 4).join('\n'), c = personParts(l);
+    const ph = near.match(PH_RE), em = near.match(/[\w.+-]+@[\w-]+(\.[\w-]+)+/);
+    if (ph) c.phone = `${ph[1]}-${ph[2]}-${ph[3]}`; if (em) c.email = em[0];
+    push(c);
+  }
+  // people in 받는 사람 / 참조 who are written as "이름/직책/소속 <메일>" (offered folded)
+  for (const p of [...split(head('받는\\s*사람|To')), ...split(head('참조|Cc'))]) { const c = personParts(p); if (/\//.test(p)) push(c, true); }
+  return out.map(c => ({ ...cleanContacts([c])[0], extra: c.extra })).filter(c => c.name);
+}
+const mailContacts = m => {
+  const a = m.analysis || {}, me = (mfOf().name || '').trim();
+  const ai = a.contacts && a.contacts.length ? cleanContacts(a.contacts) : [], loc = contactsFromText(m.raw);
+  const list = [...ai];
+  for (const c of loc) { const same = list.find(x => (x.email && c.email && x.email.toLowerCase() === c.email.toLowerCase()) || x.name === c.name); if (same) { for (const f of ['title', 'org', 'phone', 'email']) if (!same[f] && c[f]) same[f] = c[f]; } else list.push(c); }
+  return list.filter(c => c.name !== me && !(c.email && /^sclee@/i.test(c.email)));
+};
 function ctSec(m) {
-  const list = mailContacts(m).filter(c => !(m.ctSkip || []).includes(ctKey(c))); if (!list.length) return '';
-  return `<div class="sec"><h4><span>${ic('user')} 연락처 ${list.length}</span></h4>${list.map((c, i) => { const k = contactKnown(c), same = k && ['title', 'org', 'phone', 'email'].every(f => !c[f] || k[f] === c[f]);
+  const all = mailContacts(m).filter(c => !(m.ctSkip || []).includes(ctKey(c))); if (!all.length) return '';
+  const main = all.filter(c => !c.extra), extra = all.filter(c => c.extra);
+  const row = (c, i) => { const k = contactKnown(c), same = k && ['title', 'org', 'phone', 'email'].every(f => !c[f] || k[f] === c[f]);
     return `<div class="ctitem ${same ? 'added' : ''}"><div class="ctinfo"><b>${esc(c.name)}</b>${c.title || c.org ? `<span>${esc([c.title, c.org].filter(Boolean).join(' · '))}</span>` : ''}<span class="mono">${esc([c.phone, c.email].filter(Boolean).join(' · '))}</span></div>
-      ${same ? '<span class="pill replied">연락처에 있음</span>' : `<div class="row"><button class="btn small primary" type="button" data-act="ctAdd" data-k="${esc(ctKey(c))}">${k ? '연락처 고치기' : '연락처에 추가'}</button><button class="btn small" type="button" data-act="ctSkip" data-k="${esc(ctKey(c))}">건너뛰기</button></div>`}</div>`; }).join('')}</div>`;
+      ${same ? '<span class="pill replied">연락처에 있음</span>' : `<div class="row"><button class="btn small primary" type="button" data-act="ctAdd" data-k="${esc(ctKey(c))}">${k ? '연락처 고치기' : '연락처에 추가'}</button><button class="btn small" type="button" data-act="ctSkip" data-k="${esc(ctKey(c))}">건너뛰기</button></div>`}</div>`; };
+  return `<div class="sec"><h4><span>${ic('user')} 연락처 ${main.length}${extra.length ? ` <span class="count">· 받는 사람·참조 ${extra.length}명</span>` : ''}</span></h4>${main.map(row).join('')}${extra.length ? `<details class="ctmore"><summary class="count">받는 사람·참조에 적힌 ${extra.length}명 보기</summary>${extra.map(row).join('')}</details>` : ''}</div>`;
 }
 function ctDlg(c, idx) {
   c = c || { name: '', title: '', org: '', phone: '', email: '' };
