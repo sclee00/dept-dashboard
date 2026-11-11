@@ -969,6 +969,8 @@ button.hw{cursor:pointer}button.hw:hover{border-color:var(--accent)}
 .ddx{border:0;background:none;color:var(--muted);font-size:.7rem;padding:0 .2rem;cursor:pointer;opacity:0;flex:none}.ddwrap:hover .ddx,.ddx:focus-visible{opacity:1}.ddx:hover{color:var(--red)}
 @media (hover:none){.ddx{opacity:.6}}
 .linkbtn{border:0;background:none;color:var(--accent);padding:0;font:inherit;cursor:pointer;text-decoration:underline}
+.gcalrow{display:flex;align-items:center;gap:.4rem;flex-wrap:wrap}.gcalrow select{width:auto;flex:1;min-width:8rem}
+.bykind{display:grid;grid-template-columns:repeat(auto-fill,minmax(9rem,1fr));gap:.4rem}.bykind>.count{grid-column:1/-1}
 </style>
 
 </head>
@@ -1677,7 +1679,7 @@ function openEdit(kind, id) {
   let d;
   if (kind === 'e') {
     const e = S.events.find(x => x.id === id); if (!e) return;
-    d = { kind, id, title: e.title, date: e.date, endDate: e.endDate || '', time: e.time || '', endTime: e.time ? fromMin(Math.min(evEnd(e), 1439)) : '', allDay: toMin(e.time) == null, location: e.location || '', ekind: e.kind || '회의', imp: impOfEvent(e), days: repDays(e) ? [...repDays(e)] : null, until: e.repeat && e.repeat.until || '', g: !!e.googleId || !!e.googleSent };
+    d = { kind, id, gCal: e.googleId && e.googleId !== 'pushed' ? (e.googleCal || 'primary') : '', title: e.title, date: e.date, endDate: e.endDate || '', time: e.time || '', endTime: e.time ? fromMin(Math.min(evEnd(e), 1439)) : '', allDay: toMin(e.time) == null, location: e.location || '', ekind: e.kind || '회의', imp: impOfEvent(e), days: repDays(e) ? [...repDays(e)] : null, until: e.repeat && e.repeat.until || '', g: !!e.googleId || !!e.googleSent };
   } else {
     const g = G.events.find(x => gKey(x) === id); if (!g) return;
     d = { kind, id, title: g.title, date: g.date, endDate: g.allDay && g.endDate > g.date ? g.endDate : '', time: g.allDay ? '' : g.time, endTime: g.allDay ? '' : (g.endTime === '24:00' ? '23:59' : g.endTime), allDay: g.allDay, location: g.loc || '', imp: impOfG(g), recurring: !!g.recurring, calName: g.calName || '' };
@@ -1697,7 +1699,8 @@ function renderEdit() {
       <label>시작<input class="field" type="time" id="edStart" value="${esc(d.time)}" ${d.allDay ? 'disabled' : ''}></label>
       <label>끝<input class="field" type="time" id="edEnd" value="${esc(d.endTime)}" ${d.allDay ? 'disabled' : ''}></label>
       ${!d.days ? `<label>여러 날이면 마지막 날<input class="field" type="date" id="edEndDate" value="${esc(d.endDate)}"></label>` : ''}
-      ${d.kind === 'e' ? `<label>종류<select class="field" id="edKind">${['회의', '행사', '학사', '마감'].map(k => `<option ${k === d.ekind ? 'selected' : ''}>${k}</option>`).join('')}</select></label>` : ''}
+      ${d.kind === 'e' && gReady() && gWritable().length ? `<label>구글 캘린더<select class="field" id="edGCal">${d.gCal ? calOptions(d.gCal) : calOptions('', '<option value="" selected>보내지 않음</option>')}</select></label>` : ''}
+      ${d.kind === 'e' ? `<label>종류<select class="field" id="edKind">${['회의', '행사', '학사', '마감', '개인'].map(k => `<option ${k === d.ekind ? 'selected' : ''}>${k}</option>`).join('')}</select></label>` : ''}
       <label class="full">장소<input class="field" id="edLoc" value="${esc(d.location)}" autocomplete="off"></label>
       ${d.days ? `<div class="full"><span class="count">반복 요일</span><div class="row" style="margin-top:.3rem">${tog}</div></div>
         <label>반복 끝나는 날 (비우면 계속)<input class="field" type="date" id="edUntil" value="${esc(d.until)}"></label>` : ''}
@@ -1730,8 +1733,22 @@ async function saveEdit(btn) {
       const rows = gDiffRows({ ...before, time: before.time, endTime: before.endTime }, doc).map(r => r[0] === '언제' ? ['언제', docWhen(before), docWhen(doc)] : r);
       if (rows.length) { btn.disabled = false; if (!await gAsk({ title: '구글 캘린더에도 반영할까요?', rows: [['일정', e.title], ...rows], note: '대시보드와 구글 캘린더 모두 바뀝니다.', choices: [{ v: 'ok', label: '저장하고 반영', primary: true }] })) return; btn.disabled = true; }
     }
+    // another Google calendar chosen: move it (remove there, add here) — asked first
+    const newCal = $('edGCal') ? $('edGCal').value : null;
+    const moving = newCal && e.googleId && e.googleId !== 'pushed' && !sameCal(newCal, e.googleCal || 'primary');
+    const sending = newCal && !e.googleId;
+    if (moving) { btn.disabled = false; if (!await gAsk({ title: '다른 구글 캘린더로 옮길까요?', rows: [['일정', e.title], ['지금', calInfo(e.googleCal || 'primary').name], ['옮길 곳', calInfo(newCal).name]], note: '지금 캘린더에서 지우고 새 캘린더에 다시 만듭니다.', choices: [{ v: 'ok', label: '옮기기', primary: true }, { v: '', label: '취소' }] })) return; btn.disabled = true; }
+    if (newCal) upd.gTarget = sameCal(newCal, defCal(upd.kind)) ? '' : newCal;
     await patch('events', d.id, upd);
     $('dlgRoot').innerHTML = ''; UI.dlg = null; UI.edit = null;
+    if (moving) {
+      const del = await gDelete(e.googleCal, e.googleId, { series: !!repDays(e) });
+      await patch('events', d.id, { googleId: '', googleCal: '', googleLink: '' });
+      const ne = S.events.find(x => x.id === d.id); const ok = ne && await pushGoogle(ne, d.id, newCal, true);
+      toast(ok ? `구글 캘린더 "${calInfo(newCal).name}"로 옮겼습니다.` + (del === 'ok' ? '' : ' (예전 캘린더에서 지우지 못했으니 확인해 주세요)') : '새 캘린더에 넣지 못했습니다. 일정 옆 "구글로"로 다시 보내 주세요.');
+      gLoad(true); UI.selDay = date; renderAll(); return;
+    }
+    if (sending) { const ne = S.events.find(x => x.id === d.id); if (ne) await pushGoogle(ne, d.id, newCal); UI.selDay = date; renderAll(); return; }
     const r = e.googleId ? await gUpdate(e.googleCal, e.googleId, { ...e, ...upd }) : e.googleSent ? 'unknown' : '';
     gResultToast(r, '일정을 고쳤습니다.');
     UI.selDay = date; renderAll(); return;
@@ -2414,6 +2431,16 @@ function selectedCals() {
   const p = G.cals.find(c => c.primary);
   return [p ? p.id : 'primary'];
 }
+// which Google calendar an event goes to: chosen on the event, else the default for its kind, else the general default
+const gWritable = () => G.cals.filter(c => c.write);
+const sameCal = (a, b) => a === b || ((a === 'primary' || b === 'primary') && (G.cals.find(c => c.primary) || {}).id === (a === 'primary' ? b : a));
+const defCal = kind => ((S.settings.gCalByKind || {})[kind]) || S.settings.gPushCal || 'primary';
+const calTarget = doc => doc.gTarget || defCal(doc.kind);
+function calOptions(sel, extra) {
+  const w = gWritable(); if (!w.length) return `<option value="${esc(sel || 'primary')}">${esc(calInfo(sel || 'primary').name)}</option>`;
+  return (extra || '') + w.map(c => `<option value="${esc(c.id)}" ${sel && sameCal(sel, c.id) ? 'selected' : ''}>${esc(c.name)}${c.primary ? ' (기본)' : ''}</option>`).join('');
+}
+window.__defCal = k => defCal(k);
 const calInfo = id => G.cals.find(c => c.id === id) || (id === 'primary' ? G.cals.find(c => c.primary) : null) || { id, name: id === 'primary' ? '기본 캘린더' : id, color: '' };
 async function gLoad(force) {
   if (!gReady()) return;
@@ -2498,7 +2525,7 @@ async function pushGoogle(doc, id, calId, quiet) {
     body.start = { date: doc.date }; body.end = { date: addDays(last, 1) };
   }
   try {
-    const target = calId || S.settings.gPushCal || 'primary';
+    const target = calId || calTarget(doc);
     if (gasOn()) {
       const j = await gas({ action: 'create', cal: target, title: gTitle, date: doc.date, time: toMin(doc.time) != null ? doc.time : '', endTime: toMin(doc.time) != null ? fromMin(Math.min(evEnd(doc), 1439)) : '', endDate: doc.endDate || '', location: doc.location || '', description: body.description, days: repDays(doc) ? repDays(doc).join(',') : '', until: repDays(doc) && isDate(doc.repeat.until) ? doc.repeat.until : '' });
       await patch('events', id, { googleId: String((j.event && j.event.id) || 'pushed'), googleCal: target });
@@ -5049,12 +5076,12 @@ function dayFormHtml(day) {
   if (UI.dayForm === 'event') return `<form class="miniform" id="fEvent">
       <input class="field full" id="fTitle" placeholder="일정 이름" autocomplete="off" required>
       <label>날짜<input class="field" type="date" id="fDate" value="${esc(pf.date || day)}"></label>
-      <label>종류<select class="field" id="fKind"><option>회의</option><option>행사</option><option>학사</option><option>마감</option></select></label>
+      <label>종류<select class="field" id="fKind" onchange="const g=document.getElementById('fGCal');if(g&&!g.dataset.touched)g.value=window.__defCal?window.__defCal(this.value):g.value"><option>회의</option><option>행사</option><option>학사</option><option>마감</option><option>개인</option></select></label>
       <label class="full">중요도<select class="field" id="fImp"><option value="normal">일반</option><option value="high">중요 (달력에서 깜빡임)</option></select></label>
       <label>시작<input class="field" type="time" id="fStart" value="${esc(pf.s || '')}"></label>
       <label>끝<input class="field" type="time" id="fEnd" value="${esc(pf.e || '')}"></label>
       <input class="field full" id="fLoc" placeholder="장소(선택)" autocomplete="off">
-      ${gReady() ? `<label class="full chk"><input type="checkbox" id="fG" ${gAuto() ? 'checked' : ''}>구글 캘린더 "${esc(calInfo(S.settings.gPushCal || 'primary').name)}"에도 추가</label>` : ''}
+      ${gReady() ? `<label class="full chk gcalrow"><input type="checkbox" id="fG" ${gAuto() ? 'checked' : ''}>구글 캘린더에도 추가 →<select class="field" id="fGCal" aria-label="넣을 구글 캘린더" onchange="this.dataset.touched=1">${calOptions(defCal('회의'))}</select></label>` : ''}
       <div class="full status err" id="fWarn"></div>
       <div class="full row" style="justify-content:flex-end"><button class="btn" type="button" data-act="dayForm" data-f="">취소</button><button class="btn primary" type="submit">${ic('plus')}일정 추가</button></div>
     </form>`;
@@ -6547,6 +6574,7 @@ document.addEventListener('click', async ev0 => {
           data.gasUrl = gu; data.gasKey = gk; if (changedGas) { G.cals = []; G.events = []; G.key = ''; G.storedAt = 0; G.changedAt = 0; gCacheClear(); setTimeout(() => { if (gasOn()) signIn(); else renderAll(); }, 50); } }
         if (document.querySelector('input[name=gcal]')) data.gCals = [...document.querySelectorAll('input[name=gcal]:checked')].map(x => x.value);
         if ($('sGPushCal')) data.gPushCal = $('sGPushCal').value;
+        if (document.querySelector('[data-gk]')) { const m = {}; document.querySelectorAll('[data-gk]').forEach(x => { if (x.value) m[x.dataset.gk] = x.value; }); data.gCalByKind = m; }
         if ($('sInboxSec')) data.inboxSec = Number($('sInboxSec').value);
         const cid = cleanCid($('sCid').value);
         const bad = cid && cidProblem(cid);
@@ -6746,6 +6774,7 @@ document.addEventListener('submit', async e => {
     if (s != null && (en == null || en <= s)) en = Math.min(s + 60, 1439);
     const doc = { title, date, time: s != null ? fromMin(s) : '', endTime: s != null ? fromMin(en) : '', location: $('fLoc').value.trim(), kind: $('fKind').value, imp: $('fImp').value, source: 'manual', createdAt: nowISO() };
     const toG = $('fG') && $('fG').checked;
+    if (toG && $('fGCal') && !sameCal($('fGCal').value, defCal(doc.kind))) doc.gTarget = $('fGCal').value;
     try {
       const nid = await add('events', doc);
       UI.dayForm = null; UI.prefill = null; renderDay(true); toast('일정을 추가했습니다.');
@@ -6897,7 +6926,8 @@ function openSettings() {
       ${!clientId() && !gasOn() ? `<details><summary class="count" style="cursor:pointer">다른 방법: OAuth 클라이언트 ID (고급)</summary><span class="count">구글은 웹페이지가 캘린더를 읽을 때 Google Cloud Console에서 만든 "OAuth 클라이언트 ID"를 요구합니다. 무료이고 한 번만 만들면 됩니다. 만들었다면 아래 칸에 넣고 저장한 뒤 "구글 일정 불러오기"를 누르세요.</span></details>` : !gReady() ? `<div><button class="btn small primary" type="button" data-act="gSignin">${ic('gcal')}구글 로그인</button></div>` : ''}
       ${gReady() ? (G.cals.length ? `<span class="count">달력에 가져올 캘린더만 고르세요. 고르지 않은 캘린더는 읽지 않습니다.</span>
         <div class="callist">${G.cals.map(c => `<label class="chk"><input type="checkbox" name="gcal" value="${esc(c.id)}" ${selectedCals().includes(c.id) || (c.primary && selectedCals().includes('primary')) ? 'checked' : ''}><i class="cdot" style="background:${esc(c.color || '#7DB6D4')}"></i>${esc(c.name)}${c.primary ? ' (기본)' : ''}</label>`).join('')}</div>
-        <label>"구글에 추가"로 보낼 캘린더<select class="field" id="sGPushCal">${G.cals.filter(c => c.write).map(c => `<option value="${esc(c.id)}" ${c.id === s.gPushCal || (s.gPushCal === 'primary' && c.primary) ? 'selected' : ''}>${esc(c.name)}${c.primary ? ' (기본)' : ''}</option>`).join('')}</select></label>`
+        <label>"구글에 추가"로 보낼 캘린더<select class="field" id="sGPushCal">${G.cals.filter(c => c.write).map(c => `<option value="${esc(c.id)}" ${c.id === s.gPushCal || (s.gPushCal === 'primary' && c.primary) ? 'selected' : ''}>${esc(c.name)}${c.primary ? ' (기본)' : ''}</option>`).join('')}</select></label>
+        ${G.cals.filter(c => c.write).length > 1 ? `<div class="bykind"><span class="count">종류별로 다른 캘린더에 넣기 ${tip('예: "개인" 일정은 개인 캘린더로. 일정마다 편집 창에서 따로 바꿀 수도 있습니다.')}</span>${['회의', '행사', '학사', '마감', '개인'].map(k => `<label>${k}<select class="field" data-gk="${k}"><option value="">위와 같음</option>${G.cals.filter(c => c.write).map(c => `<option value="${esc(c.id)}" ${((s.gCalByKind || {})[k]) === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>`).join('')}</div>` : ''}`
         : `<div class="row"><span class="count">캘린더 목록을 아직 못 읽었습니다.</span><button class="btn small" type="button" data-act="gReloadCals">다시 읽기</button></div>`) : ''}
       <label class="chk"><input type="checkbox" id="sGShow" ${s.googleShow !== false ? 'checked' : ''}>달력에 구글 일정 표시</label>
       <label class="chk"><input type="checkbox" id="sGBusy" ${s.googleBusy !== false ? 'checked' : ''}>구글 일정 시간을 빈 시간에서 빼기</label>
