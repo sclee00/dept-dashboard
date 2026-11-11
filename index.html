@@ -933,6 +933,7 @@ button.hw{cursor:pointer}button.hw:hover{border-color:var(--accent)}
 .attevwrap{display:inline-flex;align-items:center;gap:.1rem}
 .attevx{border:0;background:none;color:var(--muted);cursor:pointer;font-size:.75rem;padding:.15rem .3rem;border-radius:6px}.attevx:hover{color:var(--red);background:color-mix(in srgb,var(--red) 12%,transparent)}
 .verbtn{align-self:center;border:1px solid var(--amber);background:color-mix(in srgb,var(--amber) 14%,transparent);color:var(--amber);border-radius:999px;padding:.25rem .7rem;font:inherit;font-size:.8rem;font-weight:700;cursor:pointer;white-space:nowrap;animation:attevGlow 2.4s ease-in-out infinite}
+.decsec.done{opacity:.85}.decnote{font-size:.88rem;line-height:1.5;padding:.4rem .6rem;border-left:3px solid var(--accent);background:var(--surface-2);border-radius:0 8px 8px 0;margin:.2rem 0 .4rem}
 </style>
 
 </head>
@@ -4045,6 +4046,9 @@ function fxLive() {
 /* ---------- mail sheet helpers: decisions, short delegate, highlighted original ---------- */
 const sheetView = () => { try { return UI.sheetView || localStorage.getItem('sheetView') || 'simple'; } catch { return UI.sheetView || 'simple'; } };
 function decChosen(m) { return (m.analysis && m.analysis.decisions || []).map((d, i) => { const j = (m.decisionChoices || {})[i]; return j != null && d.options[j] ? { q: d.question, a: d.options[j].label, detail: d.options[j].detail } : null; }).filter(Boolean); }
+// decisions settled in my own words (추가 지시): the option cards are folded away so they don't contradict what I wrote
+const decKey = m => ((m.analysis && m.analysis.decisions) || []).map(d => d.question).join('|');
+const decByNote = m => m.decidedNote && m.decidedNote.key === decKey(m) && m.decidedNote.text ? m.decidedNote.text : '';
 const decLine = m => decChosen(m).map(x => `${x.q} → ${x.a}`).join(' / ');
 function delegateItems(m) { return (m.delegate && m.delegate.items) || []; }
 function delegateSel(m, i) { const s = m.delegateSel || {}; return i in s ? !!s[i] : !!(delegateItems(m)[i] || {}).essential; }
@@ -5326,7 +5330,9 @@ function renderSheet(force) {
       ${m.analysis && a.myAction ? `<div class="myact">${ic('hand')}<div><b>내가 할 일</b><span>${esc(a.myAction)}</span></div></div>` : ''}
       ${m.analysis ? `<div class="sec"><h4>요약</h4><div class="summary">${esc(m.summary)}
         ${!simple && (a.openIssues || []).length ? `<ul class="issues">${a.openIssues.map(x => `<li>${ic('alert')}<span>${esc(x)}</span></li>`).join('')}</ul>` : ''}</div></div>
-        ${decs.length ? `<div class="sec decsec"><h4><span>${ic('gavel')} 결정할 사항 ${decs.length}</span>${decChosen(m).length ? `<span class="count">${decChosen(m).length}/${decs.length} 결정함</span>` : ''}</h4>
+        ${decs.length && decByNote(m) && !(UI.decOpen && UI.decOpen[m.id]) ? `<div class="sec decsec done"><h4><span>${ic('gavel')} 결정할 사항 ${decs.length}</span><span class="count">${ic('check')}직접 정함</span></h4>
+          <div class="decnote">"${esc(decByNote(m))}"</div>
+          <div class="row"><button class="btn small" type="button" data-act="decShow">선택지 다시 보기</button></div></div>` : decs.length ? `<div class="sec decsec"><h4><span>${ic('gavel')} 결정할 사항 ${decs.length}</span>${decChosen(m).length ? `<span class="count">${decChosen(m).length}/${decs.length} 결정함</span>` : ''}</h4>
           ${decs.map((d, i) => `<div class="dec"><div class="q">${i + 1}. ${esc(d.question)}</div><div class="optrow">${d.options.map((o, j) => `<button class="optchip ${dch[i] === j ? 'on' : ''}" type="button" data-act="decPick" data-i="${i}" data-j="${j}" aria-pressed="${dch[i] === j}"><b>${String.fromCharCode(9312 + j)} ${esc(o.label)}${d.recommend === j ? ' <em class="rec">추천</em>' : ''}</b>${o.detail ? `<span>${esc(o.detail)}</span>` : ''}</button>`).join('')}</div>${d.why && !simple ? `<div class="count">추천 이유: ${esc(d.why)}</div>` : ''}</div>`).join('')}
           ${decChosen(m).length ? `<div class="row"><button class="btn small" type="button" data-act="decRedraft">${ic('reply')}결정대로 답장 다시 쓰기</button><span class="count">조교 지시(짧은 버전)에는 결정이 자동으로 들어갑니다.</span></div>` : ''}</div>` : ''}
         ${simple ? ((m.attachments || []).length ? `<div class="sec"><h4><span>${ic('doc')} 첨부파일 ${m.attachments.length}</span></h4><div class="attlist" style="margin:0">${m.attachments.map(x => attChip({ ...x, state: x.text ? 'ok' : 'skip' }) + (x.saved || x.inbox ? `<button class="btn small" type="button" data-act="attOpen" data-id="${m.id}" data-name="${esc(x.name)}" title="원본 열기">${ic('ext')}열기</button>` : '') + attEvBtn(m, x)).join('')}</div></div>` : '') : attSection(m)}
@@ -5801,9 +5807,9 @@ ${ctxLine()}
 순서는 인사 → 요청에 대한 답 → (필요할 때만) 되묻거나 부탁할 것 → 맺음말. 내가 아직 안 정한 건 [대괄호]로 비워 둬.
 ${replyFmt()}
 ${tone ? '이런 방향으로: ' + tone : ''}
-${decLine(m) ? '내가 정한 것(답장에 넣어 줘): ' + decLine(m) : ''}
+${decLine(m) && !noteRaw ? '내가 정한 것(답장에 넣어 줘): ' + decLine(m) : ''}
 ${keyLine() ? keyLine() + '\n(참석 여부를 묻는 메일이고 그 행사가 위 일정과 겹치면 기본으로 불참으로 써 줘. 겹치는 일정 내용은 밝히지 말고.)\n' : ''}내 빈 시간 (시간 제안할 일 있으면 이 안에서만 골라): ${slotsForPrompt().join(', ') || '없음'}
-${note ? '추가로 원하는 거: ' + note : ''}
+${note ? '추가로 원하는 거 (내가 직접 정한 거니까 이게 제일 우선이야. 위 내용과 다르면 이걸 따라): ' + note : ''}
 ${current && !looksLikeAppCard(current) ? '지금 초안(이거 바탕으로 고쳐 줘):\n"""\n' + current + '\n"""' : ''}
 ${wantEv ? `오늘은 ${todayStr()}(${WD[new Date().getDay()]}요일)이야. 답은 아래 JSON 하나로만 줘 (글로 정리만 하는 거야). slots에는 "추가로 원하는 거"에서 내가 정해 준 만남을 날짜·시간·장소 그대로 옮겨 적어 (끝 시간을 안 말했으면 1시간 뒤).
 {"reply":"답장 본문 전체","slots":[{"title":"만남 이름 (메일 제목에서 따서 짧게, 회차가 있으면 회차 포함)","date":"YYYY-MM-DD","time":"HH:MM","endTime":"HH:MM","place":"장소 또는 빈 문자열"}]}` : ''}
@@ -5844,7 +5850,8 @@ ${String(m.raw).slice(0, 20000)}
     }
     // I have decided the dates: the candidates the analysis guessed from the mail are no longer waiting to be reflected
     if (added.length) a.events.forEach(x => { if (!x.added && !x.skipped) x.skipped = true; });
-    await patch('emails', m.id, { reply: { draft: fixed }, needsReply: true, ...(added.length ? { analysis: a } : {}) });
+    await patch('emails', m.id, { reply: { draft: fixed }, needsReply: true, ...(added.length ? { analysis: a } : {}), ...(noteRaw && decKey(m) ? { decidedNote: { key: decKey(m), text: noteRaw.slice(0, 500) } } : {}) });
+    if (noteRaw && decKey(m) && !added.length) { try { if (UI.decOpen) delete UI.decOpen[m.id]; renderSheet(true); const t = $('draft'); if (t) t.value = fixed; const s2 = $('draftStatus'); if (s2) { s2.className = 'status'; s2.textContent = '초안을 저장했습니다. 대괄호 부분을 채운 뒤 복사해서 보내세요.'; } } catch {} }
     st.textContent = '초안을 저장했습니다. 대괄호 부분을 채운 뒤 복사해서 보내세요.' + (wantEv ? (added.length ? ` 일정 ${added.length}개를 캘린더에 넣었습니다: ${added.join(' / ')}` : ' 넣을 일정은 찾지 못했습니다(이미 있거나 날짜가 없음).') : '');
     if (added.length) { try { renderSheet(true); const t = $('draft'); if (t) t.value = fixed; const s2 = $('draftStatus'); if (s2) { s2.className = 'status'; s2.textContent = `초안을 저장했고, 일정 ${added.length}개를 캘린더에 넣었습니다: ${added.join(' / ')}`; } } catch {} }
   } catch (e0) {
@@ -6152,7 +6159,7 @@ document.addEventListener('click', async ev0 => {
       case 'sheetView': UI.sheetView = el.dataset.v; try { localStorage.setItem('sheetView', el.dataset.v); } catch {} return renderSheet(true);
       case 'showRest': UI['showRest' + el.dataset.k] = !UI['showRest' + el.dataset.k]; return renderSheet(true);
       case 'dlgTab': UI.dlgTab = el.dataset.v; return renderSheet(true);
-      case 'decPick': { const i = +el.dataset.i, j = +el.dataset.j, cur = { ...(m.decisionChoices || {}) }; if (cur[i] === j) delete cur[i]; else cur[i] = j; delete UI.edits.dlgShort; await patch('emails', m.id, { decisionChoices: null }); await patch('emails', m.id, { decisionChoices: cur }); return renderSheet(true); }
+      case 'decPick': { const i = +el.dataset.i, j = +el.dataset.j, cur = { ...(m.decisionChoices || {}) }; if (cur[i] === j) delete cur[i]; else cur[i] = j; delete UI.edits.dlgShort; await patch('emails', m.id, { decisionChoices: null, decidedNote: null }); await patch('emails', m.id, { decisionChoices: cur }); return renderSheet(true); }
       case 'decRedraft': return redraft(m, '');
       case 'dlSel': { const sel = { ...(m.delegateSel || {}) }; sel[+el.dataset.i] = el.checked; delete UI.edits.dlgShort; await patch('emails', m.id, { delegateSel: sel }); return renderSheet(true); }
       case 'dlAdd': { const t = ($('dlAdd').value || '').trim(); if (!t) return; const items = [...delegateItems(m), { text: t.slice(0, 200), essential: true }]; delete UI.edits.dlgShort; await patch('emails', m.id, { delegate: { items } }); return renderSheet(true); }
@@ -6367,6 +6374,7 @@ document.addEventListener('click', async ev0 => {
         catch { const pre = $('pt-' + el.dataset.i); const r = document.createRange(); r.selectNodeContents(pre); const s = getSelection(); s.removeAllRanges(); s.addRange(r); toast('선택해 두었습니다. Ctrl+C로 복사하세요.'); }
         return;
       }
+      case 'decShow': UI.decOpen = UI.decOpen || {}; UI.decOpen[m.id] = true; return renderSheet(true);
       case 'redraft': return redraft(m, el.dataset.tone);
       case 'stopDraft': UI.draftCtl && UI.draftCtl.abort(); return;
       case 'saveDraft': await patch('emails', m.id, { reply: { draft: $('draft').value } }); toast('초안을 저장했습니다.'); return;
