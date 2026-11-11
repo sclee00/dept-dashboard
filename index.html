@@ -946,7 +946,15 @@ button.hw{cursor:pointer}button.hw:hover{border-color:var(--accent)}
 .ctitem{display:flex;gap:.6rem;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:.45rem .6rem;border:1px solid var(--line);border-radius:10px;margin-bottom:.35rem}
 .ctitem.added{opacity:.6}.ctinfo{display:grid;gap:.1rem;min-width:0}.ctinfo span{font-size:.82rem;color:var(--muted)}.ctinfo .mono{font-family:var(--mono,monospace);font-size:.78rem;color:var(--ink)}
 /* header cards share one height (as tall as the header allows); long lists scroll inside the card */
-@media (min-width:1100px){.hwidgets{height:6.4rem;align-items:stretch}.hw{height:100%;box-sizing:border-box;overflow:hidden}}
+/* the cards sit beside the header AND the "지금 볼 것" bar, so they are tall without taking height from the calendar */
+.topwrap{display:contents}
+@media (min-width:1100px){
+  .topwrap{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:1rem 1rem;align-items:start}
+  .topwrap>header.top{grid-column:1;grid-row:1;min-width:0}
+  .topwrap>.focusbar{grid-column:1;grid-row:2;min-width:0}
+  .topwrap>.hwidgets{grid-column:2;grid-row:1 / span 2;align-self:stretch;height:auto;min-height:5.6rem;align-items:stretch;flex:none}
+  .hw{height:auto;box-sizing:border-box;overflow:hidden}
+}
 .ddlist{display:flex;flex-direction:column;gap:.12rem;overflow-y:auto;min-height:0;flex:1 1 auto;padding-right:.2rem}
 .snhw .snlist{max-height:none;flex:1 1 auto;min-height:0;align-content:flex-start}
 .ddpins{display:grid;gap:.3rem;max-height:14rem;overflow:auto}.ddpin{display:flex;gap:.6rem;align-items:center}.ddpin b{font-family:var(--mono,monospace);font-size:.8rem;min-width:3rem;color:var(--accent)}.ddpin span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -965,6 +973,7 @@ button.hw{cursor:pointer}button.hw:hover{border-color:var(--accent)}
     </form>
   </div>
 <div class="app">
+  <div class="topwrap">
   <header class="top">
     <div>
       <div class="eyebrow" id="eyebrow">업무 대시보드</div>
@@ -973,11 +982,12 @@ button.hw{cursor:pointer}button.hw:hover{border-color:var(--accent)}
     </div>
     <div class="stats" id="stats"></div>
     <button type="button" class="verbtn" id="verBtn" hidden data-act="verReload" title="대시보드가 새 버전으로 바뀌었습니다. 눌러서 새로고침하면 적용됩니다.">새 버전 · 새로고침</button>
-    <div class="hwidgets" id="hwidgets" aria-label="다음 일정 · D-day · 상용구"></div>
     <div class="gutter v hg" data-split="head" hidden role="separator" aria-orientation="vertical" tabindex="0" title="끌어서 왼쪽(현황)·오른쪽(버튼) 너비 조절 · 두 번 누르면 원래대로"></div>
   </header>
 
   <section class="focusbar" id="focus" aria-label="지금 볼 것"></section>
+  <div class="hwidgets" id="hwidgets" aria-label="다음 일정 · D-day · 연락처 · 상용구"></div>
+  </div>
 
   <main class="board">
     <section class="calwrap" aria-labelledby="monthLabel">
