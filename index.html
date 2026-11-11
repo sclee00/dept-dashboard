@@ -925,6 +925,11 @@ button.hw{cursor:pointer}button.hw:hover{border-color:var(--accent)}
 .cmdpick{accent-color:var(--accent);width:1rem;height:1rem;margin-right:.2rem;flex:none}
 .cmdrow.off{opacity:.45}.cmdrow.off b{text-decoration:line-through}
 .cmdpickall{gap:.6rem;align-items:center}
+.attev.hot{border-color:var(--amber);color:var(--amber);animation:attevGlow 2.4s ease-in-out infinite}
+.attev.hot b{font-weight:800}
+@keyframes attevGlow{0%,100%{box-shadow:0 0 0 0 transparent}50%{box-shadow:0 0 0 3px color-mix(in srgb,var(--amber) 35%,transparent)}}
+@media (prefers-reduced-motion:reduce){.attev.hot{animation:none}}
+.attcal{display:inline-grid;place-items:center;color:var(--amber)}
 </style>
 
 </head>
@@ -3732,12 +3737,33 @@ function addAttFiles(files) {
   }
   renderAttList();
 }
+// roughly how many dates a read file mentions (2026-12-11, 2026. 12. 11., 12/11, 12. 11.(금), 12월 11일) — counted locally, no AI
+function dateCount(text) {
+  if (!text) return 0;
+  const t = String(text), seen = new Set();
+  const re = /(?:(20\d{2})\s*[-./년]\s*)?(\d{1,2})\s*(?:[-./]|월)\s*(\d{1,2})\s*(?:일|\.)?\s*(?:\(([월화수목금토일])\))?/g;
+  let m;
+  while ((m = re.exec(t))) {
+    const mo = +m[2], d = +m[3];
+    if (mo < 1 || mo > 12 || d < 1 || d > 31) continue;
+    // a bare "3.5" or "1/2" is too often not a date: need a year, a weekday, 월/일 words or a two-part date with a dot after
+    const strong = m[1] || m[4] || /월/.test(m[0]) || /\d\s*\.\s*\d{1,2}\s*\./.test(m[0]) || /\//.test(m[0]);
+    if (strong) seen.add(`${mo}-${d}`);
+  }
+  return seen.size;
+}
+const datesOf = x => x.dates != null ? x.dates : (x.dates = dateCount(x.text));
+function attEvBtn(m, x) {
+  if (!x.text || x.text.length < 30) return '';
+  const n = datesOf(x), hot = n >= 2;
+  return `<button class="btn small ${hot ? 'attev hot' : ''}" type="button" data-act="attEvents" data-id="${m.id}" data-name="${esc(x.name)}" title="${hot ? `날짜가 ${n}개쯤 있습니다. ` : ''}이 파일에 있는 날짜를 일정 목록으로 뽑아서, 고른 것만 넣습니다">${ic('cal')}일정 뽑기${hot ? ` <b>· ${n}</b>` : ''}</button>`;
+}
 function attChip(x, removeAct) {
   const st = x.state === 'reading' ? '<span class="spin"></span>읽는 중' : x.state === 'ok' ? `${ic('check')}${(x.chars || x.text.length).toLocaleString()}자` : x.state === 'fail' ? `${ic('alert')}못 읽음` : /\.(png|jpe?g|webp|gif|heic)$/i.test(x.name || '') || /^image\//.test((x.file && x.file.type) || x.type || '') ? '그림 · AI가 직접 봄' : '내용은 못 읽고 파일만 보관';
   // pictures show a small preview, so it is easy to see which picture is going to the AI
   const isImg = x.file && /^image\//.test(x.file.type || '');
   if (isImg && !x.thumb) { try { x.thumb = URL.createObjectURL(x.file); } catch {} }
-  return `<span class="attchip ${x.state || ''}" title="${esc(x.name + (x.note ? ' · ' + x.note : ''))}">${isImg && x.thumb ? `<img class="attthumb" src="${x.thumb}" alt="">` : ic('doc')}<b>${esc(x.name)}</b><span class="count">${ATT_KO[x.kind || attKind(x.name)]} · ${fmtSize(x.size || 0)} · ${st}</span>${removeAct ? `<button class="x" type="button" ${removeAct} aria-label="빼기">✕</button>` : ''}</span>`;
+  return `<span class="attchip ${x.state || ''}" title="${esc(x.name + (x.note ? ' · ' + x.note : ''))}">${isImg && x.thumb ? `<img class="attthumb" src="${x.thumb}" alt="">` : x.text && datesOf(x) >= 2 ? `<span class="attcal" title="일정이 들어 있는 파일 (날짜 ${datesOf(x)}개쯤)">${ic('cal')}</span>` : ic('doc')}<b>${esc(x.name)}</b><span class="count">${ATT_KO[x.kind || attKind(x.name)]} · ${fmtSize(x.size || 0)} · ${st}</span>${removeAct ? `<button class="x" type="button" ${removeAct} aria-label="빼기">✕</button>` : ''}</span>`;
 }
 function renderAttList() {
   const el = $('attList'); if (!el) return;
@@ -5096,7 +5122,7 @@ function attSection(m) {
       return `<div class="attrow">${attChip({ ...x, state: x.text ? 'ok' : x.note && /못/.test(x.note) ? 'fail' : 'skip' })}
         ${g && g.gist ? `<div class="gist">${esc(g.gist)}</div>` : ''}${x.note ? `<div class="count">${esc(x.note)}</div>` : ''}
         <div class="row">${x.saved || x.inbox ? `<button class="btn small" type="button" data-act="attOpen" data-id="${m.id}" data-name="${esc(x.name)}">${ic('ext')}${/\.(pdf|png|jpe?g|gif|webp|txt)$/i.test(x.name) ? '열기' : '열기 (내려받아 열림)'}</button>` : '<span class="count">원본은 보관 안 됨 (저장 폴더 연결 필요)</span>'}
-        ${x.text && x.text.length > 30 ? `<button class="btn small" type="button" data-act="attEvents" data-id="${m.id}" data-name="${esc(x.name)}" title="이 파일에 있는 날짜를 일정 목록으로 뽑아서, 고른 것만 넣습니다">${ic('cal')}일정 뽑기</button>` : ''}
+        ${attEvBtn(m, x)}
         ${x.text ? `<details><summary class="count" style="cursor:pointer">읽은 내용 보기 (${(x.chars || x.text.length).toLocaleString()}자${x.cut ? ', 앞부분만 분석에 사용' : ''})</summary><pre>${esc(x.text.slice(0, 8000))}${x.text.length > 8000 ? '\n…' : ''}</pre></details>` : ''}</div></div>`; }).join('')
       : '<div class="count">첨부파일이 없습니다. 메일에 딸린 파일이 있으면 "파일 추가"로 넣고 다시 분석하세요.</div>'}
     <input type="file" id="attInput2" multiple hidden></div>`;
@@ -5234,7 +5260,7 @@ function renderSheet(force) {
         ${decs.length ? `<div class="sec decsec"><h4><span>${ic('gavel')} 결정할 사항 ${decs.length}</span>${decChosen(m).length ? `<span class="count">${decChosen(m).length}/${decs.length} 결정함</span>` : ''}</h4>
           ${decs.map((d, i) => `<div class="dec"><div class="q">${i + 1}. ${esc(d.question)}</div><div class="optrow">${d.options.map((o, j) => `<button class="optchip ${dch[i] === j ? 'on' : ''}" type="button" data-act="decPick" data-i="${i}" data-j="${j}" aria-pressed="${dch[i] === j}"><b>${String.fromCharCode(9312 + j)} ${esc(o.label)}${d.recommend === j ? ' <em class="rec">추천</em>' : ''}</b>${o.detail ? `<span>${esc(o.detail)}</span>` : ''}</button>`).join('')}</div>${d.why && !simple ? `<div class="count">추천 이유: ${esc(d.why)}</div>` : ''}</div>`).join('')}
           ${decChosen(m).length ? `<div class="row"><button class="btn small" type="button" data-act="decRedraft">${ic('reply')}결정대로 답장 다시 쓰기</button><span class="count">조교 지시(짧은 버전)에는 결정이 자동으로 들어갑니다.</span></div>` : ''}</div>` : ''}
-        ${simple ? ((m.attachments || []).length ? `<div class="sec"><h4><span>${ic('doc')} 첨부파일 ${m.attachments.length}</span></h4><div class="attlist" style="margin:0">${m.attachments.map(x => attChip({ ...x, state: x.text ? 'ok' : 'skip' }) + (x.saved || x.inbox ? `<button class="btn small" type="button" data-act="attOpen" data-id="${m.id}" data-name="${esc(x.name)}" title="원본 열기">${ic('ext')}열기</button>` : '') + (x.text && x.text.length > 30 ? `<button class="btn small" type="button" data-act="attEvents" data-id="${m.id}" data-name="${esc(x.name)}" title="이 파일에 있는 날짜를 일정 목록으로 뽑아서, 고른 것만 넣습니다">${ic('cal')}일정 뽑기</button>` : '')).join('')}</div></div>` : '') : attSection(m)}
+        ${simple ? ((m.attachments || []).length ? `<div class="sec"><h4><span>${ic('doc')} 첨부파일 ${m.attachments.length}</span></h4><div class="attlist" style="margin:0">${m.attachments.map(x => attChip({ ...x, state: x.text ? 'ok' : 'skip' }) + (x.saved || x.inbox ? `<button class="btn small" type="button" data-act="attOpen" data-id="${m.id}" data-name="${esc(x.name)}" title="원본 열기">${ic('ext')}열기</button>` : '') + attEvBtn(m, x)).join('')}</div></div>` : '') : attSection(m)}
         ${!simple && (a.thread || []).length > 1 ? `<div class="sec"><h4><span>${ic('thread')} 스레드 흐름 ${a.thread.length}통</span></h4><ol class="timeline">${a.thread.map(t => `<li><div><div class="who">${t.date ? esc(fmtShort(t.date)) + ' · ' : ''}${esc(t.from)}</div>${esc(t.gist)}</div></li>`).join('')}</ol></div>` : ''}` :
         `<div class="sec"><div class="summary">아직 분석되지 않은 메일입니다. <button class="btn small primary" type="button" data-act="reanalyze">지금 분석</button></div></div>${(m.attachments || []).length ? attSection(m) : ''}`}
       ${m.analysis ? `
