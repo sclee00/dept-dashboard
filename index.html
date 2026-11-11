@@ -945,6 +945,11 @@ button.hw{cursor:pointer}button.hw:hover{border-color:var(--accent)}
 .ctcopy .ic{width:.7rem;height:.7rem;opacity:.5;flex:none}.ctcopy:hover{color:var(--accent)}
 .ctitem{display:flex;gap:.6rem;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:.45rem .6rem;border:1px solid var(--line);border-radius:10px;margin-bottom:.35rem}
 .ctitem.added{opacity:.6}.ctinfo{display:grid;gap:.1rem;min-width:0}.ctinfo span{font-size:.82rem;color:var(--muted)}.ctinfo .mono{font-family:var(--mono,monospace);font-size:.78rem;color:var(--ink)}
+/* header cards share one height (as tall as the header allows); long lists scroll inside the card */
+@media (min-width:1100px){.hwidgets{height:6.4rem;align-items:stretch}.hw{height:100%;box-sizing:border-box;overflow:hidden}}
+.ddlist{display:flex;flex-direction:column;gap:.12rem;overflow-y:auto;min-height:0;flex:1 1 auto;padding-right:.2rem}
+.snhw .snlist{max-height:none;flex:1 1 auto;min-height:0;align-content:flex-start}
+.ddpins{display:grid;gap:.3rem;max-height:14rem;overflow:auto}.ddpin{display:flex;gap:.6rem;align-items:center}.ddpin b{font-family:var(--mono,monospace);font-size:.8rem;min-width:3rem;color:var(--accent)}.ddpin span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 </style>
 
 </head>
@@ -1844,14 +1849,19 @@ function upcoming(days) {
   }
   return out.sort((a, b) => a.date.localeCompare(b.date) || a.s - b.s);
 }
-// D-day card: the next important event (automatic) + one date I pin myself
+// the dates I pinned (any number), nearest first; older single-pin / list settings are read too
+function ddayPins() {
+  const t = todayStr(), s0 = S.settings;
+  const list = Array.isArray(s0.ddayPins) ? s0.ddayPins : [...(s0.ddayPin ? [s0.ddayPin] : []), ...((s0.ddays || []).filter(d => d.date >= t))];
+  const seen = new Set();
+  return list.filter(d => d && isDate(d.date) && d.title && !seen.has(d.date + d.title) && seen.add(d.date + d.title)).sort((a, b) => a.date.localeCompare(b.date));
+}
+// D-day card: the next important event (automatic) + the dates I pin myself
 function ddayList() {
   const t = todayStr(), out = [];
   const auto = upcoming(180).find(x => x.imp);
   if (auto) out.push({ ...auto, tag: '중요' });
-  let pin = S.settings.ddayPin;
-  if (!pin) { const old = (S.settings.ddays || []).filter(d => isDate(d.date) && d.date >= t).sort((a, b) => a.date.localeCompare(b.date))[0]; if (old) pin = old; }
-  if (pin && isDate(pin.date)) out.push({ date: pin.date, title: pin.title, tag: '지정', pin: true, past: pin.date < t });
+  for (const pin of ddayPins()) out.push({ date: pin.date, title: pin.title, tag: '지정', pin: true });
   return out;
 }
 function renderWidgets() {
@@ -1866,14 +1876,14 @@ function renderWidgets() {
   }
   const dl = ddayList(), hasPin = dl.some(x => x.pin);
   const ddRow = x => { const n = diff(x.date); return `<button type="button" class="ddrow" ${x.pin ? 'data-act="pickDay" data-day="' + x.date + '"' : `data-act="ipOpen" data-kind="${x.kind}" data-id="${esc(x.id)}"`} title="${esc(x.title)} · ${fmtShort(x.date)}"><b class="${n < 0 ? '' : n <= 3 ? 'hot' : n <= 7 ? 'warm' : ''}">${n === 0 ? 'D-day' : n < 0 ? 'D+' + -n : 'D-' + n}</b><span>${esc(x.title)}</span><i>${x.tag}</i></button>`; };
-  const dd = `<div class="hw ddhw"><span class="hwl">${ic('flag')}D-day <button type="button" class="hwedit" data-act="ddayEdit" title="내가 지정하는 D-day 고르기" aria-label="D-day 지정">${ic('pen')}</button></span>${dl.filter(x => !x.pin).map(ddRow).join('') || '<span class="ddrow none"><b>—</b><span>다가오는 중요 일정 없음</span></span>'}${hasPin ? dl.filter(x => x.pin).map(ddRow).join('') : `<button type="button" class="ddrow add" data-act="ddayEdit"><b>＋</b><span>D-day 지정하기</span></button>`}</div>`;
+  const dd = `<div class="hw ddhw"><span class="hwl">${ic('flag')}D-day <button type="button" class="hwedit" data-act="ddayEdit" title="내가 지정하는 D-day 고르기" aria-label="D-day 지정">${ic('pen')}</button></span><div class="ddlist">${dl.filter(x => !x.pin).map(ddRow).join('') || '<span class="ddrow none"><b>—</b><span>다가오는 중요 일정 없음</span></span>'}${dl.filter(x => x.pin).map(ddRow).join('')}<button type="button" class="ddrow add" data-act="ddayEdit"><b>＋</b><span>D-day ${hasPin ? '더 ' : ''}지정하기</span></button></div></div>`;
   const sn = S.settings.snippets || [];
   const sp = `<div class="hw snhw"><span class="hwl">${ic('copy')}상용구 <button type="button" class="hwedit" data-act="snipEdit" title="상용구 추가·편집" aria-label="상용구 편집">${ic('pen')}</button></span><div class="snlist">${sn.length ? sn.map((x, i) => `<button type="button" class="snchip" data-act="snipCopy" data-i="${i}" title="${esc(x.text)}">${esc(x.label || x.text)}${ic('copy')}</button>`).join('') : '<button type="button" class="snchip" data-act="snipEdit">+ 이메일·전화번호 등 추가</button>'}</div></div>`;
   const cl = contactsAll(); if (UI.ctIdx == null || UI.ctIdx >= cl.length) UI.ctIdx = 0;
   const c = cl[UI.ctIdx];
   const cp = (v, label) => v ? `<button type="button" class="ctcopy" data-act="ctCopy" data-v="${esc(v)}" title="${label} 복사">${esc(v)}${ic('copy')}</button>` : '';
   const ct = `<div class="hw cthw"><span class="hwl">${ic('user')}연락처${cl.length ? ` <span class="mono">${UI.ctIdx + 1}/${cl.length}</span>` : ''}<span class="ctnav">${cl.length > 1 ? `<button type="button" class="hwedit" data-act="ctNav" data-d="-1" aria-label="이전 연락처">‹</button><button type="button" class="hwedit" data-act="ctNav" data-d="1" aria-label="다음 연락처">›</button>` : ''}${c ? `<button type="button" class="hwedit" data-act="ctEdit" title="이 연락처 고치기" aria-label="연락처 고치기">${ic('pen')}</button>` : ''}<button type="button" class="hwedit" data-act="ctNew" title="연락처 직접 추가" aria-label="연락처 추가">＋</button></span></span>
-    ${c ? `<span class="hwv">${esc(c.name)}${c.title || c.org ? ` <small>${esc([c.title, c.org].filter(Boolean).join(' · '))}</small>` : ''}</span><span class="ctlines">${cp(c.phone, '전화번호')}${cp(c.email, '이메일')}</span>` : '<span class="hwv count">메일을 분석하면 서명의 연락처를 추가할 수 있습니다</span>'}</div>`;
+    ${c ? `<span class="hwv">${esc(c.name)}${c.title || c.org ? ` <small>${esc([c.title, c.org].filter(Boolean).join(' · '))}</small>` : ''}</span><span class="ctlines">${cp(c.phone, '전화번호')}${cp(c.email, '이메일')}</span>` : `<span class="count">아직 없음 ${tip('메일을 분석하면 서명의 연락처를 확인 후 추가할 수 있습니다. ＋로 직접 넣어도 됩니다.')}</span>`}</div>`;
   box.innerHTML = nx + dd + ct + sp;
 }
 // 2026-12-18, 2026.12.18, 12/18, 12.18 → YYYY-MM-DD (a date without a year is the next one to come)
@@ -1885,16 +1895,17 @@ function normDate(t) {
   return null;
 }
 function ddayDlg() {
-  const pin = S.settings.ddayPin || {}, up = upcoming(180);
+  const pins = ddayPins(), up = upcoming(180);
   const seen = new Set(), opts = up.filter(x => { const k = x.date + x.title; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 80);
   $('dlgRoot').innerHTML = `<div class="scrim" data-act="closeDlg"></div><div class="dlg"><div class="dlgbox" role="dialog" aria-modal="true" aria-labelledby="dlgT">
     <h3 id="dlgT">${ic('flag')}D-day 지정</h3>
-    <span class="count">첫 줄은 다음에 오는 중요 일정이 자동으로 나옵니다. 둘째 줄에 둘 날짜를 여기서 정합니다.</span>
-    <label>내 일정에서 고르기<select class="field" id="ddPick"><option value="">— 고르세요 —</option>${opts.map((x, i) => `<option value="${i}" ${pin.date === x.date && pin.title === x.title ? 'selected' : ''}>${esc(fmtShort(x.date))} · ${esc(x.title.slice(0, 40))}${x.imp ? ' ★' : ''}</option>`).join('')}</select></label>
-    <div class="count">또는 직접 적기</div>
-    <div class="row"><input class="field" type="date" id="ddDate" value="${esc(pin.date || '')}" style="width:auto"><input class="field" id="ddTitle" placeholder="이름 (예: 성적 입력 마감)" value="${esc(pin.title || '')}" style="flex:1"></div>
-    <div class="row" style="justify-content:flex-end"><button class="btn" type="button" data-act="ddayClear">지정 해제</button><button class="btn" type="button" data-act="closeDlg">취소</button><button class="btn primary" type="button" data-act="ddaySave">저장</button></div></div></div>`;
-  UI.dlg = 'dday'; UI.ddOpts = opts;
+    <span class="count">첫 줄은 다음에 오는 중요 일정이 자동으로 나옵니다. 그 아래에 둘 날짜를 여기서 여러 개 정할 수 있습니다.</span>
+    <div class="ddpins">${pins.length ? pins.map((x, i) => { const n = diff(x.date); return `<div class="ddpin"><b>${n === 0 ? 'D-day' : n < 0 ? 'D+' + -n : 'D-' + n}</b><span>${esc(fmtShort(x.date))} · ${esc(x.title)}</span><button class="btn small" type="button" data-act="ddayDel" data-i="${i}" aria-label="${esc(x.title)} 빼기">빼기</button></div>`; }).join('') : '<div class="count">아직 지정한 날짜가 없습니다.</div>'}</div>
+    <label>내 일정에서 골라 추가<select class="field" id="ddPick"><option value="">— 고르세요 —</option>${opts.map((x, i) => `<option value="${i}">${esc(fmtShort(x.date))} · ${esc(x.title.slice(0, 40))}${x.imp ? ' ★' : ''}</option>`).join('')}</select></label>
+    <div class="count">또는 직접 적어 추가</div>
+    <div class="row"><input class="field" type="date" id="ddDate" style="width:auto"><input class="field" id="ddTitle" placeholder="이름 (예: 성적 입력 마감)" style="flex:1"><button class="btn primary" type="button" data-act="ddaySave">추가</button></div>
+    <div class="row" style="justify-content:flex-end"><button class="btn" type="button" data-act="closeDlg">닫기</button></div></div></div>`;
+  UI.dlg = 'dday';
   $('ddPick').onchange = e => { const x = opts[+e.target.value]; if (x) { $('ddDate').value = x.date; $('ddTitle').value = x.title; } };
 }
 function listEditDlg(kind) {
@@ -3403,7 +3414,7 @@ const UNDO_LABEL = {
   delRule: '아이콘 규칙 삭제', skipOcc: '반복 일정 한 번 빼기', edSave: '일정 편집', bdSave: '불가 시간 설정', saveSettings: '설정 변경', imSave: '아이콘 색·이름',
   pushG: '구글에 추가', fEvent: '일정 추가', fBlock: '불가 시간 추가', taskForm: '할 일 추가', importData: '파일 가져오기'
 };
-const UNDO_SKIP = new Set(['ctNav', 'ctCopy', 'ctNew', 'ctEdit', 'ctAdd', 'ctSave', 'ctDel', 'ddaySave', 'ddayClear', 'verReload', 'attEvents', 'snipCopy', 'snipEdit', 'ddayEdit', 'lockNow', 'lockSave', 'tip', 'daySel', 'dayMode', 'dayNav', 'dayGo', 'fwdCopy', 'gemCancel', 'scriptCopy', 'scriptSetup', 'scriptTest', 'scriptOn', 'copyReply', 'copyDraft', 'gemEmbed', 'gemDockOpen', 'qTab', 'gemNew', 'gemTall', 'gemZoom', 'histUndo', 'histRedo', 'histOne', 'histGroup', 'histFold', 'stPing', 'pushAllG', 'aiKeySave', 'aiKeyClear', 'aiTest', 'aiMode', 'aiModelSel', 'relayClip', 'stOpen', 'tidyOpen', 'tidyDel', 'tidyTime', 'tidyMerge', 'inboxRun', 'analyzeMail', 'tgShow', 'tgHide', 'phoneLink', 'gDel', 'fltImp', 'fltIcons', 'fltTog', 'fltClear', 'fltClose', 'cmdToAI', 'cmdPick', 'cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
+const UNDO_SKIP = new Set(['ddayDel', 'ctNav', 'ctCopy', 'ctNew', 'ctEdit', 'ctAdd', 'ctSave', 'ctDel', 'ddaySave', 'ddayClear', 'verReload', 'attEvents', 'snipCopy', 'snipEdit', 'ddayEdit', 'lockNow', 'lockSave', 'tip', 'daySel', 'dayMode', 'dayNav', 'dayGo', 'fwdCopy', 'gemCancel', 'scriptCopy', 'scriptSetup', 'scriptTest', 'scriptOn', 'copyReply', 'copyDraft', 'gemEmbed', 'gemDockOpen', 'qTab', 'gemNew', 'gemTall', 'gemZoom', 'histUndo', 'histRedo', 'histOne', 'histGroup', 'histFold', 'stPing', 'pushAllG', 'aiKeySave', 'aiKeyClear', 'aiTest', 'aiMode', 'aiModelSel', 'relayClip', 'stOpen', 'tidyOpen', 'tidyDel', 'tidyTime', 'tidyMerge', 'inboxRun', 'analyzeMail', 'tgShow', 'tgHide', 'phoneLink', 'gDel', 'fltImp', 'fltIcons', 'fltTog', 'fltClear', 'fltClose', 'cmdToAI', 'cmdPick', 'cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
 function undoSnap() {
   const o = { settings: JSON.parse(JSON.stringify(S.settings)) };
   for (const c of COLS) o[c] = JSON.parse(JSON.stringify(S[c]));
@@ -6134,6 +6145,27 @@ document.addEventListener('click', async ev0 => {
       case 'snipCopy': { const x = (S.settings.snippets || [])[+el.dataset.i]; if (!x) return; try { await navigator.clipboard.writeText(x.text); } catch { prompt('복사할 내용', x.text); return; } el.classList.add('done'); setTimeout(() => el.classList.remove('done'), 900); toast(`복사했습니다: ${x.label || x.text}`); return; }
       case 'snipEdit': listEditDlg('snip'); return;
       case 'ddayEdit': ddayDlg(); return;
+      case 'ctNav': { const n = contactsAll().length; if (n) UI.ctIdx = ((UI.ctIdx || 0) + (+el.dataset.d) + n) % n; renderWidgets(); return; }
+      case 'ctCopy': { try { await navigator.clipboard.writeText(el.dataset.v); toast('복사했습니다: ' + el.dataset.v); } catch { prompt('복사할 내용', el.dataset.v); } return; }
+      case 'ctNew': ctDlg(); return;
+      case 'ctEdit': { const c = contactsAll()[UI.ctIdx || 0]; if (c) ctDlg(c, (S.settings.contacts || []).indexOf((S.settings.contacts || []).find(x => ctKey(x) === ctKey(c)))); return; }
+      case 'ctAdd': { // from a mail: always shown for checking before it is saved
+        const m = S.emails.find(x => x.id === UI.openId), c = m && mailContacts(m).find(x => ctKey(x) === el.dataset.k); if (!c) return;
+        const k = contactKnown(c); ctDlg(k ? { ...k, ...Object.fromEntries(Object.entries(c).filter(([, v]) => v)) } : c, k ? (S.settings.contacts || []).indexOf(k) : null); return;
+      }
+      case 'ctSkip': { const m = S.emails.find(x => x.id === UI.openId); if (!m) return; await patch('emails', m.id, { ctSkip: [...(m.ctSkip || []), el.dataset.k] }); return; }
+      case 'ctSave': {
+        const c = cleanContacts([{ name: $('ctName').value, title: $('ctTitle').value, org: $('ctOrg').value, phone: $('ctPhone').value, email: $('ctEmail').value }])[0];
+        if (!c) return toast('이름과, 전화번호나 이메일 중 하나는 넣어 주세요.');
+        const list = (S.settings.contacts || []).slice(), i = el.dataset.i === '' ? -1 : +el.dataset.i;
+        if (i >= 0 && list[i]) list[i] = c; else { const dup = list.findIndex(x => ctKey(x) === ctKey(c)); if (dup >= 0) list[dup] = c; else list.push(c); }
+        await saveSettings({ ...S.settings, contacts: list });
+        $('dlgRoot').innerHTML = ''; UI.dlg = null; UI.ctIdx = contactsAll().findIndex(x => ctKey(x) === ctKey(c)); renderHeader(); if (UI.openId) { try { renderSheet(true); } catch {} }
+        toast(`연락처에 저장했습니다: ${c.name}`); return;
+      }
+      case 'ctDel': { const list = (S.settings.contacts || []).slice(); list.splice(+el.dataset.i, 1); await saveSettings({ ...S.settings, contacts: list }); $('dlgRoot').innerHTML = ''; UI.dlg = null; renderHeader(); toast('연락처를 지웠습니다.'); return; }
+      case 'ddaySave': { const date = $('ddDate').value, title = $('ddTitle').value.trim(); if (!isDate(date) || !title) return toast('날짜와 이름을 넣어 주세요.'); await saveSettings({ ...S.settings, ddayPins: [...ddayPins().filter(x => !(x.date === date && x.title === title)), { date, title }], ddayPin: null, ddays: [] }); renderHeader(); ddayDlg(); toast('D-day를 추가했습니다.'); return; }
+      case 'ddayDel': { const list = ddayPins(); list.splice(+el.dataset.i, 1); await saveSettings({ ...S.settings, ddayPins: list, ddayPin: null, ddays: [] }); renderHeader(); ddayDlg(); return; }
       case 'ctNav': { const n = contactsAll().length; if (n) UI.ctIdx = ((UI.ctIdx || 0) + (+el.dataset.d) + n) % n; renderWidgets(); return; }
       case 'ctCopy': { try { await navigator.clipboard.writeText(el.dataset.v); toast('복사했습니다: ' + el.dataset.v); } catch { prompt('복사할 내용', el.dataset.v); } return; }
       case 'ctNew': ctDlg(); return;
