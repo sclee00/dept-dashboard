@@ -3188,7 +3188,7 @@ function scriptableAsk(prompt, title, json, images) {
 const imgOK = () => { const v = bridgeVer(); return v[0] > 1 || (v[0] === 1 && v[1] >= 2); }; // 1.2.1+ uses Gemini's own file input
 async function aiRun(prompt, opts, json) {
   // Gemini (web) may otherwise try to act with its own Google Calendar / Gmail extensions instead of answering
-  prompt = '(먼저) 이 대화에서는 Google 캘린더·Gmail·Drive 같은 앱 기능이나 확장을 쓰지 말고, 글로만 답해 줘. 일정 등록·메일 발송은 내가 따로 해.\n\n' + prompt;
+  prompt = '(먼저) 이 대화에서는 도구나 확장 기능(Workspace 앱 연결)을 쓰지 말고 텍스트로만 답해 줘.\n\n' + prompt;
   // whatever happens, the answer must stay machine-readable
   if (json) prompt += '\n\n(꼭 지켜) 어떤 경우에도 설명이나 안내 없이 위 형식의 JSON 하나로만 답해 줘. 할 수 없거나 찾을 게 없으면 형식은 그대로 두고 비어 있는 값과 함께 note(또는 summary)에 이유를 한 줄로 적어.';
   const images = opts.images || [], title = opts.title || (json ? 'AI 분석' : 'AI에게 답 받기');
@@ -5789,12 +5789,14 @@ const looksLikeAppCard = t => /Google Calendar|Google 캘린더/.test(t) && /(�
 async function redraft(m, tone) {
   if (!sample) { toast('이 화면에서는 Claude를 쓸 수 없습니다.'); return; }
   const ta = $('draft'), st = $('draftStatus');
-  const note = ($('draftNote').value || '').trim();
-  const current = ta.value.trim();
+  const noteRaw = ($('draftNote').value || '').trim();
+  // "…일정에도 추가해" is for the dashboard, not for Gemini: seeing it, Gemini (web) tries to use its own Google Calendar instead of writing
+  const note = noteRaw.replace(/\s*(그리고|하고|,)?\s*(내\s*)?(구글\s*)?(일정|캘린더|달력|스케줄)(표)?(에도|에|도)?\s*([가-힣]{2,4}\s+)?(추가|넣어|넣고|등록|잡아|반영)[^\s.,]*[.]?/g, '').trim();
+  const current = looksLikeAppCard(ta.value) ? '' : ta.value.trim();
   // "…라고 답하고 일정에도 추가해": the reply and the events come back together, the dashboard adds the events itself
-  const wantEv = /(일정|캘린더|달력|스케줄)/.test(note) && /(추가|넣어|넣고|등록|잡아|반영)/.test(note);
+  const wantEv = note !== noteRaw;
   const prompt = `아래 받은 메일에 내 이름으로 보낼 답장 좀 써 줘. ${wantEv ? '' : '설명이나 머리말 없이 답장 본문만 줘. '}답장은 실제로 보낼 거니까 받는 사람한테 맞게 예의 바르게.
-(중요) Google 캘린더·Gmail 같은 앱 기능이나 확장은 절대 쓰지 마. 일정 등록은 대시보드가 따로 하니까 너는 글만 써. "적용할까요?" 같은 확인도 묻지 마.
+(중요) 도구나 확장 기능은 쓰지 말고 글만 써 줘. 확인을 되묻지도 마.
 ${ctxLine()}
 순서는 인사 → 요청에 대한 답 → (필요할 때만) 되묻거나 부탁할 것 → 맺음말. 내가 아직 안 정한 건 [대괄호]로 비워 둬.
 ${replyFmt()}
@@ -5803,8 +5805,8 @@ ${decLine(m) ? '내가 정한 것(답장에 넣어 줘): ' + decLine(m) : ''}
 ${keyLine() ? keyLine() + '\n(참석 여부를 묻는 메일이고 그 행사가 위 일정과 겹치면 기본으로 불참으로 써 줘. 겹치는 일정 내용은 밝히지 말고.)\n' : ''}내 빈 시간 (시간 제안할 일 있으면 이 안에서만 골라): ${slotsForPrompt().join(', ') || '없음'}
 ${note ? '추가로 원하는 거: ' + note : ''}
 ${current && !looksLikeAppCard(current) ? '지금 초안(이거 바탕으로 고쳐 줘):\n"""\n' + current + '\n"""' : ''}
-${wantEv ? `오늘은 ${todayStr()}(${WD[new Date().getDay()]}요일)이야. 답은 아래 JSON 하나로만 줘. events에는 내가 "추가로 원하는 거"에서 일정에 넣으라고 한 것만, 내가 말한 날짜·시간·장소 그대로 넣어 (끝 시간을 안 말했으면 1시간).
-{"reply":"답장 본문 전체","events":[{"title":"일정 이름","date":"YYYY-MM-DD","time":"HH:MM","endTime":"HH:MM","location":"장소 또는 빈 문자열"}]}` : ''}
+${wantEv ? `오늘은 ${todayStr()}(${WD[new Date().getDay()]}요일)이야. 답은 아래 JSON 하나로만 줘 (글로 정리만 하는 거야). slots에는 "추가로 원하는 거"에서 내가 정해 준 만남을 날짜·시간·장소 그대로 옮겨 적어 (끝 시간을 안 말했으면 1시간 뒤).
+{"reply":"답장 본문 전체","slots":[{"title":"만남 이름 (메일 제목에서 따서 짧게, 회차가 있으면 회차 포함)","date":"YYYY-MM-DD","time":"HH:MM","endTime":"HH:MM","place":"장소 또는 빈 문자열"}]}` : ''}
 
 받은 메일 (분류: ${m.category}):
 """
@@ -5819,7 +5821,7 @@ ${String(m.raw).slice(0, 20000)}
     if (wantEv) {
       const j = await sample.json(prompt, { title: '답장 초안 + 일정' });
       text = String((j && j.reply) || '');
-      evs = (Array.isArray(j && j.events) ? j.events : []).filter(e => e && e.title && isDate(e.date)).slice(0, 10);
+      evs = (Array.isArray(j && (j.slots || j.events)) ? (j.slots || j.events) : []).map(e => ({ ...e, location: e.place || e.location })).filter(e => e && e.title && isDate(e.date)).slice(0, 10);
     } else ({ text } = await sample(prompt, { title: '답장 초안', onText: ({ text }) => { const t = $('draft'); if (t) t.value = text; } }));
     if (!text.trim() || looksLikeAppCard(text)) throw { code: 'appcard', message: 'Gemini가 답장을 쓰지 않고 자기 캘린더 기능을 쓰려고 했습니다. Gemini 창에서 그 확인(Confirm)은 취소하고 "다시 작성"을 한 번 더 눌러 주세요.' };
     const fixed = fixNames(text); { const t = $('draft'); if (t) t.value = fixed; }
@@ -5843,8 +5845,11 @@ ${String(m.raw).slice(0, 20000)}
     await patch('emails', m.id, { reply: { draft: fixed }, needsReply: true, ...(added.length ? { analysis: a } : {}) });
     st.textContent = '초안을 저장했습니다. 대괄호 부분을 채운 뒤 복사해서 보내세요.' + (wantEv ? (added.length ? ` 일정 ${added.length}개를 캘린더에 넣었습니다: ${added.join(' / ')}` : ' 넣을 일정은 찾지 못했습니다(이미 있거나 날짜가 없음).') : '');
     if (added.length) { try { renderSheet(true); const t = $('draft'); if (t) t.value = fixed; const s2 = $('draftStatus'); if (s2) { s2.className = 'status'; s2.textContent = `초안을 저장했고, 일정 ${added.length}개를 캘린더에 넣었습니다: ${added.join(' / ')}`; } } catch {} }
-  } catch (e) {
-    if (e && e.text) { UI.edits.draft = e.text; } else { const t = $('draft'); if (t) t.value = before; }
+  } catch (e0) {
+    let e = e0;
+    const app = e && (e.code === 'appcard' || (e.text && looksLikeAppCard(e.text)));
+    if (app) { e = { code: 'appcard', message: 'Gemini가 답장을 쓰지 않고 자기 캘린더 기능을 쓰려고 했습니다. Gemini 창에서 그 확인은 Cancel로 닫고 "다시 작성"을 한 번 더 눌러 주세요.' }; const t = $('draft'); if (t) t.value = looksLikeAppCard(before) ? '' : before; if (looksLikeAppCard(before)) { UI.edits.draft = ''; patch('emails', m.id, { reply: { draft: '' } }).catch(() => {}); } }
+    else if (e && e.text && !wantEv) { UI.edits.draft = e.text; } else { const t = $('draft'); if (t) t.value = looksLikeAppCard(before) ? '' : before; }
     st.className = e && e.code === 'cancelled' ? 'status' : 'status err'; st.textContent = sampleErr(e).replace('분석', '작성');
   }
   const sd = $('stopDraft'); if (sd) sd.hidden = true;
