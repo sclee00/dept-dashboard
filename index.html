@@ -934,6 +934,7 @@ button.hw{cursor:pointer}button.hw:hover{border-color:var(--accent)}
 .attevx{border:0;background:none;color:var(--muted);cursor:pointer;font-size:.75rem;padding:.15rem .3rem;border-radius:6px}.attevx:hover{color:var(--red);background:color-mix(in srgb,var(--red) 12%,transparent)}
 .verbtn{align-self:center;border:1px solid var(--amber);background:color-mix(in srgb,var(--amber) 14%,transparent);color:var(--amber);border-radius:999px;padding:.25rem .7rem;font:inherit;font-size:.8rem;font-weight:700;cursor:pointer;white-space:nowrap;animation:attevGlow 2.4s ease-in-out infinite}
 .decsec.done{opacity:.85}.decnote{font-size:.88rem;line-height:1.5;padding:.4rem .6rem;border-left:3px solid var(--accent);background:var(--surface-2);border-radius:0 8px 8px 0;margin:.2rem 0 .4rem}
+.decedit{display:grid;gap:.2rem;margin:.35rem 0 .2rem}.decedit .count{display:flex;align-items:center;gap:.25rem}.decedit .ic{width:.8rem;height:.8rem}
 </style>
 
 </head>
@@ -4050,7 +4051,7 @@ function fxLive() {
 
 /* ---------- mail sheet helpers: decisions, short delegate, highlighted original ---------- */
 const sheetView = () => { try { return UI.sheetView || localStorage.getItem('sheetView') || 'simple'; } catch { return UI.sheetView || 'simple'; } };
-function decChosen(m) { return (m.analysis && m.analysis.decisions || []).map((d, i) => { const j = (m.decisionChoices || {})[i]; return j != null && d.options[j] ? { q: d.question, a: d.options[j].label, detail: d.options[j].detail } : null; }).filter(Boolean); }
+function decChosen(m) { return (m.analysis && m.analysis.decisions || []).map((d, i) => { const j = (m.decisionChoices || {})[i]; const ed = ((m.decisionEdits || {})[i] || '').trim(); return j != null && d.options[j] ? { q: d.question, a: ed || d.options[j].label, detail: ed ? '' : d.options[j].detail } : null; }).filter(Boolean); }
 // decisions settled in my own words (추가 지시): the option cards are folded away so they don't contradict what I wrote
 const decKey = m => ((m.analysis && m.analysis.decisions) || []).map(d => d.question).join('|');
 const decByNote = m => m.decidedNote && m.decidedNote.key === decKey(m) && m.decidedNote.text ? m.decidedNote.text : '';
@@ -5338,7 +5339,7 @@ function renderSheet(force) {
         ${decs.length && decByNote(m) && !(UI.decOpen && UI.decOpen[m.id]) ? `<div class="sec decsec done"><h4><span>${ic('gavel')} 결정할 사항 ${decs.length}</span><span class="count">${ic('check')}직접 정함</span></h4>
           <div class="decnote">"${esc(decByNote(m))}"</div>
           <div class="row"><button class="btn small" type="button" data-act="decShow">선택지 다시 보기</button></div></div>` : decs.length ? `<div class="sec decsec"><h4><span>${ic('gavel')} 결정할 사항 ${decs.length}</span>${decChosen(m).length ? `<span class="count">${decChosen(m).length}/${decs.length} 결정함</span>` : ''}</h4>
-          ${decs.map((d, i) => `<div class="dec"><div class="q">${i + 1}. ${esc(d.question)}</div><div class="optrow">${d.options.map((o, j) => `<button class="optchip ${dch[i] === j ? 'on' : ''}" type="button" data-act="decPick" data-i="${i}" data-j="${j}" aria-pressed="${dch[i] === j}"><b>${String.fromCharCode(9312 + j)} ${esc(o.label)}${d.recommend === j ? ' <em class="rec">추천</em>' : ''}</b>${o.detail ? `<span>${esc(o.detail)}</span>` : ''}</button>`).join('')}</div>${d.why && !simple ? `<div class="count">추천 이유: ${esc(d.why)}</div>` : ''}</div>`).join('')}
+          ${decs.map((d, i) => `<div class="dec"><div class="q">${i + 1}. ${esc(d.question)}</div><div class="optrow">${d.options.map((o, j) => `<button class="optchip ${dch[i] === j ? 'on' : ''}" type="button" data-act="decPick" data-i="${i}" data-j="${j}" aria-pressed="${dch[i] === j}"><b>${String.fromCharCode(9312 + j)} ${esc(o.label)}${d.recommend === j ? ' <em class="rec">추천</em>' : ''}</b>${o.detail ? `<span>${esc(o.detail)}</span>` : ''}</button>`).join('')}</div>${dch[i] != null && d.options[dch[i]] ? `<label class="decedit"><span class="count">${ic('pen')}고른 내용 고쳐 쓰기</span><input class="field decin" data-i="${i}" value="${esc((m.decisionEdits || {})[i] || d.options[dch[i]].label)}" placeholder="${esc(d.options[dch[i]].label)}" aria-label="고른 내용 고쳐 쓰기"></label>` : ''}${d.why && !simple ? `<div class="count">추천 이유: ${esc(d.why)}</div>` : ''}</div>`).join('')}
           ${decChosen(m).length ? `<div class="row"><button class="btn small" type="button" data-act="decRedraft">${ic('reply')}결정대로 답장 다시 쓰기</button><span class="count">조교 지시(짧은 버전)에는 결정이 자동으로 들어갑니다.</span></div>` : ''}</div>` : ''}
         ${simple ? ((m.attachments || []).length ? `<div class="sec"><h4><span>${ic('doc')} 첨부파일 ${m.attachments.length}</span></h4><div class="attlist" style="margin:0">${m.attachments.map(x => attChip({ ...x, state: x.text ? 'ok' : 'skip' }) + (x.saved || x.inbox ? `<button class="btn small" type="button" data-act="attOpen" data-id="${m.id}" data-name="${esc(x.name)}" title="원본 열기">${ic('ext')}열기</button>` : '') + attEvBtn(m, x)).join('')}</div></div>` : '') : attSection(m)}
         ${!simple && (a.thread || []).length > 1 ? `<div class="sec"><h4><span>${ic('thread')} 스레드 흐름 ${a.thread.length}통</span></h4><ol class="timeline">${a.thread.map(t => `<li><div><div class="who">${t.date ? esc(fmtShort(t.date)) + ' · ' : ''}${esc(t.from)}</div>${esc(t.gist)}</div></li>`).join('')}</ol></div>` : ''}` :
@@ -6164,7 +6165,7 @@ document.addEventListener('click', async ev0 => {
       case 'sheetView': UI.sheetView = el.dataset.v; try { localStorage.setItem('sheetView', el.dataset.v); } catch {} return renderSheet(true);
       case 'showRest': UI['showRest' + el.dataset.k] = !UI['showRest' + el.dataset.k]; return renderSheet(true);
       case 'dlgTab': UI.dlgTab = el.dataset.v; return renderSheet(true);
-      case 'decPick': { const i = +el.dataset.i, j = +el.dataset.j, cur = { ...(m.decisionChoices || {}) }; if (cur[i] === j) delete cur[i]; else cur[i] = j; delete UI.edits.dlgShort; await patch('emails', m.id, { decisionChoices: null, decidedNote: null }); await patch('emails', m.id, { decisionChoices: cur }); return renderSheet(true); }
+      case 'decPick': { const i = +el.dataset.i, j = +el.dataset.j, cur = { ...(m.decisionChoices || {}) }; if (cur[i] === j) delete cur[i]; else cur[i] = j; { const ed = { ...(m.decisionEdits || {}) }; if (ed[i] != null) { delete ed[i]; await patch('emails', m.id, { decisionEdits: null }); await patch('emails', m.id, { decisionEdits: ed }); } } delete UI.edits.dlgShort; await patch('emails', m.id, { decisionChoices: null, decidedNote: null }); await patch('emails', m.id, { decisionChoices: cur }); return renderSheet(true); }
       case 'decRedraft': return redraft(m, '');
       case 'dlSel': { const sel = { ...(m.delegateSel || {}) }; sel[+el.dataset.i] = el.checked; delete UI.edits.dlgShort; await patch('emails', m.id, { delegateSel: sel }); return renderSheet(true); }
       case 'dlAdd': { const t = ($('dlAdd').value || '').trim(); if (!t) return; const items = [...delegateItems(m), { text: t.slice(0, 200), essential: true }]; delete UI.edits.dlgShort; await patch('emails', m.id, { delegate: { items } }); return renderSheet(true); }
@@ -6418,8 +6419,19 @@ document.addEventListener('click', async ev0 => {
   } catch (e) { dbErr(e); }
 });
 document.addEventListener('input', e => { if (e.target.matches && e.target.matches('[data-wc]')) wcLive(); if (e.target.matches && e.target.matches('[data-fx-k], #fxShort, #fxLong')) fxLive(); if (e.target.matches && e.target.matches('input[name=fontBody], #fontHead, #fontSmall, #fontSize')) fontLive(); });
-document.addEventListener('change', e => {
+document.addEventListener('change', async e => {
   const t = e.target;
+  // an edited decision ("11/18 09:00" → "11/18 10:00"): kept with the mail and used in the reply and the assistant mail
+  if (t.classList && t.classList.contains('decin')) {
+    const m = S.emails.find(x => x.id === UI.openId); if (!m) return;
+    const i = +t.dataset.i, d = ((m.analysis || {}).decisions || [])[i], j = (m.decisionChoices || {})[i];
+    const ed = { ...(m.decisionEdits || {}) }, v = t.value.trim();
+    if (!v || (d && d.options[j] && v === d.options[j].label)) delete ed[i]; else ed[i] = v.slice(0, 300);
+    undoArm('결정 내용 고치기'); delete UI.edits.dlgShort;
+    await patch('emails', m.id, { decisionEdits: null }); await patch('emails', m.id, { decisionEdits: ed });
+    toast(ed[i] ? '고친 내용으로 정했습니다. "결정대로 답장 다시 쓰기"를 누르면 답장에 들어갑니다.' : '원래 선택지로 되돌렸습니다.');
+    return;
+  }
   if (t.id === 'cmdPickAll') document.querySelectorAll('.cmdpick').forEach(b => { b.checked = t.checked; });
   if (t.id === 'cmdPickAll' || (t.classList && t.classList.contains('cmdpick'))) {
     const all = [...document.querySelectorAll('.cmdpick')], n = all.filter(b => b.checked).length, el = $('cmdPickN');
