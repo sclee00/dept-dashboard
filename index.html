@@ -938,6 +938,13 @@ button.hw{cursor:pointer}button.hw:hover{border-color:var(--accent)}
 .ddrow i{font-style:normal;font-size:.65rem;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:0 .35rem;margin-left:auto;flex:none}
 .ddrow.add{color:var(--muted)}.ddrow.add b{color:var(--muted)}.ddrow.none{cursor:default;color:var(--muted)}
 .ddhw{max-width:22rem}.ddhw .ddrow{width:100%}
+.cthw{min-width:13rem;max-width:19rem}.cthw .ctnav{margin-left:auto;display:inline-flex;gap:.1rem}.cthw .ctnav .hwedit{margin-left:0;font-size:.95rem;min-width:1.1rem}
+.cthw .hwv small{font-weight:400;font-size:.74rem;color:var(--muted)}
+.ctlines{display:flex;flex-direction:column;gap:.05rem;min-width:0}
+.ctcopy{display:inline-flex;align-items:center;gap:.3rem;border:0;background:none;color:var(--ink);font-family:var(--mono,monospace);font-size:.74rem;padding:0;cursor:pointer;text-align:left;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ctcopy .ic{width:.7rem;height:.7rem;opacity:.5;flex:none}.ctcopy:hover{color:var(--accent)}
+.ctitem{display:flex;gap:.6rem;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:.45rem .6rem;border:1px solid var(--line);border-radius:10px;margin-bottom:.35rem}
+.ctitem.added{opacity:.6}.ctinfo{display:grid;gap:.1rem;min-width:0}.ctinfo span{font-size:.82rem;color:var(--muted)}.ctinfo .mono{font-family:var(--mono,monospace);font-size:.78rem;color:var(--ink)}
 </style>
 
 </head>
@@ -1112,6 +1119,7 @@ const IP = {
   마감:'<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M5 3 2 6M19 3l3 3"/>',
   할일:'<rect x="4" y="4" width="16" height="16" rx="3"/><path d="m8 12 3 3 5-6"/>',
   archive:'<rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10h14V9M10 13h4"/>',
+  user:'<circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-6 8-6s8 2 8 6"/>',
   info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.6v.4"/>',
   spark:'<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6.3 6.3l2.5 2.5M15.2 15.2l2.5 2.5M6.3 17.7l2.5-2.5M15.2 8.8l2.5-2.5"/>',
   copy:'<rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/>',
@@ -1861,7 +1869,12 @@ function renderWidgets() {
   const dd = `<div class="hw ddhw"><span class="hwl">${ic('flag')}D-day <button type="button" class="hwedit" data-act="ddayEdit" title="내가 지정하는 D-day 고르기" aria-label="D-day 지정">${ic('pen')}</button></span>${dl.filter(x => !x.pin).map(ddRow).join('') || '<span class="ddrow none"><b>—</b><span>다가오는 중요 일정 없음</span></span>'}${hasPin ? dl.filter(x => x.pin).map(ddRow).join('') : `<button type="button" class="ddrow add" data-act="ddayEdit"><b>＋</b><span>D-day 지정하기</span></button>`}</div>`;
   const sn = S.settings.snippets || [];
   const sp = `<div class="hw snhw"><span class="hwl">${ic('copy')}상용구 <button type="button" class="hwedit" data-act="snipEdit" title="상용구 추가·편집" aria-label="상용구 편집">${ic('pen')}</button></span><div class="snlist">${sn.length ? sn.map((x, i) => `<button type="button" class="snchip" data-act="snipCopy" data-i="${i}" title="${esc(x.text)}">${esc(x.label || x.text)}${ic('copy')}</button>`).join('') : '<button type="button" class="snchip" data-act="snipEdit">+ 이메일·전화번호 등 추가</button>'}</div></div>`;
-  box.innerHTML = nx + dd + sp;
+  const cl = contactsAll(); if (UI.ctIdx == null || UI.ctIdx >= cl.length) UI.ctIdx = 0;
+  const c = cl[UI.ctIdx];
+  const cp = (v, label) => v ? `<button type="button" class="ctcopy" data-act="ctCopy" data-v="${esc(v)}" title="${label} 복사">${esc(v)}${ic('copy')}</button>` : '';
+  const ct = `<div class="hw cthw"><span class="hwl">${ic('user')}연락처${cl.length ? ` <span class="mono">${UI.ctIdx + 1}/${cl.length}</span>` : ''}<span class="ctnav">${cl.length > 1 ? `<button type="button" class="hwedit" data-act="ctNav" data-d="-1" aria-label="이전 연락처">‹</button><button type="button" class="hwedit" data-act="ctNav" data-d="1" aria-label="다음 연락처">›</button>` : ''}${c ? `<button type="button" class="hwedit" data-act="ctEdit" title="이 연락처 고치기" aria-label="연락처 고치기">${ic('pen')}</button>` : ''}<button type="button" class="hwedit" data-act="ctNew" title="연락처 직접 추가" aria-label="연락처 추가">＋</button></span></span>
+    ${c ? `<span class="hwv">${esc(c.name)}${c.title || c.org ? ` <small>${esc([c.title, c.org].filter(Boolean).join(' · '))}</small>` : ''}</span><span class="ctlines">${cp(c.phone, '전화번호')}${cp(c.email, '이메일')}</span>` : '<span class="hwv count">메일을 분석하면 서명의 연락처를 추가할 수 있습니다</span>'}</div>`;
+  box.innerHTML = nx + dd + ct + sp;
 }
 // 2026-12-18, 2026.12.18, 12/18, 12.18 → YYYY-MM-DD (a date without a year is the next one to come)
 function normDate(t) {
@@ -3390,7 +3403,7 @@ const UNDO_LABEL = {
   delRule: '아이콘 규칙 삭제', skipOcc: '반복 일정 한 번 빼기', edSave: '일정 편집', bdSave: '불가 시간 설정', saveSettings: '설정 변경', imSave: '아이콘 색·이름',
   pushG: '구글에 추가', fEvent: '일정 추가', fBlock: '불가 시간 추가', taskForm: '할 일 추가', importData: '파일 가져오기'
 };
-const UNDO_SKIP = new Set(['ddaySave', 'ddayClear', 'verReload', 'attEvents', 'snipCopy', 'snipEdit', 'ddayEdit', 'lockNow', 'lockSave', 'tip', 'daySel', 'dayMode', 'dayNav', 'dayGo', 'fwdCopy', 'gemCancel', 'scriptCopy', 'scriptSetup', 'scriptTest', 'scriptOn', 'copyReply', 'copyDraft', 'gemEmbed', 'gemDockOpen', 'qTab', 'gemNew', 'gemTall', 'gemZoom', 'histUndo', 'histRedo', 'histOne', 'histGroup', 'histFold', 'stPing', 'pushAllG', 'aiKeySave', 'aiKeyClear', 'aiTest', 'aiMode', 'aiModelSel', 'relayClip', 'stOpen', 'tidyOpen', 'tidyDel', 'tidyTime', 'tidyMerge', 'inboxRun', 'analyzeMail', 'tgShow', 'tgHide', 'phoneLink', 'gDel', 'fltImp', 'fltIcons', 'fltTog', 'fltClear', 'fltClose', 'cmdToAI', 'cmdPick', 'cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
+const UNDO_SKIP = new Set(['ctNav', 'ctCopy', 'ctNew', 'ctEdit', 'ctAdd', 'ctSave', 'ctDel', 'ddaySave', 'ddayClear', 'verReload', 'attEvents', 'snipCopy', 'snipEdit', 'ddayEdit', 'lockNow', 'lockSave', 'tip', 'daySel', 'dayMode', 'dayNav', 'dayGo', 'fwdCopy', 'gemCancel', 'scriptCopy', 'scriptSetup', 'scriptTest', 'scriptOn', 'copyReply', 'copyDraft', 'gemEmbed', 'gemDockOpen', 'qTab', 'gemNew', 'gemTall', 'gemZoom', 'histUndo', 'histRedo', 'histOne', 'histGroup', 'histFold', 'stPing', 'pushAllG', 'aiKeySave', 'aiKeyClear', 'aiTest', 'aiMode', 'aiModelSel', 'relayClip', 'stOpen', 'tidyOpen', 'tidyDel', 'tidyTime', 'tidyMerge', 'inboxRun', 'analyzeMail', 'tgShow', 'tgHide', 'phoneLink', 'gDel', 'fltImp', 'fltIcons', 'fltTog', 'fltClear', 'fltClose', 'cmdToAI', 'cmdPick', 'cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
 function undoSnap() {
   const o = { settings: JSON.parse(JSON.stringify(S.settings)) };
   for (const c of COLS) o[c] = JSON.parse(JSON.stringify(S[c]));
@@ -5363,6 +5376,7 @@ function renderSheet(force) {
       ${m.analysis && a.myAction ? `<div class="myact">${ic('hand')}<div><b>내가 할 일</b><span>${esc(a.myAction)}</span></div></div>` : ''}
       ${m.analysis ? `<div class="sec"><h4>요약</h4><div class="summary">${esc(m.summary)}
         ${!simple && (a.openIssues || []).length ? `<ul class="issues">${a.openIssues.map(x => `<li>${ic('alert')}<span>${esc(x)}</span></li>`).join('')}</ul>` : ''}</div></div>
+        ${ctSec(m)}
         ${decs.length && decByNote(m) && !(UI.decOpen && UI.decOpen[m.id]) ? `<div class="sec decsec done"><h4><span>${ic('gavel')} 결정할 사항 ${decs.length}</span><span class="count">${ic('check')}직접 정함</span></h4>
           <div class="decnote">"${esc(decByNote(m))}"</div>
           <div class="row"><button class="btn small" type="button" data-act="decShow">선택지 다시 보기</button></div></div>` : decs.length ? `<div class="sec decsec"><h4><span>${ic('gavel')} 결정할 사항 ${decs.length}</span>${decChosen(m).length ? `<span class="count">${decChosen(m).length}/${decs.length} 결정함</span>` : ''}</h4>
@@ -5481,6 +5495,7 @@ ${keyLine() ? keyLine() + '\n참석 여부를 묻는 메일인데 그 행사 날
   "delegateTitle": "업무 지시 메일 제목 (짧게)",
   "delegateItems": [{"text": "조교가 할 일 한 줄 (개조식, 산출물·기한 포함)", "essential": true 또는 false}],
   "myAction": "내가 지금 해야 할 일을 한두 줄로 (예: 11/3까지 예외 교과목 여부를 정해 조교에게 회신. 나머지는 조교에게 맡기면 됨)",
+  "contacts": [{"name": "이름", "title": "직책 또는 빈 문자열", "org": "소속 또는 빈 문자열", "phone": "전화번호 또는 빈 문자열", "email": "이메일 또는 빈 문자열"}],  // 메일 본문·서명에 연락처(전화나 이메일)가 적힌 사람만, 적힌 그대로. 나 자신은 빼. 없으면 빈 배열
   "decisions": [{"question": "내가 정해야 할 것 (질문 한 줄)", "options": [{"label": "선택지 (짧게)", "detail": "고르면 어떻게 되는지 한 줄"}], "recommend": 추천 선택지 번호(0부터) 또는 null, "why": "추천 이유 한 줄 또는 null"}],
   "highlights": [{"text": "원문에서 글자 그대로 옮긴 짧은 구절", "type": "deadline | request | decision | date | attachment | warning"}]
 }
@@ -5503,6 +5518,47 @@ ${(atts || []).length ? ATT_RULES + ' 형식: "attachments": [{"name": "파일 �
 """
 ${raw.slice(0, 24000)}
 """${attPromptBlock(atts)}`;
+}
+/* ---------- contacts: name, title, org, phone, email — kept with the settings so every device has them ---------- */
+const ctKey = c => (c.email || '').toLowerCase() || (c.name || '') + '|' + String(c.phone || '').replace(/\D/g, '');
+function cleanContacts(arr) {
+  const cut = (v, n) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, n);
+  return (Array.isArray(arr) ? arr : []).map(c => ({ name: cut(c && c.name, 40), title: cut(c && c.title, 40), org: cut(c && c.org, 60), phone: cut(c && c.phone, 30), email: (cut(c && c.email, 80).match(/[\w.+-]+@[\w-]+(\.[\w-]+)+/) || [''])[0] }))
+    .filter(c => c.name && (c.phone || c.email) && !/^(이름|name)$/i.test(c.name)).slice(0, 8);
+}
+const contactsAll = () => (S.settings.contacts || []).slice().sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+const contactKnown = c => (S.settings.contacts || []).find(x => ctKey(x) === ctKey(c) || (c.email && x.email && x.email.toLowerCase() === c.email.toLowerCase()) || (x.name === c.name && c.phone && String(x.phone).replace(/\D/g, '') === String(c.phone).replace(/\D/g, '')));
+// a signature block read without AI (when the analysis gave no contacts): a line with a phone or an e-mail and the name line just above
+function contactsFromText(text) {
+  const lines = String(text || '').split('\n').map(l => l.replace(/^>+\s*/, '').trim());
+  const out = [];
+  for (let i = 0; i < lines.length; i++) {
+    const em = lines[i].match(/[\w.+-]+@[\w-]+(\.[\w-]+)+/); if (!em || /^(보낸|받는|from|to|cc|참조)\b/i.test(lines[i]) || /(보낸 사람|받는 사람|From:|To:|Cc:)/i.test(lines[i])) continue;
+    const blk = lines.slice(Math.max(0, i - 4), i + 3), all = blk.join('\n');
+    const ph = (all.match(/(?:T\.?|Tel\.?|전화|☎|M\.?|HP)?\s*:?\s*(0\d{1,2}[-.\s)]\s?\d{3,4}[-.\s]\d{4})/i) || [])[1] || '';
+    const nl = blk.find(l => /^[가-힣]{2,4}\s*[\/|·,]/.test(l) || /^[가-힣]{2,4}\s+(교수|박사|선생|담당|팀장|과장|주무관|조교|대표|이사|연구원)/.test(l)) || '';
+    if (!nl) continue;
+    const parts = nl.split(/\s*[\/|·,]\s*|\s+/).filter(Boolean);
+    out.push({ name: parts[0], title: parts[1] || '', org: parts.slice(2).join(' '), phone: ph.replace(/\s+/g, ''), email: em[0] });
+  }
+  return cleanContacts(out);
+}
+const mailContacts = m => { const a = m.analysis || {}; const list = (a.contacts && a.contacts.length ? cleanContacts(a.contacts) : contactsFromText(m.raw)); const me = (mfOf().name || '').trim(); return list.filter(c => c.name !== me && !/^sclee/i.test(c.email || '')); };
+function ctSec(m) {
+  const list = mailContacts(m).filter(c => !(m.ctSkip || []).includes(ctKey(c))); if (!list.length) return '';
+  return `<div class="sec"><h4><span>${ic('user')} 연락처 ${list.length}</span></h4>${list.map((c, i) => { const k = contactKnown(c), same = k && ['title', 'org', 'phone', 'email'].every(f => !c[f] || k[f] === c[f]);
+    return `<div class="ctitem ${same ? 'added' : ''}"><div class="ctinfo"><b>${esc(c.name)}</b>${c.title || c.org ? `<span>${esc([c.title, c.org].filter(Boolean).join(' · '))}</span>` : ''}<span class="mono">${esc([c.phone, c.email].filter(Boolean).join(' · '))}</span></div>
+      ${same ? '<span class="pill replied">연락처에 있음</span>' : `<div class="row"><button class="btn small primary" type="button" data-act="ctAdd" data-k="${esc(ctKey(c))}">${k ? '연락처 고치기' : '연락처에 추가'}</button><button class="btn small" type="button" data-act="ctSkip" data-k="${esc(ctKey(c))}">건너뛰기</button></div>`}</div>`; }).join('')}</div>`;
+}
+function ctDlg(c, idx) {
+  c = c || { name: '', title: '', org: '', phone: '', email: '' };
+  const f = (id, label, v, ph) => `<label>${label}<input class="field" id="${id}" value="${esc(v || '')}" placeholder="${ph || ''}"></label>`;
+  $('dlgRoot').innerHTML = `<div class="scrim" data-act="closeDlg"></div><div class="dlg"><div class="dlgbox" role="dialog" aria-modal="true" aria-labelledby="dlgT">
+    <h3 id="dlgT">${ic('user')}${idx != null ? '연락처 고치기' : '연락처 추가'}</h3>
+    <span class="count">내용을 확인하고 저장하세요.</span>
+    ${f('ctName', '이름', c.name)}${f('ctTitle', '직책', c.title, '예: 담당, 교수')}${f('ctOrg', '소속', c.org)}${f('ctPhone', '전화번호', c.phone)}${f('ctEmail', '이메일', c.email)}
+    <div class="row" style="justify-content:flex-end">${idx != null ? `<button class="btn danger" type="button" data-act="ctDel" data-i="${idx}">지우기</button>` : ''}<button class="btn" type="button" data-act="closeDlg">취소</button><button class="btn primary" type="button" data-act="ctSave" data-i="${idx == null ? '' : idx}">저장</button></div></div></div>`;
+  UI.dlg = 'contact'; setTimeout(() => $('ctName').focus(), 30);
 }
 function cleanAnalysis(a) {
   a = a && typeof a === 'object' ? a : {};
@@ -5529,6 +5585,7 @@ function cleanAnalysis(a) {
     delegateTitle: a.delegateTitle ? String(a.delegateTitle).slice(0, 120) : '',
     delegateItems: (Array.isArray(a.delegateItems) ? a.delegateItems : []).filter(x => x && (x.text || typeof x === 'string')).slice(0, 12).map(x => typeof x === 'string' ? { text: x.slice(0, 200), essential: true } : { text: String(x.text).slice(0, 200), essential: x.essential !== false }),
     myAction: a.myAction ? String(a.myAction).slice(0, 300) : '',
+    contacts: cleanContacts(a.contacts),
     decisions: (Array.isArray(a.decisions) ? a.decisions : []).filter(d => d && d.question && Array.isArray(d.options) && d.options.length >= 2).slice(0, 5).map(d => { const opts = d.options.filter(o => o && (o.label || typeof o === 'string')).slice(0, 5).map(o => typeof o === 'string' ? { label: o.slice(0, 60), detail: '' } : { label: String(o.label).slice(0, 60), detail: String(o.detail || '').slice(0, 160) }); const r = Number.isInteger(d.recommend) && d.recommend >= 0 && d.recommend < opts.length ? d.recommend : null; return { question: String(d.question).slice(0, 200), options: opts, recommend: r, why: d.why ? String(d.why).slice(0, 200) : '' }; }),
     highlights: (Array.isArray(a.highlights) ? a.highlights : []).filter(h => h && h.text).slice(0, 30).map(h => ({ text: String(h.text).slice(0, 120), type: HL_TYPES[h.type] ? h.type : 'request' }))
   };
@@ -6077,6 +6134,25 @@ document.addEventListener('click', async ev0 => {
       case 'snipCopy': { const x = (S.settings.snippets || [])[+el.dataset.i]; if (!x) return; try { await navigator.clipboard.writeText(x.text); } catch { prompt('복사할 내용', x.text); return; } el.classList.add('done'); setTimeout(() => el.classList.remove('done'), 900); toast(`복사했습니다: ${x.label || x.text}`); return; }
       case 'snipEdit': listEditDlg('snip'); return;
       case 'ddayEdit': ddayDlg(); return;
+      case 'ctNav': { const n = contactsAll().length; if (n) UI.ctIdx = ((UI.ctIdx || 0) + (+el.dataset.d) + n) % n; renderWidgets(); return; }
+      case 'ctCopy': { try { await navigator.clipboard.writeText(el.dataset.v); toast('복사했습니다: ' + el.dataset.v); } catch { prompt('복사할 내용', el.dataset.v); } return; }
+      case 'ctNew': ctDlg(); return;
+      case 'ctEdit': { const c = contactsAll()[UI.ctIdx || 0]; if (c) ctDlg(c, (S.settings.contacts || []).indexOf((S.settings.contacts || []).find(x => ctKey(x) === ctKey(c)))); return; }
+      case 'ctAdd': { // from a mail: always shown for checking before it is saved
+        const m = S.emails.find(x => x.id === UI.openId), c = m && mailContacts(m).find(x => ctKey(x) === el.dataset.k); if (!c) return;
+        const k = contactKnown(c); ctDlg(k ? { ...k, ...Object.fromEntries(Object.entries(c).filter(([, v]) => v)) } : c, k ? (S.settings.contacts || []).indexOf(k) : null); return;
+      }
+      case 'ctSkip': { const m = S.emails.find(x => x.id === UI.openId); if (!m) return; await patch('emails', m.id, { ctSkip: [...(m.ctSkip || []), el.dataset.k] }); return; }
+      case 'ctSave': {
+        const c = cleanContacts([{ name: $('ctName').value, title: $('ctTitle').value, org: $('ctOrg').value, phone: $('ctPhone').value, email: $('ctEmail').value }])[0];
+        if (!c) return toast('이름과, 전화번호나 이메일 중 하나는 넣어 주세요.');
+        const list = (S.settings.contacts || []).slice(), i = el.dataset.i === '' ? -1 : +el.dataset.i;
+        if (i >= 0 && list[i]) list[i] = c; else { const dup = list.findIndex(x => ctKey(x) === ctKey(c)); if (dup >= 0) list[dup] = c; else list.push(c); }
+        await saveSettings({ ...S.settings, contacts: list });
+        $('dlgRoot').innerHTML = ''; UI.dlg = null; UI.ctIdx = contactsAll().findIndex(x => ctKey(x) === ctKey(c)); renderHeader(); if (UI.openId) { try { renderSheet(true); } catch {} }
+        toast(`연락처에 저장했습니다: ${c.name}`); return;
+      }
+      case 'ctDel': { const list = (S.settings.contacts || []).slice(); list.splice(+el.dataset.i, 1); await saveSettings({ ...S.settings, contacts: list }); $('dlgRoot').innerHTML = ''; UI.dlg = null; renderHeader(); toast('연락처를 지웠습니다.'); return; }
       case 'ddaySave': { const date = $('ddDate').value, title = $('ddTitle').value.trim(); if (!isDate(date) || !title) return toast('날짜와 이름을 넣어 주세요.'); await saveSettings({ ...S.settings, ddayPin: { date, title }, ddays: [] }); $('dlgRoot').innerHTML = ''; UI.dlg = null; renderHeader(); toast('D-day를 지정했습니다.'); return; }
       case 'ddayClear': await saveSettings({ ...S.settings, ddayPin: null, ddays: [] }); $('dlgRoot').innerHTML = ''; UI.dlg = null; renderHeader(); toast('지정한 D-day를 뺐습니다.'); return;
       case 'leSave': {
