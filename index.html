@@ -2918,6 +2918,23 @@ function parseCommand(raw) {
     }
   };
   const ymdOf = (mo, d) => { const y = parse(today).getFullYear(); let s = `${y}-${pad(mo)}-${pad(d)}`; if (s < addDays(today, -60)) s = `${y + 1}-${pad(mo)}-${pad(d)}`; return isDate(s) ? s : ''; };
+  // a span of days first: "11/27~28", "11/27~11/28", "11월 27일~28일", "11월 27~28일", "2026-11-27~2026-11-28" → one event over those days
+  {
+    const W = '(?:\\s*\\([월화수목금토일]\\))?';
+    const reS = new RegExp('(?:(\\d{4})[-.]\\s*)?(\\d{1,2})\\s*(?:[/.\\-]|월)\\s*(\\d{1,2})\\s*일?\\.?' + W + '\\s*(?:부터|~|∼|～|–|-)\\s*(?:(?:(\\d{4})[-.]\\s*)?(\\d{1,2})\\s*(?:[/.\\-]|월)\\s*)?(\\d{1,2})\\s*일?\\.?' + W + '\\s*(?:까지)?(?![\\d:시])');
+    const ms = t.match(reS);
+    if (ms) {
+      const y0 = ms[1] ? +ms[1] : null, mo = +ms[2], d0 = +ms[3];
+      let mo2 = ms[5] ? +ms[5] : mo, d2 = +ms[6];
+      if (!ms[5] && d2 < d0) mo2 = mo + 1;                       // "11/30~2" runs into the next month
+      const st = y0 ? `${y0}-${pad(mo)}-${pad(d0)}` : ymdOf(mo, d0);
+      if (st && mo >= 1 && mo <= 12 && d0 >= 1 && d0 <= 31 && d2 >= 1 && d2 <= 31) {
+        const sy = +st.slice(0, 4), ey = ms[4] ? +ms[4] : (mo2 > 12 ? sy + 1 : mo2 < mo ? sy + 1 : sy), em = ((mo2 - 1) % 12) + 1;
+        const en = `${ey}-${pad(em)}-${pad(d2)}`;
+        if (isDate(en) && en > st) { dates.push({ d: st, until: false }); r.endDate = en; t = t.replace(ms[0], ' '); }
+      }
+    }
+  }
   take(/(\d{4})[-.](\d{1,2})[-.](\d{1,2})/, x => `${x[1]}-${pad(x[2])}-${pad(x[3])}`);
   take(/(\d{1,2})\s*월\s*(\d{1,2})\s*일/, x => ymdOf(+x[1], +x[2]));
   take(/(?<![\d:])(\d{1,2})\/(\d{1,2})(?![\d:])/, x => ymdOf(+x[1], +x[2]));
@@ -2957,6 +2974,7 @@ function parseCommand(raw) {
   if (m && r.time && !r.endTime) r.endTime = fromMin(Math.min(toMin(r.time) + +m[1], 1439));
   if (r.time && !r.endTime) r.endTime = fromMin(Math.min(toMin(r.time) + 60, 1439));
 
+  if (r.endDate && !r.time) r.allDay = true;
   // assign dates
   for (const x of dates) {
     if (r.repeat && x.until) r.repeat.until = x.d;
