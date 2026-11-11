@@ -3799,6 +3799,8 @@ async function webEvents(url, ask, found) {
   // remember pages that worked, so the next search can reuse them
   if (found) { const sites = (S.settings.sites || []).filter(x => x.url !== url).concat({ url, title: r.title || (UI.webFound && UI.webFound.title) || url }).slice(-20); saveSettings({ ...S.settings, sites }).catch(() => {}); }
   UI.webSrc = { url, title: r.title || url, note: found && UI.webFound ? UI.webFound.note : '' };
+  // tidy the page text (Windows line breaks, menus) and start near the first date when it is long
+  if (r.text) { r.text = r.text.replace(/\r/g, '').replace(/[ \t]+/g, ' ').replace(/ *\n */g, '\n').replace(/\n{3,}/g, '\n\n'); if (r.text.length > 14000) { const k = r.text.search(/\d{1,2}\s*[./]\s*\d{1,2}\s*\.?\s*\([월화수목금토일]\)|\d{4}\s*[-.]\s*\d{1,2}\s*[-.]\s*\d{1,2}/); if (k > 600) r.text = r.text.slice(k - 600); } }
   if (r.type === 'pdf') { st.className = 'status err'; st.textContent = '이 주소는 PDF 파일입니다. 내려받아 자동 처리 칸에 파일로 넣어 주세요.'; return; }
   if (!r.text || r.text.length < 40) { st.className = 'status err'; st.textContent = '페이지에 글이 거의 없습니다. 일정이 그림이거나 로그인이 필요한 페이지일 수 있습니다.'; return; }
   return runCommandAI(extractPrompt(`웹페이지 "${r.title || url}" (${url})`, r.text + (r.links && r.links.length ? '\n\n(페이지 안 링크: ' + r.links.map(l => l.text).join(', ') + ')' : ''), ask));
