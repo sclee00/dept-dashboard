@@ -2455,6 +2455,26 @@ function calTag(id) {
 const calTagHtml = id => { const t = calTag(id); return t ? `<span class="caltag" style="color:${esc(/^#[0-9a-f]{6}$/i.test(t.c || '') ? t.c : '#e5484d')}">${esc(t.t)}</span>` : ''; };
 const evCal = e => (e.googleId && e.googleId !== 'pushed' ? (e.googleCal || 'primary') : '') || e.gTarget || '';
 const calInfo = id => G.cals.find(c => c.id === id) || (id === 'primary' ? G.cals.find(c => c.primary) : null) || { id, name: id === 'primary' ? '기본 캘린더' : id, color: '' };
+// events I sent to Google that are no longer there (deleted in Google Calendar): asked before removing them here too
+async function gGoneCheck(a, b, cals) {
+  if (G.partial || UI.goneAsking) return;
+  const read = id => cals.some(c => sameCal(c, id || 'primary'));
+  const there = (gid, cal) => G.events.some(g => sameCal(g.cal, cal || 'primary') && (g.id === gid || String(g.id).startsWith(gid + '_') || Object.values(g).includes(gid)));
+  const skip = UI.goneSkip || (UI.goneSkip = new Set());
+  const gone = S.events.filter(e => e.googleId && e.googleId !== 'pushed' && read(e.googleCal) && !skip.has(e.id)
+    && e.date >= a && (e.endDate || e.date) < b && !repDays(e) && Date.now() - (e._u || 0) > 120000 && !there(e.googleId, e.googleCal));
+  if (!gone.length) return;
+  UI.goneAsking = true;
+  try {
+    const v = await gAsk({ title: `구글 캘린더에서 지워진 일정 ${gone.length}개`, icon: 'gcal',
+      rows: gone.slice(0, 12).map(e => [fmtShort(e.date), e.title + (e.time ? ' · ' + e.time : '')]).concat(gone.length > 12 ? [['…', `외 ${gone.length - 12}개`]] : []),
+      note: '대시보드에서 구글로 보냈던 일정인데, 구글 캘린더에서 지워진 것 같습니다.', noLabel: '나중에',
+      choices: [{ v: 'keep', label: '대시보드에는 남기기' }, { v: 'del', label: '대시보드에서도 지우기', primary: true, danger: true }] });
+    if (v === 'del') { undoArm('구글에서 지워진 일정 정리'); for (const e of gone) await del('events', e.id); toast(`대시보드에서도 ${gone.length}개를 지웠습니다. 잘못이면 되돌리기로 살릴 수 있습니다.`); }
+    else if (v === 'keep') { undoArm('구글 연결 끊기'); for (const e of gone) await patch('events', e.id, { googleId: '', googleCal: '', googleLink: '' }); toast('대시보드에만 남겼습니다. 다시 보내려면 일정 옆 "구글로"를 누르세요.'); }
+    else gone.forEach(e => skip.add(e.id));
+  } finally { UI.goneAsking = false; }
+}
 async function gLoad(force) {
   if (!gReady()) return;
   if (S.settings.googleShow === false) { G.events = []; G.storedAt = 0; G.changedAt = 0; gCacheClear(); G.state = 'hidden'; renderAll(); return; }
@@ -2488,6 +2508,7 @@ async function gLoad(force) {
     const diff0 = added || changedN || removed || !G.changedAt;
     if (diff0) { G.changedAt = Date.now(); if (fsReady()) { DRIVE.dirty = true; clearTimeout(DRIVE.timer); DRIVE.timer = setTimeout(syncNow, 1500); } }
     gCacheSave();
+    setTimeout(() => gGoneCheck(a, b, cals).catch(() => {}), 300);
     const diff = [added && `새 일정 ${added}건`, changedN && `바뀐 일정 ${changedN}건`, removed && `없어진 일정 ${removed}건`].filter(Boolean).join(' · ');
     if (hadData && diff && (G.fromCache || !force)) toast('구글 캘린더 업데이트: ' + diff);
     G.fromCache = false;
@@ -7224,7 +7245,7 @@ try {
     .observe(ps, { childList: true, subtree: true, characterData: true });
 } catch {}
 setInterval(() => { if (UI.qtab === 'stat' && !document.hidden) renderStat(); }, 30000);
-if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__dd = { S, sample, add, UNDO, undoArm, doUndo, patchItem: (c, id, d) => patch(c, id, d), replyFmt, delegFmt, fixNames, keyLine, snapshot, mergeIn, renderAll, FS, G, parseEdit, normalizeCmd, pickDT, parseCommand };
+if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__dd = { S, sample, gLoad, add, UNDO, undoArm, doUndo, patchItem: (c, id, d) => patch(c, id, d), replyFmt, delegFmt, fixNames, keyLine, snapshot, mergeIn, renderAll, FS, G, parseEdit, normalizeCmd, pickDT, parseCommand };
 })();
 </script>
 </body>
