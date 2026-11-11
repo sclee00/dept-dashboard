@@ -978,6 +978,7 @@ button.hw{cursor:pointer}button.hw:hover{border-color:var(--accent)}
 .cmdrow.off .cmdopts{opacity:.4}
 .caltag{font-weight:800;margin-right:.25em;white-space:nowrap}
 .caltags{display:grid;gap:.35rem}.ctagrow{display:grid;grid-template-columns:minmax(0,1fr) 8rem 2.4rem;gap:.4rem;align-items:center}.ctagrow>span{display:flex;align-items:center;gap:.35rem;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ctagrow input[type=color]{width:2.4rem;height:2rem;padding:0;border:1px solid var(--line);border-radius:6px;background:none}
+.impbtn.ask{border:1px dashed var(--amber);color:var(--amber);background:none}
 </style>
 
 </head>
@@ -1271,7 +1272,9 @@ const ICON_LEGEND = [['개인', '개인 일정'], ['interview', '면접'], ['hir
 
 /* ---------- event importance: 중요 / 일반 ---------- */
 const IMP_HIGH = /면접|채용|임용|공개\s*발표|위원회|심의|평의원|이사회|총장|학장|교무처|기획처|본부|감사|평가|인증|공청회|교수회의|학과회의|마감|제출|심사|예산|입시|학위|디펜스|defense|발표|출장|병원|진료|수술|장례|조문|결혼식|시험|성적|감독|입학식|졸업식|deadline/i;
-const autoImp = (title, kind) => kind === '마감' || IMP_HIGH.test(String(title || '')) ? 'high' : 'normal';
+// a guess only: shown as a suggestion ("중요?") — importance itself is set only when I choose it
+const suggestImp = (title, kind) => kind === '마감' || IMP_HIGH.test(String(title || '')) ? 'high' : 'normal';
+const autoImp = () => 'normal';
 const impOfEvent = e => e.imp === 'high' || e.imp === 'normal' ? e.imp : autoImp(e.title, e.kind);
 const gKey = g => `g:${g.id}:${g.date}`;
 function impOfG(g) { const m = (S.marks || []).find(x => x.id === gKey(g)); return m && (m.imp === 'high' || m.imp === 'normal') ? m.imp : autoImp(g.title); }
@@ -3054,7 +3057,7 @@ function parseCommand(raw) {
     .replace(/\s(일정|스케줄)$/, '').trim();
   r.title = title || (r.type === 'block' ? '불가' : r.type === 'task' ? '할 일' : '일정');
   if (r.type === 'event') r.kind = /마감|제출/.test(r.title) ? '마감' : /강의|수업|학사|시험|개강|종강|졸업|입학/.test(r.title) ? '학사' : /행사|세미나|학회|전시|축제|식사|회식|발표회|설명회/.test(r.title) ? '행사' : '회의';
-  r.imp = autoImp(r.title, r.kind);
+  r.imp = /중요/.test(raw) ? 'high' : 'normal'; r.impSuggest = r.imp !== 'high' && suggestImp(r.title, r.kind) === 'high';
   if (r.type === 'event' && !r.date) { r.date = today; r.notes.push('날짜를 찾지 못해 오늘로 넣었습니다'); }
   if (r.type === 'block' && !r.date && !r.repeat) { r.date = today; r.notes.push('날짜를 찾지 못해 오늘로 넣었습니다'); }
   if (r.type === 'block' && !r.time && !r.allDay) r.allDay = true;
@@ -3074,7 +3077,7 @@ function describeAction(a) {
 const EV_KINDS = ['회의', '행사', '학사', '마감', '개인'];
 function cmdRowsHtml(actions) {
   return actions.map((a, i) => { const d = describeAction(a); const k = a.type === 'update' ? 'pen' : a.type === 'done' ? 'check' : a.type === 'skip' ? 'dash' : a.type === 'delete' ? 'ban' : a.type === 'block' ? 'lock' : a.type === 'task' ? iconFor(a.title, '할일') : a.icon && IP[a.icon] ? a.icon : a.kind === '마감' ? '마감' : iconFor(a.title, a.kind || '회의'); const ev = a.type === 'event';
-      return `<div class="cmdrow ${a.off ? 'off' : ''}">${actions.length > 1 ? `<input type="checkbox" class="cmdpick" data-i="${i}" ${a.off ? '' : 'checked'} aria-label="${esc(d.title)} 넣기">` : ''}${ev ? `<button type="button" class="cmdic" data-act="cmdIcon" data-i="${i}" title="아이콘 바꾸기" aria-label="아이콘 바꾸기">${ic(k, ICON_GROUP[k] || '')}</button>` : ic(k, ICON_GROUP[k] || '')}<span class="pill ${a.type === 'delete' ? 'del' : 'pend'}">${d.typeKo}</span><b>${esc(d.title)}</b><span class="count">${colorTimes(esc(d.when))}</span>${a.repeat ? `<span class="count nextocc">다음: ${nextOccurrences({ date: a.date, repeat: a.repeat }, 4, todayStr()).map(fmtShort).join(', ')}</span>` : ''}${a.type === 'event' && a.imp === 'high' ? '<span class="impbtn on">중요</span>' : ''}${ev ? `<span class="cmdopts"><select class="cmdsel" data-cf="kind" data-i="${i}" aria-label="종류">${EV_KINDS.map(x => `<option ${x === (a.kind || '회의') ? 'selected' : ''}>${x}</option>`).join('')}</select>${gReady() && gWritable().length > 1 ? `<select class="cmdsel" data-cf="gTarget" data-i="${i}" aria-label="구글 캘린더">${calOptions(a.gTarget || defCal(a.kind))}</select>` : ''}</span>` : ''}${(a.notes || []).map(n => `<span class="warnline">${esc(n)}</span>`).join('')}</div>`; }).join('');
+      return `<div class="cmdrow ${a.off ? 'off' : ''}">${actions.length > 1 ? `<input type="checkbox" class="cmdpick" data-i="${i}" ${a.off ? '' : 'checked'} aria-label="${esc(d.title)} 넣기">` : ''}${ev ? `<button type="button" class="cmdic" data-act="cmdIcon" data-i="${i}" title="아이콘 바꾸기" aria-label="아이콘 바꾸기">${ic(k, ICON_GROUP[k] || '')}</button>` : ic(k, ICON_GROUP[k] || '')}<span class="pill ${a.type === 'delete' ? 'del' : 'pend'}">${d.typeKo}</span><b>${esc(d.title)}</b><span class="count">${colorTimes(esc(d.when))}</span>${a.repeat ? `<span class="count nextocc">다음: ${nextOccurrences({ date: a.date, repeat: a.repeat }, 4, todayStr()).map(fmtShort).join(', ')}</span>` : ''}${ev ? `<button type="button" class="impbtn ${a.imp === 'high' ? 'on' : a.impSuggest ? 'ask' : ''}" data-act="cmdImp" data-i="${i}" title="${a.imp === 'high' ? '중요 표시 끄기' : a.impSuggest ? '중요 일정 같습니다. 누르면 중요로 넣습니다' : '중요로 넣기'}">${ic('행사')}${a.imp === 'high' ? '중요' : a.impSuggest ? '중요?' : ''}</button>` : ''}${ev ? `<span class="cmdopts"><select class="cmdsel" data-cf="kind" data-i="${i}" aria-label="종류">${EV_KINDS.map(x => `<option ${x === (a.kind || '회의') ? 'selected' : ''}>${x}</option>`).join('')}</select>${gReady() && gWritable().length > 1 ? `<select class="cmdsel" data-cf="gTarget" data-i="${i}" aria-label="구글 캘린더">${calOptions(a.gTarget || defCal(a.kind))}</select>` : ''}</span>` : ''}${(a.notes || []).map(n => `<span class="warnline">${esc(n)}</span>`).join('')}</div>`; }).join('');
 }
 // one bar to set kind / Google calendar / icon on every checked event at once
 function cmdBulkHtml(actions) {
@@ -3137,7 +3140,7 @@ function cleanNewActions(arr) {
     if (x.repeat && (!x.date || !repMatch({ date: x.date, repeat: x.repeat }, x.date))) { const from = x.date || todayStr(); x.date = nextOccurrences({ date: from, repeat: x.repeat }, 1)[0] || from; }
     if (x.time && !x.endTime) x.endTime = fromMin(Math.min(toMin(x.time) + 60, 1439));
     if (x.type === 'event' && !x.date) x.date = todayStr();
-    x.imp = typeof a.important === 'boolean' ? (a.important ? 'high' : 'normal') : autoImp(x.title, x.kind);
+    x.imp = 'normal'; x.impSuggest = a.important === true || suggestImp(x.title, x.kind) === 'high';
     return x;
   });
 }
@@ -3587,7 +3590,7 @@ const UNDO_LABEL = {
   delRule: '아이콘 규칙 삭제', skipOcc: '반복 일정 한 번 빼기', edSave: '일정 편집', bdSave: '불가 시간 설정', saveSettings: '설정 변경', imSave: '아이콘 색·이름',
   pushG: '구글에 추가', fEvent: '일정 추가', fBlock: '불가 시간 추가', taskForm: '할 일 추가', importData: '파일 가져오기'
 };
-const UNDO_SKIP = new Set(['gGone', 'cmdIcon', 'cmdIconSet', 'ddayX', 'ddayUnhide', 'ddayDel', 'ctNav', 'ctCopy', 'ctNew', 'ctEdit', 'ctAdd', 'ctSave', 'ctDel', 'ddaySave', 'ddayClear', 'verReload', 'attEvents', 'snipCopy', 'snipEdit', 'ddayEdit', 'lockNow', 'lockSave', 'tip', 'daySel', 'dayMode', 'dayNav', 'dayGo', 'fwdCopy', 'gemCancel', 'scriptCopy', 'scriptSetup', 'scriptTest', 'scriptOn', 'copyReply', 'copyDraft', 'gemEmbed', 'gemDockOpen', 'qTab', 'gemNew', 'gemTall', 'gemZoom', 'histUndo', 'histRedo', 'histOne', 'histGroup', 'histFold', 'stPing', 'pushAllG', 'aiKeySave', 'aiKeyClear', 'aiTest', 'aiMode', 'aiModelSel', 'relayClip', 'stOpen', 'tidyOpen', 'tidyDel', 'tidyTime', 'tidyMerge', 'inboxRun', 'analyzeMail', 'tgShow', 'tgHide', 'phoneLink', 'gDel', 'fltImp', 'fltIcons', 'fltTog', 'fltClear', 'fltClose', 'cmdToAI', 'cmdPick', 'cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
+const UNDO_SKIP = new Set(['cmdImp', 'gGone', 'cmdIcon', 'cmdIconSet', 'ddayX', 'ddayUnhide', 'ddayDel', 'ctNav', 'ctCopy', 'ctNew', 'ctEdit', 'ctAdd', 'ctSave', 'ctDel', 'ddaySave', 'ddayClear', 'verReload', 'attEvents', 'snipCopy', 'snipEdit', 'ddayEdit', 'lockNow', 'lockSave', 'tip', 'daySel', 'dayMode', 'dayNav', 'dayGo', 'fwdCopy', 'gemCancel', 'scriptCopy', 'scriptSetup', 'scriptTest', 'scriptOn', 'copyReply', 'copyDraft', 'gemEmbed', 'gemDockOpen', 'qTab', 'gemNew', 'gemTall', 'gemZoom', 'histUndo', 'histRedo', 'histOne', 'histGroup', 'histFold', 'stPing', 'pushAllG', 'aiKeySave', 'aiKeyClear', 'aiTest', 'aiMode', 'aiModelSel', 'relayClip', 'stOpen', 'tidyOpen', 'tidyDel', 'tidyTime', 'tidyMerge', 'inboxRun', 'analyzeMail', 'tgShow', 'tgHide', 'phoneLink', 'gDel', 'fltImp', 'fltIcons', 'fltTog', 'fltClear', 'fltClose', 'cmdToAI', 'cmdPick', 'cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
 function undoSnap() {
   const o = { settings: JSON.parse(JSON.stringify(S.settings)) };
   for (const c of COLS) o[c] = JSON.parse(JSON.stringify(S[c]));
@@ -5509,7 +5512,7 @@ function renderSheet(force) {
         <input class="field" type="date" id="ev-d-${i}" value="${esc(date || '')}" aria-label="날짜" ${dis}>
         <input class="field" type="time" id="ev-h-${i}" value="${esc(tm || '')}" aria-label="시작" ${dis}>
         <input class="field" type="time" id="ev-e-${i}" value="${esc(en || '')}" aria-label="끝" ${dis}>
-        <select class="field" id="ev-i-${i}" aria-label="중요도" ${dis}>${[['high', '중요'], ['normal', '일반']].map(([v, l]) => `<option value="${v}" ${(UI.edits['ev-i-'+i] ?? (e.important === false ? 'normal' : e.important === true ? 'high' : autoImp(e.title, e.kind))) === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
+        <select class="field" id="ev-i-${i}" aria-label="중요도" ${dis}>${[['high', '중요'], ['normal', e.important ? '일반 (AI는 중요 추천)' : '일반']].map(([v, l]) => `<option value="${v}" ${(UI.edits['ev-i-'+i] ?? 'normal') === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
         <select class="field" id="ev-k-${i}" aria-label="종류" ${dis}>${['회의','행사','마감','학사','개인'].map(k => `<option ${(UI.edits['ev-k-'+i] ?? e.kind) === k ? 'selected' : ''}>${k}</option>`).join('')}</select>
         ${e.added ? (() => { const lk = S.events.find(x => x.emailId === m.id && String(x.title).replace(/\s+/g, '') === String(e.title).replace(/\s+/g, '')); const st = lk && statusOfE(lk); return st ? `<span class="tag st st-${st}">${ST_KO[st]}으로 추가됨</span>` : '<span class="tag">추가됨</span>'; })() : ''}
         <label class="chk abschk" ${e.added ? 'hidden' : ''}><input type="checkbox" data-act="evAbsent" data-i="${i}" ${absent ? 'checked' : ''} ${dis}>나는 불참</label>${clash.length ? `<span class="pill clash" title="${esc(clash.map(x => (x.why === '출장' ? '출장' : '중요') + ': ' + x.with).join('\n'))}">${ic('clash')}일정 겹침</span>` : ''}
@@ -5789,7 +5792,7 @@ function cleanAnalysis(a) {
     replyDeadline: isDate(a.replyDeadline) ? a.replyDeadline : null,
     events: (Array.isArray(a.events) ? a.events : []).filter(e => e && e.title).slice(0, 12).map(e => ({
       title: String(e.title).slice(0, 200), date: isDate(e.date) ? e.date : '', time: /^\d{2}:\d{2}$/.test(e.time || '') ? e.time : '', endTime: /^\d{2}:\d{2}$/.test(e.endTime || '') ? e.endTime : '',
-      location: e.location ? String(e.location).slice(0, 120) : '', kind: kinds.includes(e.kind) ? e.kind : '회의', important: typeof e.important === 'boolean' ? e.important : autoImp(e.title, e.kind) === 'high', forHead: e.forHead !== false, added: false })),
+      location: e.location ? String(e.location).slice(0, 120) : '', kind: kinds.includes(e.kind) ? e.kind : '회의', important: typeof e.important === 'boolean' ? e.important : suggestImp(e.title, e.kind) === 'high', forHead: e.forHead !== false, added: false })),
     tasks: (Array.isArray(a.tasks) ? a.tasks : []).filter(t => t && t.title).slice(0, 12).map(t => ({
       title: String(t.title).slice(0, 200), due: isDate(t.due) ? t.due : '', priority: pr(t.priority), forHead: t.forHead !== false, added: false })),
     replyDraft: fixNames(a.replyDraft ? String(a.replyDraft).slice(0, 8000) : (a.replyMode === 'options' && Array.isArray(a.replyOptions) && a.replyOptions[0] && a.replyOptions[0].draft ? String(a.replyOptions[0].draft).slice(0, 8000) : '')),
@@ -6333,7 +6336,7 @@ async function addFromItem(m, kind, i) {
     const time = UI.edits['ev-h-'+i] ?? it.time ?? '';
     let endTime = UI.edits['ev-e-'+i] ?? it.endTime ?? '';
     if (!time || !(toMin(endTime) > toMin(time))) endTime = time ? fromMin(Math.min(toMin(time) + 60, 1439)) : '';
-    const doc = { title, date, time, endTime, location: UI.edits['ev-l-'+i] ?? it.location ?? '', kind: UI.edits['ev-k-'+i] ?? it.kind, imp: UI.edits['ev-i-'+i] ?? (it.important === false ? 'normal' : it.important === true ? 'high' : autoImp(title, it.kind)), emailId: m.id, source: 'email', createdAt: nowISO(), ...(itemAbsent(m, it, i) ? { absent: true, status: 'absent' } : {}) };
+    const doc = { title, date, time, endTime, location: UI.edits['ev-l-'+i] ?? it.location ?? '', kind: UI.edits['ev-k-'+i] ?? it.kind, imp: UI.edits['ev-i-'+i] ?? 'normal', emailId: m.id, source: 'email', createdAt: nowISO(), ...(itemAbsent(m, it, i) ? { absent: true, status: 'absent' } : {}) };
     const nid = await add('events', doc);
     if (gAuto() && gReady()) pushGoogle(doc, nid);
   } else {
@@ -6404,6 +6407,7 @@ document.addEventListener('click', async ev0 => {
       case 'snipEdit': listEditDlg('snip'); return;
       case 'ddayEdit': ddayDlg(); return;
       case 'gGone': { el.disabled = true; try { await gGoneCheck(true); } finally { el.disabled = false; } return; }
+      case 'cmdImp': { cmdSync(); const a = UI.cmd && UI.cmd.actions[+el.dataset.i]; if (a) { a.imp = a.imp === 'high' ? 'normal' : 'high'; cmdRedraw(); } return; }
       case 'cmdIcon': cmdSync(); cmdIconDlg(el.dataset.i); return;
       case 'cmdIconSet': $('dlgRoot').innerHTML = ''; UI.dlg = null; cmdSet(el.dataset.i, 'icon', el.dataset.k); return;
       case 'ctNav': { const n = contactsAll().length; if (n) UI.ctIdx = ((UI.ctIdx || 0) + (+el.dataset.d) + n) % n; renderWidgets(); return; }
@@ -6936,7 +6940,7 @@ document.addEventListener('input', e => {
   if (['tripColor', 'tripStr', 'tripOn'].includes(t.id) || (t.dataset && t.dataset.tripic)) { const v = tripReadForm(); applyTripStyle(v); $('tripStrV').textContent = v.strength + '%'; if (t.dataset.tripic) t.closest('.tripic').classList.toggle('on', t.checked); }
   if (t.id === 'edAll') { $('edStart').disabled = $('edEnd').disabled = t.checked; }
   if (t.id === 'rawMail') t.classList.toggle('big', t.value.length > 160 || t.value.split('\n').length > 3);
-  if (t.closest('#fEvent')) { checkEventForm(); if ((t.id === 'fTitle') && !$('fImp').dataset.touched) $('fImp').value = autoImp($('fTitle').value, $('fKind').value); }
+  if (t.closest('#fEvent')) checkEventForm();
   if (t.id === 'fImp') t.dataset.touched = '1';
   if (UI.dlg === 'busy' && t.closest('#dlgRoot') && t.dataset.f) {
     if (t.dataset.r != null) UI.bd.weekly[+t.dataset.r][t.dataset.f] = t.value; else UI.bd[t.dataset.f] = t.value;
@@ -6954,7 +6958,6 @@ document.addEventListener('change', e => {
   if (t.id === 'fImp') t.dataset.touched = '1';
   if (t.id === 'impMode' || t.id === 'impColorBy' || t.id === 'impPast') { applyImpStyle(impFormValues()); if ($('impColor')) $('impColor').disabled = $('impColorBy').value === 'icon'; }
   if (UI.dlg === 'ipick' && t.name === 'ipScope') { const inp = $('ipWordIn'); if (inp) UI.ipick.word = inp.value.trim(); UI.ipick.scope = t.value; return renderIconPick(); }
-  if (t.id === 'fKind' && $('fImp') && !$('fImp').dataset.touched) $('fImp').value = autoImp($('fTitle').value, t.value);
   if (t.id === 'bAll') { $('bStart').disabled = $('bEnd').disabled = $('bWeekly').disabled = t.checked; }
 });
 let wheelAcc = 0, wheelLock = 0;
