@@ -2455,19 +2455,52 @@ function calTag(id) {
 const calTagHtml = id => { const t = calTag(id); return t ? `<span class="caltag" style="color:${esc(/^#[0-9a-f]{6}$/i.test(t.c || '') ? t.c : '#e5484d')}">${esc(t.t)}</span>` : ''; };
 const evCal = e => (e.googleId && e.googleId !== 'pushed' ? (e.googleCal || 'primary') : '') || e.gTarget || '';
 const calInfo = id => G.cals.find(c => c.id === id) || (id === 'primary' ? G.cals.find(c => c.primary) : null) || { id, name: id === 'primary' ? '기본 캘린더' : id, color: '' };
-// events I sent to Google that are no longer there (deleted in Google Calendar): asked before removing them here too
-async function gGoneCheck(a, b, cals) {
-  if (G.partial || UI.goneAsking) return;
-  const read = id => cals.some(c => sameCal(c, id || 'primary'));
-  const there = (gid, cal) => G.events.some(g => sameCal(g.cal, cal || 'primary') && (g.id === gid || String(g.id).startsWith(gid + '_') || Object.values(g).includes(gid)));
+// events I sent to Google that are no longer there (deleted in Google Calendar): asked before removing them here too.
+// Every calendar they were sent to is read over their own dates (not just the months on screen), so far-off dates are checked too.
+async function gIdsIn(cal, from, to) {
+  const ids = new Set();
+  if (gasOn()) {
+    // in 60-day pieces: the script returns at most 600 events per call, and a cut-off list would make events look deleted
+    for (let f = from; f < to; f = addDays(f, 60)) {
+      const t = addDays(f, 60) < to ? addDays(f, 60) : to;
+      const j = await gas({ action: 'events', cal, from: f, to: t });
+      const list = j.events || []; if (list.length >= 600) throw new Error('too many');
+      for (const x of list) { if (x.status === 'cancelled') continue; if (x.id) ids.add(String(x.id)); if (x.recurringEventId) ids.add(String(x.recurringEventId)); }
+    }
+    return ids;
+  }
+  let pageToken = '', n = 0;
+  do {
+    const q = new URLSearchParams({ timeMin: new Date(from + 'T00:00:00').toISOString(), timeMax: new Date(to + 'T00:00:00').toISOString(), singleEvents: 'true', maxResults: '250', timeZone: TZ });
+    if (pageToken) q.set('pageToken', pageToken);
+    const r = await gapi(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(cal)}/events?` + q);
+    for (const x of (r.items || [])) { if (x.status === 'cancelled') continue; if (x.id) ids.add(String(x.id)); if (x.recurringEventId) ids.add(String(x.recurringEventId)); }
+    pageToken = r.nextPageToken || ''; n++;
+  } while (pageToken && n < 20);
+  if (pageToken) throw new Error('too many');
+  return ids;
+}
+async function gGoneCheck(force) {
+  if (!gReady() || UI.goneAsking) return;
+  if (!force && UI.goneScanAt && Date.now() - UI.goneScanAt < 20 * 60 * 1000) return;
+  UI.goneScanAt = Date.now();
   const skip = UI.goneSkip || (UI.goneSkip = new Set());
-  const gone = S.events.filter(e => e.googleId && e.googleId !== 'pushed' && read(e.googleCal) && !skip.has(e.id)
-    && e.date >= a && (e.endDate || e.date) < b && !repDays(e) && Date.now() - (e._u || 0) > 120000 && !there(e.googleId, e.googleCal));
-  if (!gone.length) return;
+  const cand = S.events.filter(e => e.googleId && e.googleId !== 'pushed' && !skip.has(e.id) && !repDays(e) && Date.now() - (e._u || 0) > 120000 && isDate(e.date));
+  if (!cand.length) { if (force) toast('구글로 보낸 일정이 모두 구글에 있습니다.'); return; }
+  const byCal = {};
+  for (const e of cand) (byCal[e.googleCal || 'primary'] ||= []).push(e);
+  const gone = [];
+  for (const [cal, list] of Object.entries(byCal)) {
+    const from = addDays(list.map(e => e.date).sort()[0], -1), to = addDays(list.map(e => e.endDate || e.date).sort().pop(), 2);
+    let ids; try { ids = await gIdsIn(cal, from, to); } catch { continue; }   // a calendar that cannot be read is left alone
+    for (const e of list) if (![...ids].some(id => id === e.googleId || id.startsWith(e.googleId + '_'))) gone.push(e);
+  }
+  if (!gone.length) { if (force) toast('구글로 보낸 일정이 모두 구글에 있습니다.'); return; }
+  gone.sort((x, y) => x.date.localeCompare(y.date));
   UI.goneAsking = true;
   try {
     const v = await gAsk({ title: `구글 캘린더에서 지워진 일정 ${gone.length}개`, icon: 'gcal',
-      rows: gone.slice(0, 12).map(e => [fmtShort(e.date), e.title + (e.time ? ' · ' + e.time : '')]).concat(gone.length > 12 ? [['…', `외 ${gone.length - 12}개`]] : []),
+      rows: gone.slice(0, 15).map(e => [fmtShort(e.date) + (e.date.slice(0, 4) !== todayStr().slice(0, 4) ? ` ${e.date.slice(0, 4)}` : ''), `${calTag(e.googleCal) ? calTag(e.googleCal).t + ' ' : ''}${e.title}${e.time ? ' · ' + e.time : ''} (${calInfo(e.googleCal || 'primary').name})`]).concat(gone.length > 15 ? [['…', `외 ${gone.length - 15}개`]] : []),
       note: '대시보드에서 구글로 보냈던 일정인데, 구글 캘린더에서 지워진 것 같습니다.', noLabel: '나중에',
       choices: [{ v: 'keep', label: '대시보드에는 남기기' }, { v: 'del', label: '대시보드에서도 지우기', primary: true, danger: true }] });
     if (v === 'del') { undoArm('구글에서 지워진 일정 정리'); for (const e of gone) await del('events', e.id); toast(`대시보드에서도 ${gone.length}개를 지웠습니다. 잘못이면 되돌리기로 살릴 수 있습니다.`); }
@@ -2508,7 +2541,7 @@ async function gLoad(force) {
     const diff0 = added || changedN || removed || !G.changedAt;
     if (diff0) { G.changedAt = Date.now(); if (fsReady()) { DRIVE.dirty = true; clearTimeout(DRIVE.timer); DRIVE.timer = setTimeout(syncNow, 1500); } }
     gCacheSave();
-    setTimeout(() => gGoneCheck(a, b, cals).catch(() => {}), 300);
+    setTimeout(() => gGoneCheck(!!force && UI.goneForce).catch(() => {}), 300);
     const diff = [added && `새 일정 ${added}건`, changedN && `바뀐 일정 ${changedN}건`, removed && `없어진 일정 ${removed}건`].filter(Boolean).join(' · ');
     if (hadData && diff && (G.fromCache || !force)) toast('구글 캘린더 업데이트: ' + diff);
     G.fromCache = false;
@@ -3554,7 +3587,7 @@ const UNDO_LABEL = {
   delRule: '아이콘 규칙 삭제', skipOcc: '반복 일정 한 번 빼기', edSave: '일정 편집', bdSave: '불가 시간 설정', saveSettings: '설정 변경', imSave: '아이콘 색·이름',
   pushG: '구글에 추가', fEvent: '일정 추가', fBlock: '불가 시간 추가', taskForm: '할 일 추가', importData: '파일 가져오기'
 };
-const UNDO_SKIP = new Set(['cmdIcon', 'cmdIconSet', 'ddayX', 'ddayUnhide', 'ddayDel', 'ctNav', 'ctCopy', 'ctNew', 'ctEdit', 'ctAdd', 'ctSave', 'ctDel', 'ddaySave', 'ddayClear', 'verReload', 'attEvents', 'snipCopy', 'snipEdit', 'ddayEdit', 'lockNow', 'lockSave', 'tip', 'daySel', 'dayMode', 'dayNav', 'dayGo', 'fwdCopy', 'gemCancel', 'scriptCopy', 'scriptSetup', 'scriptTest', 'scriptOn', 'copyReply', 'copyDraft', 'gemEmbed', 'gemDockOpen', 'qTab', 'gemNew', 'gemTall', 'gemZoom', 'histUndo', 'histRedo', 'histOne', 'histGroup', 'histFold', 'stPing', 'pushAllG', 'aiKeySave', 'aiKeyClear', 'aiTest', 'aiMode', 'aiModelSel', 'relayClip', 'stOpen', 'tidyOpen', 'tidyDel', 'tidyTime', 'tidyMerge', 'inboxRun', 'analyzeMail', 'tgShow', 'tgHide', 'phoneLink', 'gDel', 'fltImp', 'fltIcons', 'fltTog', 'fltClear', 'fltClose', 'cmdToAI', 'cmdPick', 'cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
+const UNDO_SKIP = new Set(['gGone', 'cmdIcon', 'cmdIconSet', 'ddayX', 'ddayUnhide', 'ddayDel', 'ctNav', 'ctCopy', 'ctNew', 'ctEdit', 'ctAdd', 'ctSave', 'ctDel', 'ddaySave', 'ddayClear', 'verReload', 'attEvents', 'snipCopy', 'snipEdit', 'ddayEdit', 'lockNow', 'lockSave', 'tip', 'daySel', 'dayMode', 'dayNav', 'dayGo', 'fwdCopy', 'gemCancel', 'scriptCopy', 'scriptSetup', 'scriptTest', 'scriptOn', 'copyReply', 'copyDraft', 'gemEmbed', 'gemDockOpen', 'qTab', 'gemNew', 'gemTall', 'gemZoom', 'histUndo', 'histRedo', 'histOne', 'histGroup', 'histFold', 'stPing', 'pushAllG', 'aiKeySave', 'aiKeyClear', 'aiTest', 'aiMode', 'aiModelSel', 'relayClip', 'stOpen', 'tidyOpen', 'tidyDel', 'tidyTime', 'tidyMerge', 'inboxRun', 'analyzeMail', 'tgShow', 'tgHide', 'phoneLink', 'gDel', 'fltImp', 'fltIcons', 'fltTog', 'fltClear', 'fltClose', 'cmdToAI', 'cmdPick', 'cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
 function undoSnap() {
   const o = { settings: JSON.parse(JSON.stringify(S.settings)) };
   for (const c of COLS) o[c] = JSON.parse(JSON.stringify(S[c]));
@@ -6370,6 +6403,7 @@ document.addEventListener('click', async ev0 => {
       case 'snipCopy': { const x = (S.settings.snippets || [])[+el.dataset.i]; if (!x) return; try { await navigator.clipboard.writeText(x.text); } catch { prompt('복사할 내용', x.text); return; } el.classList.add('done'); setTimeout(() => el.classList.remove('done'), 900); toast(`복사했습니다: ${x.label || x.text}`); return; }
       case 'snipEdit': listEditDlg('snip'); return;
       case 'ddayEdit': ddayDlg(); return;
+      case 'gGone': { el.disabled = true; try { await gGoneCheck(true); } finally { el.disabled = false; } return; }
       case 'cmdIcon': cmdSync(); cmdIconDlg(el.dataset.i); return;
       case 'cmdIconSet': $('dlgRoot').innerHTML = ''; UI.dlg = null; cmdSet(el.dataset.i, 'icon', el.dataset.k); return;
       case 'ctNav': { const n = contactsAll().length; if (n) UI.ctIdx = ((UI.ctIdx || 0) + (+el.dataset.d) + n) % n; renderWidgets(); return; }
@@ -7022,6 +7056,7 @@ function openSettings() {
       ${gReady() ? (G.cals.length ? `<span class="count">달력에 가져올 캘린더만 고르세요. 고르지 않은 캘린더는 읽지 않습니다.</span>
         <div class="callist">${G.cals.map(c => `<label class="chk"><input type="checkbox" name="gcal" value="${esc(c.id)}" ${selectedCals().includes(c.id) || (c.primary && selectedCals().includes('primary')) ? 'checked' : ''}><i class="cdot" style="background:${esc(c.color || '#7DB6D4')}"></i>${esc(c.name)}${c.primary ? ' (기본)' : ''}</label>`).join('')}</div>
         <label>"구글에 추가"로 보낼 캘린더<select class="field" id="sGPushCal">${G.cals.filter(c => c.write).map(c => `<option value="${esc(c.id)}" ${c.id === s.gPushCal || (s.gPushCal === 'primary' && c.primary) ? 'selected' : ''}>${esc(c.name)}${c.primary ? ' (기본)' : ''}</option>`).join('')}</select></label>
+        <div class="row"><button class="btn small" type="button" data-act="gGone">${ic('refresh')}구글과 맞춰 보기</button><span class="count">구글에서 지운 일정이 대시보드에 남아 있는지 모든 날짜에서 찾습니다.</span></div>
         <div class="caltags"><span class="count">캘린더별 말머리 ${tip('그 캘린더 일정의 제목 앞에 붙여서 보여 줍니다. 예: (INHA)를 빨간색으로. 대시보드 화면에만 보이고 구글 캘린더 제목은 바꾸지 않습니다.')}</span>${G.cals.filter(c => selectedCals().includes(c.id) || (c.primary && selectedCals().includes('primary')) || c.write).map(c => { const t = calTag(c.id) || {}; return `<label class="ctagrow"><span><i class="cdot" style="background:${esc(c.color || '#7DB6D4')}"></i>${esc(c.name)}</span><input class="field" data-ctag="${esc(c.id)}" value="${esc(t.t || '')}" placeholder="예: (INHA)" maxlength="12"><input type="color" data-ctagc="${esc(c.id)}" value="${esc(t.c || '#e5484d')}" aria-label="${esc(c.name)} 말머리 색"></label>`; }).join('')}</div>
         ${G.cals.filter(c => c.write).length > 1 ? `<div class="bykind"><span class="count">종류별로 다른 캘린더에 넣기 ${tip('예: "개인" 일정은 개인 캘린더로. 일정마다 편집 창에서 따로 바꿀 수도 있습니다.')}</span>${['회의', '행사', '학사', '마감', '개인'].map(k => `<label>${k}<select class="field" data-gk="${k}"><option value="">위와 같음</option>${G.cals.filter(c => c.write).map(c => `<option value="${esc(c.id)}" ${((s.gCalByKind || {})[k]) === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>`).join('')}</div>` : ''}`
         : `<div class="row"><span class="count">캘린더 목록을 아직 못 읽었습니다.</span><button class="btn small" type="button" data-act="gReloadCals">다시 읽기</button></div>`) : ''}
