@@ -932,6 +932,7 @@ button.hw{cursor:pointer}button.hw:hover{border-color:var(--accent)}
 .attcal{display:inline-grid;place-items:center;color:var(--amber)}
 .attevwrap{display:inline-flex;align-items:center;gap:.1rem}
 .attevx{border:0;background:none;color:var(--muted);cursor:pointer;font-size:.75rem;padding:.15rem .3rem;border-radius:6px}.attevx:hover{color:var(--red);background:color-mix(in srgb,var(--red) 12%,transparent)}
+.verbtn{align-self:center;border:1px solid var(--amber);background:color-mix(in srgb,var(--amber) 14%,transparent);color:var(--amber);border-radius:999px;padding:.25rem .7rem;font:inherit;font-size:.8rem;font-weight:700;cursor:pointer;white-space:nowrap;animation:attevGlow 2.4s ease-in-out infinite}
 </style>
 
 </head>
@@ -954,6 +955,7 @@ button.hw{cursor:pointer}button.hw:hover{border-color:var(--accent)}
       <div class="term"><b id="termLabel">—</b><span id="weekLabel"></span><span>·</span><span class="clock" id="clock">--:--</span></div>
     </div>
     <div class="stats" id="stats"></div>
+    <button type="button" class="verbtn" id="verBtn" hidden data-act="verReload" title="대시보드가 새 버전으로 바뀌었습니다. 눌러서 새로고침하면 적용됩니다.">새 버전 · 새로고침</button>
     <div class="hwidgets" id="hwidgets" aria-label="다음 일정 · D-day · 상용구"></div>
     <div class="gutter v hg" data-split="head" hidden role="separator" aria-orientation="vertical" tabindex="0" title="끌어서 왼쪽(현황)·오른쪽(버튼) 너비 조절 · 두 번 누르면 원래대로"></div>
   </header>
@@ -1793,6 +1795,19 @@ function toast(msg) { TLOG.unshift({ at: Date.now(), msg: String(msg) }); if (TL
 const nowISO = () => new Date().toISOString();
 
 /* ---------- header ---------- */
+/* ---------- new version notice: an open window (or installed app) keeps running the old page until it is reloaded ---------- */
+const VER = { tag: null, newer: false };
+async function verCheck() {
+  if (VER.newer || !/^https?:/.test(location.protocol) || /^(localhost|127\.)/.test(location.hostname)) return;
+  try {
+    const r = await fetch(location.pathname + '?v=' + Date.now(), { method: 'HEAD', cache: 'no-store' });
+    const tag = r.headers.get('etag') || r.headers.get('last-modified'); if (!r.ok || !tag) return;
+    if (!VER.tag) { VER.tag = tag; return; }
+    if (tag !== VER.tag) { VER.newer = true; const b = $('verBtn'); if (b) b.hidden = false; }
+  } catch {}
+}
+setTimeout(verCheck, 4000); setInterval(verCheck, 5 * 60 * 1000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) verCheck(); });
 /* ---------- header cards: next event countdown, D-day, copyable snippets ---------- */
 function nextEvent() {
   const now = new Date(), nm = now.getHours() * 60 + now.getMinutes();
@@ -3344,7 +3359,7 @@ const UNDO_LABEL = {
   delRule: '아이콘 규칙 삭제', skipOcc: '반복 일정 한 번 빼기', edSave: '일정 편집', bdSave: '불가 시간 설정', saveSettings: '설정 변경', imSave: '아이콘 색·이름',
   pushG: '구글에 추가', fEvent: '일정 추가', fBlock: '불가 시간 추가', taskForm: '할 일 추가', importData: '파일 가져오기'
 };
-const UNDO_SKIP = new Set(['attEvents', 'snipCopy', 'snipEdit', 'ddayEdit', 'lockNow', 'lockSave', 'tip', 'daySel', 'dayMode', 'dayNav', 'dayGo', 'fwdCopy', 'gemCancel', 'scriptCopy', 'scriptSetup', 'scriptTest', 'scriptOn', 'copyReply', 'copyDraft', 'gemEmbed', 'gemDockOpen', 'qTab', 'gemNew', 'gemTall', 'gemZoom', 'histUndo', 'histRedo', 'histOne', 'histGroup', 'histFold', 'stPing', 'pushAllG', 'aiKeySave', 'aiKeyClear', 'aiTest', 'aiMode', 'aiModelSel', 'relayClip', 'stOpen', 'tidyOpen', 'tidyDel', 'tidyTime', 'tidyMerge', 'inboxRun', 'analyzeMail', 'tgShow', 'tgHide', 'phoneLink', 'gDel', 'fltImp', 'fltIcons', 'fltTog', 'fltClear', 'fltClose', 'cmdToAI', 'cmdPick', 'cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
+const UNDO_SKIP = new Set(['verReload', 'attEvents', 'snipCopy', 'snipEdit', 'ddayEdit', 'lockNow', 'lockSave', 'tip', 'daySel', 'dayMode', 'dayNav', 'dayGo', 'fwdCopy', 'gemCancel', 'scriptCopy', 'scriptSetup', 'scriptTest', 'scriptOn', 'copyReply', 'copyDraft', 'gemEmbed', 'gemDockOpen', 'qTab', 'gemNew', 'gemTall', 'gemZoom', 'histUndo', 'histRedo', 'histOne', 'histGroup', 'histFold', 'stPing', 'pushAllG', 'aiKeySave', 'aiKeyClear', 'aiTest', 'aiMode', 'aiModelSel', 'relayClip', 'stOpen', 'tidyOpen', 'tidyDel', 'tidyTime', 'tidyMerge', 'inboxRun', 'analyzeMail', 'tgShow', 'tgHide', 'phoneLink', 'gDel', 'fltImp', 'fltIcons', 'fltTog', 'fltClear', 'fltClose', 'cmdToAI', 'cmdPick', 'cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
 function undoSnap() {
   const o = { settings: JSON.parse(JSON.stringify(S.settings)) };
   for (const c of COLS) o[c] = JSON.parse(JSON.stringify(S[c]));
@@ -5977,6 +5992,7 @@ document.addEventListener('click', async ev0 => {
         return;
       }
       case 'rail': UI.rail = el.dataset.r; renderRail(); if (UI.rail === 'day') renderDay(true); return;
+      case 'verReload': try { await syncNow(); } catch {} location.reload(); return;
       case 'lockNow': lockNow(); return;
       case 'snipCopy': { const x = (S.settings.snippets || [])[+el.dataset.i]; if (!x) return; try { await navigator.clipboard.writeText(x.text); } catch { prompt('복사할 내용', x.text); return; } el.classList.add('done'); setTimeout(() => el.classList.remove('done'), 900); toast(`복사했습니다: ${x.label || x.text}`); return; }
       case 'snipEdit': listEditDlg('snip'); return;
