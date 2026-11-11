@@ -952,8 +952,15 @@ button.hw{cursor:pointer}button.hw:hover{border-color:var(--accent)}
   .topwrap{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:1rem 1rem;align-items:start}
   .topwrap>header.top{grid-column:1;grid-row:1;min-width:0}
   .topwrap>.focusbar{grid-column:1;grid-row:2;min-width:0}
-  .topwrap>.hwidgets{grid-column:2;grid-row:1 / span 2;align-self:stretch;height:auto;min-height:5.6rem;align-items:stretch;flex:none}
-  .hw{height:auto;box-sizing:border-box;overflow:hidden}
+  .topwrap{min-height:6rem}
+  /* contain:size — the cards never make the row taller; they take the height the header + focus bar give them and scroll inside */
+  .topwrap>.hwidgets{grid-column:2;grid-row:1 / span 2;align-self:stretch;contain:size;width:min(62rem,60vw);height:auto;min-height:0;align-items:stretch;flex:none;overflow:hidden}
+  .hw{height:auto;max-height:100%;min-height:0;box-sizing:border-box;overflow:hidden}
+  .hw>.hwl{flex:none}
+  .ddlist,.hw .snlist,.hw .ctlines{overflow-y:auto;min-height:0;flex:1 1 auto;scrollbar-width:thin}
+  .ddlist::-webkit-scrollbar,.hw .snlist::-webkit-scrollbar,.hw .ctlines::-webkit-scrollbar{width:6px}
+  .ddlist::-webkit-scrollbar-thumb,.hw .snlist::-webkit-scrollbar-thumb,.hw .ctlines::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
+  .nexthw .hwv{white-space:normal;overflow-y:auto;min-height:0;display:-webkit-box;-webkit-box-orient:vertical}
 }
 .ddlist{display:flex;flex-direction:column;gap:.12rem;overflow-y:auto;min-height:0;flex:1 1 auto;padding-right:.2rem}
 .snhw .snlist{max-height:none;flex:1 1 auto;min-height:0;align-content:flex-start}
