@@ -5115,11 +5115,11 @@ function tripSettingsHtml(s) {
   </div>`;
 }
 const tripReadForm = () => ({ on: $('tripOn').checked, color: $('tripColor').value, strength: +$('tripStr').value, icons: [...document.querySelectorAll('[data-tripic]')].filter(x => x.checked).map(x => x.dataset.tripic) });
-// time in a calendar cell (제목 mode): full 2:30, hour only 2시, or hidden — settings.calTime
+// time in a calendar cell (제목 mode): full 2:30, hour only 2, or hidden — settings.calTime
 function cellTm(tm) {
   const mode = S.settings.calTime || 'full', m = /^(\d{1,2}):(\d{2})/.exec(tm || '');
   if (!m || mode === 'off') return '';
-  if (mode === 'hour') { const h = +m[1]; return `<span class="ctm"><span class="${h >= 12 ? 'tpm' : 'tam'}">${h % 12 || 12}시</span></span>`; }
+  if (mode === 'hour') { const h = +m[1]; return `<span class="ctm"><span class="${h >= 12 ? 'tpm' : 'tam'}">${h % 12 || 12}</span></span>`; }
   return `<span class="ctm">${colorTimes(esc(tm.slice(0, 5)))}</span>`;
 }
 function renderCal() {
@@ -7015,7 +7015,7 @@ function openSettings() {
     </div><div class="stab" data-tab="display" ${tab === 'display' ? '' : 'hidden'}>
     <div class="bsec"><b>${ic('cal')} 달력 칸 표시</b>
       <label>달력 칸에<select class="field" id="sCellMode"><option value="icons" ${s.cellMode !== 'titles' ? 'selected' : ''}>아이콘만 (3×3 격자)</option><option value="titles" ${s.cellMode === 'titles' ? 'selected' : ''}>아이콘과 제목 (구글 캘린더처럼 한 줄씩)</option></select></label>
-      <label>시간 표시<select class="field" id="sCalTime"><option value="full" ${(s.calTime || 'full') === 'full' ? 'selected' : ''}>시:분 (2:30)</option><option value="hour" ${s.calTime === 'hour' ? 'selected' : ''}>시만 (2시)</option><option value="off" ${s.calTime === 'off' ? 'selected' : ''}>숨기기</option></select></label>
+      <label>시간 표시<select class="field" id="sCalTime"><option value="full" ${(s.calTime || 'full') === 'full' ? 'selected' : ''}>시:분 (2:30)</option><option value="hour" ${s.calTime === 'hour' ? 'selected' : ''}>시만 (2)</option><option value="off" ${s.calTime === 'off' ? 'selected' : ''}>숨기기</option></select></label>
       <span class="count">시간 표시는 '아이콘과 제목'일 때 달력 칸에 적용됩니다. 제목을 보이면 칸 너비만큼 앞부분만 보이고, 넘치는 것은 +숫자로 표시됩니다. 마우스를 올리면 전체 제목이 보입니다.</span></div>
     <div class="bsec"><b>${ic('inbox')} 이메일 처리 위치</b>
       <label>넓은 화면에서<select class="field" id="sMailTab"><option value="split" ${!s.mailTab ? 'selected' : ''}>오른쪽에 따로 (일정·할 일 옆)</option><option value="tab" ${s.mailTab ? 'selected' : ''}>일정·할 일과 같은 탭으로</option></select></label>
