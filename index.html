@@ -2028,8 +2028,11 @@ function renderFocus() {
     } else if (m.priority === 'high' && m.status === 'open') items.push({ sc: 72, why: '중요 메일 · 처리 중', title: m.subject, icon: 'mail', act });
     if (m.delegable && !m.delegated) items.push({ sc: m.priority === 'high' ? 68 : 52, why: '조교에게 전달할 일', title: m.subject, icon: 'hand', act });
   }
+  const nowM0 = new Date().getHours() * 60 + new Date().getMinutes();
   for (const e of expandEvents()) {
     const n = diff(e.date);
+    // today's timed events that have already ended are not shown here
+    if (n === 0 && !e.span && toMin(e.time) != null && evEnd(e) <= nowM0) continue;
     const act = `data-act="pickDay" data-day="${e.date}"`;
     if (impOfEvent(e) === 'high' && !e.span && n >= 0 && n <= 3) { items.push({ sc: n === 0 ? 95 : n === 1 ? 86 : 74, why: `중요 · ${n === 0 ? '오늘' : n === 1 ? '내일' : 'D-' + n}${e.time ? ' ' + e.time : ''}`, title: e.title, icon: e.kind === '마감' ? '마감' : e.kind || '학사', act }); continue; }
     if (n === 0 && !e.span) items.push({ sc: 90, why: `오늘 ${e.kind || '일정'}${e.time ? ' · ' + e.time : ''}`, title: e.title, icon: e.kind || '학사', act });
