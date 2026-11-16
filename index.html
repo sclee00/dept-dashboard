@@ -362,6 +362,7 @@ textarea.field{resize:vertical;width:100%;line-height:1.55}
 .schip[aria-pressed="true"]{background:var(--green);color:var(--surface);font-weight:600}
 .schip.sm{font-size:.75rem;padding:0 .45rem}
 .item .fields .fullrow{flex-basis:100%;display:flex;gap:.3rem;flex-wrap:wrap;align-items:center}
+.item .fields .absask{flex-wrap:nowrap;align-items:flex-start}.item .fields .absask>span{flex:1;min-width:0}
 .warnline{color:var(--red);font-size:.82rem}
 .blist{display:flex;flex-direction:column;gap:3px}
 .rstep{display:grid;grid-template-columns:1.8rem minmax(0,1fr);gap:.6rem;align-items:start}
@@ -5530,9 +5531,9 @@ function renderSheet(force) {
         <label class="chk abschk" ${e.added ? 'hidden' : ''}><input type="checkbox" data-act="evAbsent" data-i="${i}" ${absent ? 'checked' : ''} ${dis}>나는 불참</label>${clash.length ? `<span class="pill clash" title="${esc(clash.map(x => (x.why === '출장' ? '출장' : '중요') + ': ' + x.with).join('\n'))}">${ic('clash')}일정 겹침</span>` : ''}
         ${e.location && !simple ? `<input class="field title" id="ev-l-${i}" value="${ev('ev-l-'+i, e.location)}" aria-label="장소" ${dis}>` : ''}
         ${chips && !simple ? `<div class="fullrow"><span class="count">${ic('free')} 이 날 빈 시간</span>${chips}</div>` : ''}
+        ${!e.added && !e.skipped && absent ? `<div class="fullrow count absask">${ic('ban')}<span>불참이어도 달력에 <b>(불참)</b>으로 남길까요? 남기면 흐리게 보이고 빈 시간 계산에서 빠집니다.</span></div>` : ''}
         ${cf.length ? `<div class="fullrow warnline">${ic('alert')} 겹침: ${esc(cf.join(', '))}</div>` : ''}
       </div>
-      ${!e.added && !e.skipped && absent ? `<div class="count absask">${ic('ban')} 불참이어도 달력에 <b>(불참)</b>으로 남길까요? 남기면 흐리게 보이고 빈 시간 계산에서 빠집니다.</div>` : ''}
       ${e.added ? '<span class="pill replied">추가됨</span>' : e.skipped ? '<span class="pill done">건너뜀</span>' : `<div class="row"><button class="btn small primary" type="button" data-act="addEv" data-i="${i}">${absent ? '불참으로 추가' : '일정 추가'}</button><button class="btn small" type="button" data-act="skipItem" data-kind="events" data-i="${i}">건너뛰기</button></div>`}
     </div>`;
   };
