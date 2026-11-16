@@ -940,6 +940,7 @@ button.hw{cursor:pointer}button.hw:hover{border-color:var(--accent)}
 .ddrow i{font-style:normal;font-size:.65rem;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:0 .35rem;margin-left:auto;flex:none}
 .ddrow.add{color:var(--muted)}.ddrow.add b{color:var(--muted)}.ddrow.none{cursor:default;color:var(--muted)}
 .ddhw{max-width:22rem}.ddhw .ddrow{width:100%}
+#cal,.cthw{touch-action:pan-y}.swl{animation:swl .22s ease-out}.swr{animation:swr .22s ease-out}@keyframes swl{from{transform:translateX(28px);opacity:.4}}@keyframes swr{from{transform:translateX(-28px);opacity:.4}}@media (prefers-reduced-motion:reduce){.swl,.swr{animation:none}}
 .cthw{min-width:13rem;max-width:19rem}.cthw .ctnav{margin-left:auto;display:inline-flex;gap:.1rem}.cthw .ctnav .hwedit{margin-left:0;font-size:.95rem;min-width:1.1rem}
 .cthw .hwv small{font-weight:400;font-size:.74rem;color:var(--muted)}
 .ctlines{display:flex;flex-direction:column;gap:.05rem;min-width:0}
@@ -4505,6 +4506,43 @@ document.addEventListener('keydown', e => {
 window.addEventListener('resize', () => applyLayout());
 // the header's two halves scroll sideways with the normal mouse wheel when they are made narrow
 document.addEventListener('wheel', e => { const el = e.target.closest && e.target.closest('header.top .stats, header.top .tools'); if (!el || el.scrollWidth <= el.clientWidth || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return; el.scrollLeft += e.deltaY; e.preventDefault(); }, { passive: false });
+
+/* ---------- swipe sideways: the calendar goes to the previous/next month, the contacts card to the previous/next person ---------- */
+(() => {
+  const ZONES = [
+    ['#cal', d => document.querySelector(`.calnav [data-act="${d > 0 ? 'nextMonth' : 'prevMonth'}"]`), '#cal'],
+    ['.cthw', d => document.querySelector(`.cthw [data-act="ctNav"][data-d="${d}"]`), null]];
+  const zoneOf = t => { for (const z of ZONES) if (t && t.closest && t.closest(z[0])) return z; return null; };
+  const slide = (z, d) => { const b = z[1](d); if (!b) return false; b.click();
+    const el = z[2] ? document.querySelector(z[2]) : document.querySelector('.cthw');
+    if (el) { el.classList.remove('swl', 'swr'); void el.offsetWidth; el.classList.add(d > 0 ? 'swl' : 'swr'); }
+    return true; };
+  // a sideways move that is fast and long enough, and clearly more sideways than up/down
+  const judge = (dx, dy, dt) => Math.abs(dx) >= 45 && Math.abs(dx) > Math.abs(dy) * 1.6 && dt < 900 ? (dx < 0 ? 1 : -1) : 0;
+  let eatClick = false;
+  // fingers (iPhone, iPad, touch screens)
+  let tz = null;
+  document.addEventListener('touchstart', e => { if (e.touches.length !== 1) { tz = null; return; } const z = zoneOf(e.target); if (!z) { tz = null; return; } const p = e.touches[0]; tz = { z, x: p.clientX, y: p.clientY, t: Date.now() }; }, { passive: true });
+  document.addEventListener('touchend', e => { if (!tz) return; const p = e.changedTouches[0], d = judge(p.clientX - tz.x, p.clientY - tz.y, Date.now() - tz.t), z = tz.z; tz = null;
+    if (d && slide(z, d)) { eatClick = true; setTimeout(() => { eatClick = false; }, 400); } }, { passive: true });
+  document.addEventListener('touchcancel', () => { tz = null; });
+  // mouse: press, drag sideways, let go (not when starting on something that is dragged or typed into)
+  document.addEventListener('pointerdown', e => {
+    if (e.pointerType !== 'mouse' || e.button !== 0) return;
+    const z = zoneOf(e.target); if (!z || e.target.closest('[draggable="true"], input, textarea, select, [contenteditable="true"]')) return;
+    const x0 = e.clientX, y0 = e.clientY, t0 = Date.now();
+    const up = ev => { document.removeEventListener('pointerup', up, true); const d = judge(ev.clientX - x0, ev.clientY - y0, Date.now() - t0);
+      if (d && slide(z, d)) { eatClick = true; setTimeout(() => { eatClick = false; }, 400); } };
+    document.addEventListener('pointerup', up, true);
+  });
+  // the click that ends a swipe does not also press what was under the finger
+  document.addEventListener('click', e => { if (eatClick && e.isTrusted) { eatClick = false; e.stopPropagation(); e.preventDefault(); } }, true);
+  // trackpad: two-finger sideways swipe
+  let acc = 0, lock = 0;
+  document.addEventListener('wheel', e => { const z = zoneOf(e.target); if (!z || Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
+    e.preventDefault(); if (Date.now() < lock) return; acc += e.deltaX;
+    if (Math.abs(acc) >= 60) { slide(z, acc > 0 ? 1 : -1); acc = 0; lock = Date.now() + 600; } }, { passive: false });
+})();
 
 /* ---------- word colors: chosen words always show in a chosen color ---------- */
 const wcRules = () => (UI.wcDraft || (S.settings && S.settings.wordColors) || []).filter(r => r && r.w && String(r.w).trim() && /^#[0-9a-f]{6}$/i.test(r.color || ''));
