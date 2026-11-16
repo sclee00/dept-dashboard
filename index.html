@@ -5532,7 +5532,8 @@ function renderSheet(force) {
         ${chips && !simple ? `<div class="fullrow"><span class="count">${ic('free')} 이 날 빈 시간</span>${chips}</div>` : ''}
         ${cf.length ? `<div class="fullrow warnline">${ic('alert')} 겹침: ${esc(cf.join(', '))}</div>` : ''}
       </div>
-      ${e.added ? '<span class="pill replied">추가됨</span>' : e.skipped ? '<span class="pill done">건너뜀</span>' : `<div class="row"><button class="btn small primary" type="button" data-act="addEv" data-i="${i}">일정 추가</button><button class="btn small" type="button" data-act="skipItem" data-kind="events" data-i="${i}">건너뛰기</button></div>`}
+      ${!e.added && !e.skipped && absent ? `<div class="count absask">${ic('ban')} 불참이어도 달력에 <b>(불참)</b>으로 남길까요? 남기면 흐리게 보이고 빈 시간 계산에서 빠집니다.</div>` : ''}
+      ${e.added ? '<span class="pill replied">추가됨</span>' : e.skipped ? '<span class="pill done">건너뜀</span>' : `<div class="row"><button class="btn small primary" type="button" data-act="addEv" data-i="${i}">${absent ? '불참으로 추가' : '일정 추가'}</button><button class="btn small" type="button" data-act="skipItem" data-kind="events" data-i="${i}">건너뛰기</button></div>`}
     </div>`;
   };
   const itemTk = (t, i) => `<div class="item ${t.added || t.skipped ? 'added' : ''} ${t.forHead === false ? 'rest' : ''}">
@@ -5545,11 +5546,13 @@ function renderSheet(force) {
     </div>`;
   // only what the head has to care about is shown; the rest is one click away
   const split = (arr, fn, key, noun) => {
-    const main = arr.map((x, i) => [x, i]).filter(([x]) => x.forHead !== false), rest = arr.map((x, i) => [x, i]).filter(([x]) => x.forHead === false), open = UI['showRest' + key];
+    // an event I'm invited to but not going to is still asked about (add as 불참 or skip), never tucked away
+    const keep = (x, i) => x.forHead !== false || (key === 'Ev' && !x.added && !x.skipped && itemAbsent(m, x, i));
+    const main = arr.map((x, i) => [x, i]).filter(([x, i]) => keep(x, i)), rest = arr.map((x, i) => [x, i]).filter(([x, i]) => !keep(x, i)), open = UI['showRest' + key];
     return `${main.length ? main.map(([x, i]) => fn(x, i)).join('') : `<div class="count">내가 직접 챙길 ${noun}은 없습니다.</div>`}
       ${rest.length ? `<button class="btn small ghost restbtn" type="button" data-act="showRest" data-k="${key}">${ic(open ? 'dash' : 'plus')}${open ? '숨기기' : `숨긴 ${noun} ${rest.length}개 보기`} <span class="count">(조교·부서가 처리하거나 참고용)</span></button>${open ? rest.map(([x, i]) => fn(x, i)).join('') : ''}` : ''}`;
   };
-  const evMain = evs.filter(e => e.forHead !== false), tkMain = tks.filter(t => t.forHead !== false);
+  const evMain = evs.filter((e, i) => e.forHead !== false || (!e.added && !e.skipped && itemAbsent(m, e, i))), tkMain = tks.filter(t => t.forHead !== false);
   const decs = a.decisions || [], dch = m.decisionChoices || {};
   const items = delegateItems(m), hasShort = items.length > 0, tab = UI.dlgTab || (hasShort ? 'short' : 'long');
   const pend = pendingCount(m);
@@ -5698,7 +5701,7 @@ ${keyLine() ? keyLine() + '\n참석 여부를 묻는 메일인데 그 행사 날
   "decisions": [{"question": "내가 정해야 할 것 (질문 한 줄)", "options": [{"label": "선택지 (짧게)", "detail": "고르면 어떻게 되는지 한 줄"}], "recommend": 추천 선택지 번호(0부터) 또는 null, "why": "추천 이유 한 줄 또는 null"}],
   "highlights": [{"text": "원문에서 글자 그대로 옮긴 짧은 구절", "type": "deadline | request | decision | date | attachment | warning"}]
 }
-forHead: 내가 직접 참석·결정·제출·확인해야 하는 일정이랑 할 일만 true. 조교·행정실·다른 부서가 실무로 하는 거나 참고용 일정은 false (화면에서 기본으로 숨겨).
+forHead: 내가 직접 참석·결정·제출·확인해야 하는 일정이랑 할 일만 true. 나한테 참석 여부를 묻는 행사·회의는 내가 안 가더라도 true. 조교·행정실·다른 부서가 실무로 하는 거나 참고용 일정은 false (화면에서 기본으로 숨겨).
 myAction: 내가 뭘 언제까지 해야 하는지 한두 줄로. 할 게 없으면 "확인만 하면 됨"처럼.
 decisions: 내가 골라야 답장·지시를 마무리할 수 있는 결정만 0~4개. 선택지는 안 겹치게 2~4개, 객관식으로.
 delegateItems: 조교 지시를 개조식으로 한 줄씩 쪼갠 것(3~8개). 꼭 필요한 건 essential true, 넣을지 내가 판단할 만한 건 false.
