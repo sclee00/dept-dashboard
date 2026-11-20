@@ -34,6 +34,7 @@ html,body{margin:0}
 }
 
 html{font-size:calc(clamp(14px, .45vw + 8.5px, 19px) * var(--fs,1))}
+.calwrap{zoom:var(--z-cal,1)}.rail{zoom:var(--z-rail,1)}header.top,.focusbar,.hwidgets{zoom:var(--z-top,1)}.qrow{zoom:var(--z-bot,1)}
 body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:1rem;line-height:1.5}
 *{box-sizing:border-box}
 button,input,select,textarea{font:inherit;color:inherit}
@@ -3706,7 +3707,7 @@ const UNDO_LABEL = {
   delRule: '아이콘 규칙 삭제', skipOcc: '반복 일정 한 번 빼기', edSave: '일정 편집', bdSave: '불가 시간 설정', saveSettings: '설정 변경', imSave: '아이콘 색·이름',
   pushG: '구글에 추가', fEvent: '일정 추가', fBlock: '불가 시간 추가', taskForm: '할 일 추가', importData: '파일 가져오기'
 };
-const UNDO_SKIP = new Set(['snRowAdd', 'snRowDel', 'snipAdd', 'cmdImp', 'gGone', 'cmdIcon', 'cmdIconSet', 'ddayX', 'ddayUnhide', 'ddayDel', 'ctNav', 'ctCopy', 'ctNew', 'ctEdit', 'ctAdd', 'ctSave', 'ctDel', 'ddaySave', 'ddayClear', 'verReload', 'attEvents', 'snipCopy', 'snipEdit', 'ddayEdit', 'lockNow', 'lockSave', 'tip', 'daySel', 'dayMode', 'dayNav', 'dayGo', 'fwdCopy', 'gemCancel', 'scriptCopy', 'scriptSetup', 'scriptTest', 'scriptOn', 'copyReply', 'copyDraft', 'gemEmbed', 'gemDockOpen', 'qTab', 'gemNew', 'gemTall', 'gemZoom', 'histUndo', 'histRedo', 'histOne', 'histGroup', 'histFold', 'stPing', 'pushAllG', 'aiKeySave', 'aiKeyClear', 'aiTest', 'aiMode', 'aiModelSel', 'relayClip', 'stOpen', 'tidyOpen', 'tidyDel', 'tidyTime', 'tidyMerge', 'inboxRun', 'analyzeMail', 'tgShow', 'tgHide', 'phoneLink', 'gDel', 'fltImp', 'fltIcons', 'fltTog', 'fltClear', 'fltClose', 'cmdToAI', 'cmdPick', 'cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
+const UNDO_SKIP = new Set(['zReset', 'snRowAdd', 'snRowDel', 'snipAdd', 'cmdImp', 'gGone', 'cmdIcon', 'cmdIconSet', 'ddayX', 'ddayUnhide', 'ddayDel', 'ctNav', 'ctCopy', 'ctNew', 'ctEdit', 'ctAdd', 'ctSave', 'ctDel', 'ddaySave', 'ddayClear', 'verReload', 'attEvents', 'snipCopy', 'snipEdit', 'ddayEdit', 'lockNow', 'lockSave', 'tip', 'daySel', 'dayMode', 'dayNav', 'dayGo', 'fwdCopy', 'gemCancel', 'scriptCopy', 'scriptSetup', 'scriptTest', 'scriptOn', 'copyReply', 'copyDraft', 'gemEmbed', 'gemDockOpen', 'qTab', 'gemNew', 'gemTall', 'gemZoom', 'histUndo', 'histRedo', 'histOne', 'histGroup', 'histFold', 'stPing', 'pushAllG', 'aiKeySave', 'aiKeyClear', 'aiTest', 'aiMode', 'aiModelSel', 'relayClip', 'stOpen', 'tidyOpen', 'tidyDel', 'tidyTime', 'tidyMerge', 'inboxRun', 'analyzeMail', 'tgShow', 'tgHide', 'phoneLink', 'gDel', 'fltImp', 'fltIcons', 'fltTog', 'fltClear', 'fltClose', 'cmdToAI', 'cmdPick', 'cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
 function undoSnap() {
   const o = { settings: JSON.parse(JSON.stringify(S.settings)) };
   for (const c of COLS) o[c] = JSON.parse(JSON.stringify(S[c]));
@@ -4500,8 +4501,11 @@ function applyFont(c) {
   r.setProperty('--body', stack);
   if (c.head === 'same') r.setProperty('--display', stack); else r.removeProperty('--display');
   r.setProperty('--fs', String(Math.max(0.85, Math.min(1.3, +c.size || 1))));
+  // each part of the screen can be made bigger or smaller on its own (on top of the overall size)
+  for (const [k] of ZAREAS) r.setProperty('--z-' + k, String(Math.max(0.7, Math.min(1.5, +c['z' + k] || 1))));
   document.body.classList.toggle('small-body', c.small === 'body');
 }
+const ZAREAS = [['cal', '캘린더'], ['rail', '오른쪽 일정·메일·할 일'], ['top', '맨 위 (날짜·카드)'], ['bot', '아래 (자동 처리·버튼)']];
 function fontSettingsHtml() {
   const c = fontCfg(); FONTS.forEach(x => loadFont(x[0]));
   const sample = colorTimes('11/3(화)까지 예외 교과목 회신 · 교수회의 09:30–10:30 · 학위수여식 14:00–15:30');
@@ -4513,18 +4517,23 @@ function fontSettingsHtml() {
     <div class="impgrid">
       <label>제목 글꼴<select class="field" id="fontHead"><option value="serif" ${c.head !== 'same' ? 'selected' : ''}>명조 (지금처럼)</option><option value="same" ${c.head === 'same' ? 'selected' : ''}>본문과 같은 글꼴</option></select></label>
       <label>작은 회색 글씨<select class="field" id="fontSmall"><option value="mono" ${c.small !== 'body' ? 'selected' : ''}>고정폭 (지금처럼)</option><option value="body" ${c.small === 'body' ? 'selected' : ''}>본문 글꼴 (더 깔끔)</option></select></label>
-      <label>글씨 크기 <span id="fontSizeV">${Math.round((+c.size || 1) * 100)}%</span><input type="range" id="fontSize" min="0.85" max="1.3" step="0.05" value="${+c.size || 1}"></label>
+      <label>전체 글씨 크기 <span id="fontSizeV">${Math.round((+c.size || 1) * 100)}%</span><input type="range" id="fontSize" min="0.85" max="1.3" step="0.05" value="${+c.size || 1}"></label>
     </div>
+    <b style="display:block;margin-top:.6rem">부분별 크기 <span class="count">전체 크기에 곱해집니다 · 칸 크기는 그대로, 안의 글씨와 버튼만 커지거나 작아집니다</span></b>
+    <div class="impgrid">${ZAREAS.map(([k, name]) => `<label>${name} <span id="zV-${k}">${Math.round((+c['z' + k] || 1) * 100)}%</span><input type="range" data-z="${k}" min="0.7" max="1.5" step="0.05" value="${+c['z' + k] || 1}"></label>`).join('')}</div>
+    <div class="row"><button class="btn small" type="button" data-act="zReset">부분별 크기 모두 100%로</button></div>
     <span class="count">고르면 바로 화면에 적용됩니다. 저장을 눌러야 유지됩니다.</span></div>`;
 }
 function fontReadForm() {
   const b = document.querySelector('input[name=fontBody]:checked');
-  return { body: b ? b.value : 'plex', head: $('fontHead').value, small: $('fontSmall').value, size: +$('fontSize').value };
+  const z = {}; document.querySelectorAll('input[data-z]').forEach(i => { z['z' + i.dataset.z] = +i.value; });
+  return { body: b ? b.value : 'plex', head: $('fontHead').value, small: $('fontSmall').value, size: +$('fontSize').value, ...z };
 }
 function fontLive() {
   UI.fontDraft = fontReadForm(); applyFont(UI.fontDraft);
   document.querySelectorAll('.fontcard').forEach(x => x.classList.toggle('on', x.querySelector('input').checked));
   if ($('fontSizeV')) $('fontSizeV').textContent = Math.round(UI.fontDraft.size * 100) + '%';
+  for (const [k] of ZAREAS) if ($('zV-' + k)) $('zV-' + k).textContent = Math.round((UI.fontDraft['z' + k] || 1) * 100) + '%';
 }
 
 /* ---------- drag to reorder the top buttons and number cards ---------- */
@@ -6801,6 +6810,7 @@ document.addEventListener('click', async ev0 => {
       case 'gemEmbed': UI.gemFrameBad = false; if (!el.checked) { gemDock(false); const ff = $('gemFrame'); if (ff) ff.remove(); } await saveSettings({ ...S.settings, gemEmbed: el.checked }); if (UI.dlg === 'settings') openSettings(); return;
       case 'gemDockOpen': if (UI.qtab === 'gem') qTab('auto'); else gemDock(true); return;
       case 'qTab': qTab(el.dataset.k); return;
+      case 'zReset': { document.querySelectorAll('input[data-z]').forEach(i => { i.value = 1; }); fontLive(); return; }
       case 'gemZoom': { let z = gemZoom() + (+el.dataset.d) * 0.1; z = Math.round(Math.max(0.5, Math.min(1, z)) * 10) / 10; try { localStorage.setItem('gemZoom', String(z)); } catch {} applyGemZoom(); toast(`Gemini 글자 크기 ${Math.round(z * 100)}%`); return; }
       case 'gemNew': { const f = gemDock(true); if (f) f.src = GEM_APP; return; }
       case 'gemTall': { const q = document.querySelector('.quick'); q.classList.toggle('gtall'); el.textContent = q.classList.contains('gtall') ? '작게' : '크게'; if (q.classList.contains('gtall')) q.scrollIntoView({ block: 'nearest' }); return; }
@@ -6988,7 +6998,7 @@ document.addEventListener('click', async ev0 => {
     }
   } catch (e) { dbErr(e); }
 });
-document.addEventListener('input', e => { if (e.target.matches && e.target.matches('[data-wc]')) wcLive(); if (e.target.matches && e.target.matches('[data-fx-k], #fxShort, #fxLong')) fxLive(); if (e.target.matches && e.target.matches('input[name=fontBody], #fontHead, #fontSmall, #fontSize')) fontLive(); });
+document.addEventListener('input', e => { if (e.target.matches && e.target.matches('[data-wc]')) wcLive(); if (e.target.matches && e.target.matches('[data-fx-k], #fxShort, #fxLong')) fxLive(); if (e.target.matches && e.target.matches('input[name=fontBody], #fontHead, #fontSmall, #fontSize, input[data-z]')) fontLive(); });
 document.addEventListener('change', async e => {
   const t = e.target;
   // an edited decision ("11/18 09:00" → "11/18 10:00"): kept with the mail and used in the reply and the assistant mail
@@ -7013,7 +7023,7 @@ document.addEventListener('change', async e => {
 });
 document.addEventListener('change', e => { if (e.target.id === 'fwdDel') saveSettings({ ...S.settings, fwdDelete: e.target.value }).then(() => toast('전달 메일 처리: ' + e.target.selectedOptions[0].textContent)); });
 document.addEventListener('change', e => { if (e.target.id === 'aiModelSel') saveSettings({ ...S.settings, aiModel: e.target.value }).then(() => toast('모델: ' + e.target.value)); });
-document.addEventListener('change', e => { if (e.target.matches && e.target.matches('[data-wc]')) wcLive(); if (e.target.matches && e.target.matches('[data-fx-k], #fxShort, #fxLong')) fxLive(); if (e.target.matches && e.target.matches('input[name=fontBody], #fontHead, #fontSmall, #fontSize')) fontLive(); });
+document.addEventListener('change', e => { if (e.target.matches && e.target.matches('[data-wc]')) wcLive(); if (e.target.matches && e.target.matches('[data-fx-k], #fxShort, #fxLong')) fxLive(); if (e.target.matches && e.target.matches('input[name=fontBody], #fontHead, #fontSmall, #fontSize, input[data-z]')) fontLive(); });
 document.addEventListener('input', e => { if (e.target.closest('#sheetRoot') && e.target.id) UI.edits[e.target.id] = e.target.value; });
 document.addEventListener('change', e => { if (e.target.closest('#sheetRoot') && e.target.id && e.target.type !== 'file') UI.edits[e.target.id] = e.target.value; });
 document.addEventListener('change', e => {
