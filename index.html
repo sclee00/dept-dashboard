@@ -7500,9 +7500,10 @@ if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__dd = { S, sam
     const cur = now(); put(MP, cur);
     setMini(true);
     place({ x: cur.x + cur.w - MW, y: cur.y, w: MW, h: MH });
+    if (window.__dashRepin) window.__dashRepin();
   };
   const fromMini = () => {
-    if (window.__dashUnpin && window.__dashPinned) window.__dashUnpin();
+    if (window.__dashUnpin && window.__dashPinned) window.__dashUnpin(true);
     setMini(false);
     const prev = get(MP); if (prev) apply(prev, true);
     setTimeout(() => { try { window.__dashMain.renderAll(); } catch {} }, 300);
@@ -7543,11 +7544,13 @@ if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__dd = { S, sam
     try { window.__dashMain.renderWidgets(); } catch {}
     return true;
   };
-  const unpin = () => { window.__dashPinned = false; setPinTitle(false); try { localStorage.setItem(PINK, '0'); } catch {} try { window.__dashMain.renderWidgets(); } catch {} };
+  // keep = the widget should come back pinned next time it is shrunk (expanding only lets go of the big window)
+  const unpin = keep => { window.__dashPinned = false; setPinTitle(false); if (!keep) try { localStorage.setItem(PINK, '0'); } catch {} try { window.__dashMain.renderWidgets(); } catch {} };
   window.__dashUnpin = unpin;
+  window.__dashRepin = () => { let on = false; try { on = localStorage.getItem(PINK) === '1'; } catch {} if (on) setTimeout(() => helperPin(), 500); };
   document.addEventListener('click', async e => {
     const q = e.target.closest && e.target.closest('[data-pip]'); if (!q) return; e.preventDefault(); e.stopPropagation();
-    if (q.dataset.pip === '0') { if (window.__dashPinned) unpin(); if (pipWin) pipClose(); return; }
+    if (q.dataset.pip === '0') { unpin(false); if (pipWin) pipClose(); return; }
     if (app && await helperPin()) { try { toast('이 창을 항상 맨 앞에 고정했습니다.'); } catch {} return; }
     try { toast(app ? '고정해 줄 업무대시보드.exe가 실행 중이 아닙니다. 대시보드를 닫고 새로 받은 exe로 다시 열어 주세요.' : '항상 위는 업무대시보드.exe로 연 창에서만 됩니다.'); } catch {}
   }, true);
