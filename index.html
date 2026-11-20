@@ -1990,9 +1990,9 @@ function renderWidgets() {
 // widget view: only today's date, the next event and the D-days, in a small window
 function renderMini(nx, dl, ddRow) {
   const el = $('miniView'), pip = window.__pipPaint; if (!el || (!document.body.classList.contains('mini') && !pip)) return;
-  const d = parse(todayStr()), now = new Date(), pinned = !!pip || !!window.__dashPinned;
+  const d = parse(todayStr()), now = new Date(), pinned = !!window.__dashPinned;
   const html = `<div class="mvtop"><b>${d.getMonth() + 1}월 ${d.getDate()}일 ${WD[d.getDay()]}요일</b><span class="mono">${pad(now.getHours())}:${pad(now.getMinutes())}</span>
-      ${'documentPictureInPicture' in window ? `<button type="button" class="mvopen ${pinned ? 'on' : ''}" data-pip="${pinned ? 0 : 1}" title="${pinned ? '항상 위 끄기' : '다른 창보다 항상 위에 띄우기'}"><span>📌${pinned ? ' 고정됨' : ' 항상 위'}</span></button>` : ''}
+      ${window.__dashApp ? `<button type="button" class="mvopen ${pinned ? 'on' : ''}" data-pip="${pinned ? 0 : 1}" title="${pinned ? '항상 위 끄기' : '다른 창보다 항상 위에 띄우기'}"><span>📌${pinned ? ' 고정됨' : ' 항상 위'}</span></button>` : ''}
       <button type="button" class="mvopen" data-mini="0" title="원래 크기로 펼치기" style="margin-left:0"><span>⤢ 펼치기</span></button></div>
     ${nx}
     <div class="hw ddhw"><span class="hwl">${ic('flag')}D-day</span><div class="ddlist">${dl.length ? dl.map(ddRow).join('') : '<span class="count">지정한 날이 없습니다</span>'}</div></div>`;
@@ -7444,6 +7444,7 @@ if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__dd = { S, sam
   let app = q.get('app') === '1' || (window.toolbar && window.toolbar.visible === false) || !matchMedia('(display-mode: browser)').matches; // standalone, window-controls-overlay, minimal-ui …
   try { if (app) sessionStorage.setItem('dashApp', '1'); else app = sessionStorage.getItem('dashApp') === '1'; } catch {}
   // in an ordinary browser tab the page cannot move or resize its window, so only the inner panel sizes are switched there
+  window.__dashApp = app;
   const LK = 'dashWinLast', PK = 'dashWinPresets';
   const get = k => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch { return null; } };
   const put = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
@@ -7535,7 +7536,7 @@ if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__dd = { S, sam
   const helperPin = async () => {
     let acked = false; const h = () => { acked = true; };
     addEventListener('resize', h); setPinTitle(true);
-    await new Promise(r => setTimeout(r, 1600));
+    await new Promise(r => setTimeout(r, 2500));
     removeEventListener('resize', h);
     if (!acked) { setPinTitle(false); return false; }
     window.__dashPinned = true; try { localStorage.setItem(PINK, '1'); } catch {}
@@ -7548,7 +7549,7 @@ if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__dd = { S, sam
     const q = e.target.closest && e.target.closest('[data-pip]'); if (!q) return; e.preventDefault(); e.stopPropagation();
     if (q.dataset.pip === '0') { if (window.__dashPinned) unpin(); if (pipWin) pipClose(); return; }
     if (app && await helperPin()) { try { toast('이 창을 항상 맨 앞에 고정했습니다.'); } catch {} return; }
-    pipOpen();
+    try { toast(app ? '고정해 줄 업무대시보드.exe가 실행 중이 아닙니다. 대시보드를 닫고 새로 받은 exe로 다시 열어 주세요.' : '항상 위는 업무대시보드.exe로 연 창에서만 됩니다.'); } catch {}
   }, true);
   if (app) { let on = false; try { on = localStorage.getItem(PINK) === '1' && localStorage.getItem(MK) === '1'; } catch {} if (on) { window.__dashPinned = true; setPinTitle(true); } }
   document.addEventListener('click', e => { const m = e.target.closest && e.target.closest('[data-mini]'); if (!m) return; e.preventDefault(); e.stopPropagation(); m.dataset.mini === '1' ? toMini() : fromMini(); }, true);
