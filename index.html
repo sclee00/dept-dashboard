@@ -7477,11 +7477,14 @@ if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__dd = { S, sam
     place(b);
   };
   // 1) open where it was last time (first time: fill the screen)
-  const last = app ? get(LK) : null;
+  // the widget (mini) keeps its own last place, apart from the normal window
+  const MLK = 'dashMiniLast', isMini = () => document.body.classList.contains('mini');
+  let startMini = false; try { startMini = localStorage.getItem('dashMini') === '1'; } catch {}
+  const last = app ? (startMini ? get(MLK) || get(LK) : get(LK)) : null;
   if (app) { if (last) apply(last); else apply({ x: screen.availLeft || 0, y: screen.availTop || 0, w: screen.availWidth, h: screen.availHeight }); }
   // 2) keep remembering (there is no "moved" event, so check every couple of seconds as well)
   let sig = '';
-  const save = () => { const b = now(), s = JSON.stringify(b); if (s !== sig) { sig = s; put(LK, b); } };
+  const save = () => { if (save.hold) return; const b = now(), s = JSON.stringify(b); if (s !== sig) { sig = s; put(isMini() ? MLK : LK, b); } };
   if (app) {
   setTimeout(() => { save(); setInterval(save, 2000); }, 1500);
     addEventListener('resize', () => { clearTimeout(save._t); save._t = setTimeout(save, 400); });
@@ -7498,21 +7501,25 @@ if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__dd = { S, sam
   };
   // widget mode: a small window with only today's date, the next event and the D-days
   const MK = 'dashMini', MP = 'dashMiniPrev', MW = 320, MH = 300;
+  const hold = () => { save.hold = true; clearTimeout(hold._t); hold._t = setTimeout(() => { save.hold = false; sig = ''; }, 1500); };
   const setMini = on => {
     document.body.classList.toggle('mini', on);
     try { localStorage.setItem(MK, on ? '1' : '0'); } catch {}
     try { window.__dashMain.renderWidgets(); } catch {}
   };
   const toMini = () => {
-    const cur = now(); put(MP, cur);
+    const cur = now(); put(MP, cur); put(LK, cur);
+    hold();
     setMini(true);
-    place({ x: cur.x + cur.w - MW, y: cur.y, w: MW, h: MH });
+    const ml = get(MLK);
+    place(ml && ml.w > 120 && ml.h > 120 ? ml : { x: cur.x + cur.w - MW, y: cur.y, w: MW, h: MH });
     if (window.__dashRepin) window.__dashRepin();
   };
   const fromMini = () => {
     if (window.__dashUnpin && window.__dashPinned) window.__dashUnpin(true);
     setMini(false);
-    const prev = get(MP); if (prev) apply(prev, true);
+    put(MLK, now()); hold();
+    const prev = get(MP) || get(LK); if (prev) apply(prev, true);
     setTimeout(() => { try { window.__dashMain.renderAll(); } catch {} }, 300);
   };
   // always on top: Chrome's picture-in-picture window holds the widget (it stays above other windows)
