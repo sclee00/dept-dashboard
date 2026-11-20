@@ -4515,6 +4515,8 @@ function setSplit(kind, [a, b], dx, dy) {
   applyLayout(); const g = $('cal'); if (g) fitIcons(g);
 }
 function splitDone() { saveLayout(); UI.cap = 9; renderCal(); }
+// the desktop window's saved layouts also carry the inner panel sizes
+window.__dashLayout = { get: () => JSON.parse(JSON.stringify(LAY)), set: o => { LAY = o && typeof o === 'object' ? JSON.parse(JSON.stringify(o)) : {}; applyLayout(); splitDone(); } };
 document.addEventListener('pointerdown', e => {
   const g = e.target.closest && e.target.closest('.gutter'); if (!g || e.button !== 0) return;
   e.preventDefault();
@@ -7389,15 +7391,16 @@ if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__dd = { S, sam
   const say = m => { try { toast(m); } catch {} };
   const draw = () => {
     const ps = get(PK) || [];
-    bar.innerHTML = `<span class="wl" title="창 크기·위치를 저장해 두고 번호로 바로 바꿉니다">창 배치</span>` + ps.map((p, i) => `<button type="button" data-i="${i}" title="창 배치 ${i + 1}: ${p.w}×${p.h} (${p.x}, ${p.y})\n누르면 이 크기·위치로 · 오른쪽 클릭하면 지우기">${i + 1}</button>`).join('')
+    bar.innerHTML = `<span class="wl" title="창 크기·위치를 저장해 두고 번호로 바로 바꿉니다">창 배치</span>` + ps.map((p, i) => `<button type="button" data-i="${i}" title="창 배치 ${i + 1}: ${p.w}×${p.h} (${p.x}, ${p.y})\n누르면 이 창 크기·위치와 안쪽 칸 크기로 · 오른쪽 클릭하면 지우기">${i + 1}</button>`).join('')
       + (ps.length < 6 ? `<button type="button" class="add" data-add="1" title="지금 창 크기·위치를 ${ps.length + 1}번으로 저장">＋${ps.length ? '' : ' 저장'}</button>` : '');
     bar.hidden = false;
   };
   bar.addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b) return;
     const ps = get(PK) || [];
-    if (b.dataset.add) { ps.push(now()); put(PK, ps); draw(); say(`지금 창 배치를 ${ps.length}번으로 저장했습니다.`); return; }
-    const p = ps[+b.dataset.i]; if (p) { apply(p); setTimeout(save, 300); }
+    const L = window.__dashLayout;
+    if (b.dataset.add) { ps.push({ ...now(), lay: L ? L.get() : null }); put(PK, ps); draw(); say(`지금 창 배치(창 크기·위치와 안쪽 칸 크기)를 ${ps.length}번으로 저장했습니다.`); return; }
+    const p = ps[+b.dataset.i]; if (p) { apply(p); if (L && p.lay) setTimeout(() => L.set(p.lay), 250); setTimeout(save, 300); }
   });
   bar.addEventListener('contextmenu', e => {
     const b = e.target.closest('button[data-i]'); if (!b) return; e.preventDefault();
