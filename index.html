@@ -1288,7 +1288,10 @@ const IMP_HIGH = /면접|채용|임용|공개\s*발표|위원회|심의|평의�
 // a guess only: shown as a suggestion ("중요?") — importance itself is set only when I choose it
 const suggestImp = (title, kind) => kind === '마감' || IMP_HIGH.test(String(title || '')) ? 'high' : 'normal';
 const autoImp = () => 'normal';
-const impOfEvent = e => e.imp === 'high' || e.imp === 'normal' ? e.imp : autoImp(e.title, e.kind);
+// items made before importance stopped being guessed (2026-11-11 23:16) keep the 중요 they were shown with back then
+const IMP_GUESS_END = Date.parse('2026-11-11T14:16:00Z');
+const madeAt = id => { const t = parseInt(String(id || '').slice(0, 8), 36); return t > 1.5e12 && t < 4e12 ? t : 0; };
+const impOfEvent = e => e.imp === 'high' || e.imp === 'normal' ? e.imp : madeAt(e.srcId || e.id) && madeAt(e.srcId || e.id) < IMP_GUESS_END ? suggestImp(e.title, e.kind) : autoImp(e.title, e.kind);
 const gKey = g => `g:${g.id}:${g.date}`;
 function impOfG(g) { const m = (S.marks || []).find(x => x.id === gKey(g)); return m && (m.imp === 'high' || m.imp === 'normal') ? m.imp : autoImp(g.title); }
 function setMark(id, data) {
@@ -2499,6 +2502,23 @@ async function gIdsIn(cal, from, to) {
   if (pageToken) throw new Error('too many');
   return ids;
 }
+// Google events used to be shown as 중요 by a title guess; since that stopped, ask once whether to keep those as 중요
+async function impLegacyAsk() {
+  try { if (localStorage.getItem('impLegacyG') || sessionStorage.getItem('impLegacyLater')) return; } catch { return; }
+  if (document.getElementById('askRoot') && document.getElementById('askRoot').innerHTML) return;
+  const marked = new Set((S.marks || []).filter(m => m.imp === 'high' || m.imp === 'normal').map(m => m.id)), seen = new Set();
+  const list = G.events.filter(g => { const k = gKey(g); if (seen.has(k) || marked.has(k) || suggestImp(g.title) !== 'high') return false; seen.add(k); return true; })
+    .sort((a, b) => a.date.localeCompare(b.date));
+  if (!list.length) { try { localStorage.setItem('impLegacyG', '1'); } catch {} return; }
+  const rows = list.slice(0, 12).map(g => [gWhen(g), g.title]);
+  if (list.length > 12) rows.push(['', `외 ${list.length - 12}개`]);
+  const v = await gAsk({ title: `예전에 중요로 보이던 구글 일정 ${list.length}개`, rows, noLabel: '나중에',
+    note: '예전에는 제목(면접·마감·위원회 등)을 보고 자동으로 중요 표시를 했는데, "중요는 묻고 정하기"로 바꾸면서 이 일정들이 일반으로 보이고 있습니다. 어떻게 할까요? 앞으로 새 일정은 지금처럼 묻습니다.',
+    choices: [{ v: 'high', label: '모두 중요로 되돌리기', primary: true }, { v: 'normal', label: '일반으로 두기' }] });
+  if (!v) { try { sessionStorage.setItem('impLegacyLater', '1'); } catch {} return; }
+  if (v === 'high') { const t = Date.now(); for (const g of list) { const k = gKey(g), m = S.marks.find(x => x.id === k); if (m) { m.imp = 'high'; m._u = t; } else S.marks.push({ id: k, imp: 'high', _u: t }); } changed(); renderAll(); toast(`${list.length}개를 다시 중요로 표시했습니다.`); }
+  try { localStorage.setItem('impLegacyG', '1'); } catch {}
+}
 async function gGoneCheck(force) {
   if (!gReady() || UI.goneAsking) return;
   if (!force && UI.goneScanAt && Date.now() - UI.goneScanAt < 20 * 60 * 1000) return;
@@ -2561,6 +2581,7 @@ async function gLoad(force) {
     if (diff0) { G.changedAt = Date.now(); if (fsReady()) { DRIVE.dirty = true; clearTimeout(DRIVE.timer); DRIVE.timer = setTimeout(syncNow, 1500); } }
     gCacheSave();
     setTimeout(() => gGoneCheck(!!force && UI.goneForce).catch(() => {}), 300);
+    setTimeout(() => impLegacyAsk().catch(() => {}), 1200);
     const diff = [added && `새 일정 ${added}건`, changedN && `바뀐 일정 ${changedN}건`, removed && `없어진 일정 ${removed}건`].filter(Boolean).join(' · ');
     if (hadData && diff && (G.fromCache || !force)) toast('구글 캘린더 업데이트: ' + diff);
     G.fromCache = false;
@@ -7336,7 +7357,7 @@ try {
     .observe(ps, { childList: true, subtree: true, characterData: true });
 } catch {}
 setInterval(() => { if (UI.qtab === 'stat' && !document.hidden) renderStat(); }, 30000);
-if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__dd = { S, sample, gLoad, add, UNDO, undoArm, doUndo, patchItem: (c, id, d) => patch(c, id, d), replyFmt, delegFmt, fixNames, keyLine, snapshot, mergeIn, renderAll, FS, G, parseEdit, normalizeCmd, pickDT, parseCommand };
+if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__dd = { S, sample, gLoad, impOfEvent, impLegacyAsk, G, add, UNDO, undoArm, doUndo, patchItem: (c, id, d) => patch(c, id, d), replyFmt, delegFmt, fixNames, keyLine, snapshot, mergeIn, renderAll, FS, G, parseEdit, normalizeCmd, pickDT, parseCommand };
 })();
 </script>
 
