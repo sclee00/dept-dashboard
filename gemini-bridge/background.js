@@ -1,4 +1,4 @@
-/* 업무 대시보드 · Gemini 연결: one small Gemini window, one question at a time, a new chat for each */
+/* 업무대시보드 · Gemini 연결: one small Gemini window, one question at a time, a new chat for each */
 const GEMINI = 'https://gemini.google.com/app';
 let queue = Promise.resolve();
 

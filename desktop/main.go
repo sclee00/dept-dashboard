@@ -1,4 +1,4 @@
-// 업무 대시보드 · Windows 실행 파일
+// 업무대시보드 · Windows 실행 파일
 // Opens the dashboard as its own app window (no tabs, no address bar) in the Chrome
 // or Edge that is already on this PC, so Google sign-in and the Gemini bridge
 // extension keep working exactly as in the browser.
@@ -41,7 +41,7 @@ func installedShortcut() string {
 		roots = append(roots, filepath.Join(profile, "Desktop"), filepath.Join(profile, "OneDrive", "Desktop"), filepath.Join(profile, "OneDrive", "바탕 화면"))
 	}
 	for _, r := range roots {
-		for _, pat := range []string{"업무 대시보드.lnk", "*\\업무 대시보드.lnk"} {
+		for _, pat := range []string{"업무대시보드.lnk", "*\\업무대시보드.lnk", "업무 대시보드.lnk", "*\\업무 대시보드.lnk"} {
 			if m, _ := filepath.Glob(filepath.Join(r, pat)); len(m) > 0 {
 				return m[0]
 			}
@@ -81,5 +81,5 @@ func main() {
 	}
 	// no Chrome / Edge found: open in the default browser instead
 	exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
-	msgBox("Chrome이나 Edge를 찾지 못해 기본 브라우저로 열었습니다.\nGemini 연동은 Chrome(확장 설치)에서 가장 잘 됩니다.", "업무 대시보드")
+	msgBox("Chrome이나 Edge를 찾지 못해 기본 브라우저로 열었습니다.\nGemini 연동은 Chrome(확장 설치)에서 가장 잘 됩니다.", "업무대시보드")
 }

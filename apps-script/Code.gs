@@ -1,5 +1,5 @@
 /**
- * 학과장실 대시보드 ↔ 구글 캘린더 연결 (Google Apps Script)
+ * 업무대시보드 ↔ 구글 캘린더 연결 (Google Apps Script)
  *
  * 설치
  * 1. script.google.com → 새 프로젝트 → 이 내용을 Code.gs에 통째로 붙여넣기
