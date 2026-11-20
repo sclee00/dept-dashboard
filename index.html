@@ -7386,7 +7386,24 @@ if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__dd = { S, sam
   const get = k => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch { return null; } };
   const put = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
   const now = () => ({ x: window.screenX, y: window.screenY, w: window.outerWidth, h: window.outerHeight });
-  const apply = b => { if (!b || !(b.w > 200) || !(b.h > 200)) return; try { window.moveTo(b.x, b.y); window.resizeTo(b.w, b.h); window.moveTo(b.x, b.y); } catch {} };
+  // moving onto another monitor needs Chrome's "창 관리" (window management) permission; asked once, on a button press
+  const onThisScreen = b => { const l = screen.availLeft || 0, t = screen.availTop || 0; return b.x >= l - 20 && b.y >= t - 20 && b.x < l + screen.availWidth && b.y < t + screen.availHeight; };
+  const wmState = async () => { try { return (await navigator.permissions.query({ name: 'window-management' })).state; } catch { return 'unsupported'; } };
+  const allowScreens = async ask => {
+    if (!('getScreenDetails' in window)) return false;
+    const st = await wmState();
+    if (st === 'denied' || (st === 'prompt' && !ask)) return false;
+    try { await window.getScreenDetails(); return true; } catch { return false; }
+  };
+  const place = b => { try { window.moveTo(b.x, b.y); window.resizeTo(b.w, b.h); window.moveTo(b.x, b.y); } catch {} };
+  const apply = async (b, ask) => {
+    if (!b || !(b.w > 200) || !(b.h > 200)) return;
+    if (!onThisScreen(b)) {
+      const ok = await allowScreens(ask);
+      if (!ok && ask) { const st = await wmState(); if (st === 'denied') try { toast('다른 모니터로 옮기려면 크롬 설정 → 개인정보 보호 및 보안 → 사이트 설정 → 창 관리에서 이 사이트를 허용해 주세요.'); } catch {} }
+    }
+    place(b);
+  };
   // 1) open where it was last time (first time: fill the screen)
   const last = get(LK);
   if (last) apply(last); else apply({ x: screen.availLeft || 0, y: screen.availTop || 0, w: screen.availWidth, h: screen.availHeight });
@@ -7410,7 +7427,7 @@ if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__dd = { S, sam
     const ps = get(PK) || [];
     const L = window.__dashLayout;
     if (b.dataset.add) { ps.push({ ...now(), lay: L ? L.get() : null }); put(PK, ps); draw(); say(`지금 창 배치(창 크기·위치와 안쪽 칸 크기)를 ${ps.length}번으로 저장했습니다.`); return; }
-    const p = ps[+b.dataset.i]; if (p) { apply(p); if (L && p.lay) setTimeout(() => L.set(p.lay), 250); setTimeout(save, 300); }
+    const p = ps[+b.dataset.i]; if (p) { apply(p, true).then(() => { if (L && p.lay) setTimeout(() => L.set(p.lay), 250); setTimeout(save, 300); }); }
   });
   bar.addEventListener('contextmenu', e => {
     const b = e.target.closest('button[data-i]'); if (!b) return; e.preventDefault();
