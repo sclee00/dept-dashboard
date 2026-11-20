@@ -7388,7 +7388,7 @@ if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__dd = { S, sam
 (() => {
   const q = new URLSearchParams(location.search);
   // ?app=1 from the exe; also any window without a tab bar (Chrome --app window, installed app)
-  let app = q.get('app') === '1' || (window.toolbar && window.toolbar.visible === false) || matchMedia('(display-mode: standalone)').matches;
+  let app = q.get('app') === '1' || (window.toolbar && window.toolbar.visible === false) || !matchMedia('(display-mode: browser)').matches; // standalone, window-controls-overlay, minimal-ui …
   try { if (app) sessionStorage.setItem('dashApp', '1'); else app = sessionStorage.getItem('dashApp') === '1'; } catch {}
   // in an ordinary browser tab the page cannot move or resize its window, so only the inner panel sizes are switched there
   const LK = 'dashWinLast', PK = 'dashWinPresets';
@@ -7404,7 +7404,9 @@ if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__dd = { S, sam
     if (st === 'denied' || (st === 'prompt' && !ask)) return false;
     try { await window.getScreenDetails(); return true; } catch { return false; }
   };
-  const place = b => { if (!app) return; try { window.moveTo(b.x, b.y); window.resizeTo(b.w, b.h); window.moveTo(b.x, b.y); } catch {} };
+  const place = b => { if (!app) return; try { window.moveTo(b.x, b.y); window.resizeTo(b.w, b.h); window.moveTo(b.x, b.y); } catch {}
+    // tell when Chrome refused (a maximised window cannot be resized: restore it first)
+    setTimeout(() => { if (Math.abs(window.outerWidth - b.w) > 40 || Math.abs(window.outerHeight - b.h) > 40) try { toast(window.outerWidth >= screen.availWidth - 4 ? '창이 최대화되어 있어 크기를 못 바꿨습니다. 최대화를 풀고 다시 눌러 주세요.' : '크롬이 창 크기·위치 변경을 막았습니다.'); } catch {} }, 400); };
   const apply = async (b, ask) => {
     if (!b || !(b.w > 200) || !(b.h > 200)) return;
     if (app && !onThisScreen(b)) {
