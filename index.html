@@ -894,9 +894,10 @@ label.inl{display:inline-flex;align-items:center;gap:.3rem;font-size:.85rem} lab
 #tipBubble::after{content:'';position:absolute;left:calc(var(--ax,50%) - 6px);bottom:-6px;width:10px;height:10px;background:inherit;border-right:1px solid var(--line,#333);border-bottom:1px solid var(--line,#333);transform:rotate(45deg)}
 #tipBubble.below::after{bottom:auto;top:-6px;transform:rotate(225deg)}
 /* screen lock */
-.winbar{position:fixed;left:.5rem;bottom:.5rem;z-index:40;display:flex;gap:3px;opacity:.45;transition:opacity .15s}
+.winbar{position:fixed;left:.45rem;bottom:.45rem;z-index:40;display:flex;align-items:center;gap:3px;padding:3px 4px 3px 7px;border-radius:9px;border:1px solid var(--line);background:var(--surface-2,var(--surface));box-shadow:0 2px 8px rgb(0 0 0 / .35);opacity:.85;transition:opacity .15s}
 .winbar:hover,.winbar:focus-within{opacity:1}
-.winbar button{min-width:1.55rem;height:1.55rem;padding:0 .35rem;border-radius:6px;border:1px solid var(--line);background:var(--surface);color:var(--muted);font:600 .74rem/1 inherit;cursor:pointer}
+.winbar .wl{font-size:.72rem;color:var(--muted);margin-right:2px;white-space:nowrap}
+.winbar button{min-width:1.7rem;height:1.7rem;padding:0 .4rem;border-radius:6px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:700 .8rem/1 inherit;cursor:pointer}
 .winbar button:hover{color:var(--ink);border-color:var(--accent,#7aa2f7)}
 .winbar button.add{font-weight:400}
 .lockbtn{position:fixed;top:.6rem;right:.7rem;z-index:50;width:2.1rem;height:2.1rem;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--muted);display:grid;place-items:center;cursor:pointer;box-shadow:0 2px 8px rgb(0 0 0 / .25)}
@@ -7388,8 +7389,8 @@ if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__dd = { S, sam
   const say = m => { try { toast(m); } catch {} };
   const draw = () => {
     const ps = get(PK) || [];
-    bar.innerHTML = ps.map((p, i) => `<button type="button" data-i="${i}" title="창 배치 ${i + 1}: ${p.w}×${p.h} (${p.x}, ${p.y})\n누르면 이 크기·위치로 · 오른쪽 클릭하면 지우기">${i + 1}</button>`).join('')
-      + (ps.length < 6 ? `<button type="button" class="add" data-add="1" title="지금 창 크기·위치를 ${ps.length + 1}번으로 저장">＋</button>` : '');
+    bar.innerHTML = `<span class="wl" title="창 크기·위치 저장">창 배치</span>` + ps.map((p, i) => `<button type="button" data-i="${i}" title="창 배치 ${i + 1}: ${p.w}×${p.h} (${p.x}, ${p.y})\n누르면 이 크기·위치로 · 오른쪽 클릭하면 지우기">${i + 1}</button>`).join('')
+      + (ps.length < 6 ? `<button type="button" class="add" data-add="1" title="지금 창 크기·위치를 ${ps.length + 1}번으로 저장">＋${ps.length ? '' : ' 저장'}</button>` : '');
     bar.hidden = false;
   };
   bar.addEventListener('click', e => {
