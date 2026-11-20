@@ -894,12 +894,21 @@ label.inl{display:inline-flex;align-items:center;gap:.3rem;font-size:.85rem} lab
 #tipBubble::after{content:'';position:absolute;left:calc(var(--ax,50%) - 6px);bottom:-6px;width:10px;height:10px;background:inherit;border-right:1px solid var(--line,#333);border-bottom:1px solid var(--line,#333);transform:rotate(45deg)}
 #tipBubble.below::after{bottom:auto;top:-6px;transform:rotate(225deg)}
 /* screen lock */
-.winbar{grid-column:1/-1;display:flex;align-items:center;gap:.3rem;flex-wrap:wrap;min-width:0}
+.winbar{position:fixed;top:.6rem;right:.7rem;z-index:50}
+.lockbtn:not([hidden])~.winbar{top:3rem}
 .winbar[hidden]{display:none}
-.winbar .wl{font-size:.8rem;color:var(--muted);margin-right:.15rem;white-space:nowrap;display:inline-flex;align-items:center;gap:.3rem}
-.winbar button{min-width:2rem;height:1.9rem;padding:0 .5rem;border-radius:8px;border:1px solid var(--line);background:none;color:var(--ink);font:700 .82rem/1 inherit;cursor:pointer}
-.winbar button:hover{border-color:var(--accent,#7aa2f7)}
-.winbar button.add{font-weight:500;color:var(--muted)}
+.winbar .winbtn{width:2.1rem;height:2.1rem;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--muted);display:grid;place-items:center;cursor:pointer;box-shadow:0 2px 8px rgb(0 0 0 / .25);padding:0}
+.winbar .winbtn:hover,.winbar.open .winbtn{color:var(--ink);border-color:var(--accent,#7aa2f7)}
+.winbar .winbtn svg{width:1.05rem;height:1.05rem}
+.winbar .winpop{position:absolute;top:calc(100% + .35rem);right:0;display:flex;flex-direction:column;gap:.3rem;min-width:9.5rem;padding:.5rem;border-radius:10px;border:1px solid var(--line);background:var(--surface);box-shadow:0 6px 20px rgb(0 0 0 / .4)}
+.winbar .winpop[hidden]{display:none}
+.winbar .wl{font-size:.76rem;color:var(--muted);white-space:nowrap}
+.winbar .wrow{display:flex;flex-wrap:wrap;gap:.3rem}
+.winbar .wrow button{min-width:2rem;height:1.9rem;padding:0 .5rem;border-radius:8px;border:1px solid var(--line);background:none;color:var(--ink);font:700 .82rem/1 inherit;cursor:pointer}
+.winbar .wrow button:hover{border-color:var(--accent,#7aa2f7)}
+.winbar .wrow button.add{font-weight:500;color:var(--muted)}
+.has-winbtn .topwrap{padding-right:2.9rem}
+@media (display-mode: window-controls-overlay){.winbar{top:calc(env(titlebar-area-height,0px) + .3rem)}.lockbtn:not([hidden])~.winbar{top:calc(env(titlebar-area-height,0px) + 2.7rem)}.has-winbtn .topwrap{padding-right:var(--wco-r)}}
 .lockbtn{position:fixed;top:.6rem;right:.7rem;z-index:50;width:2.1rem;height:2.1rem;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--muted);display:grid;place-items:center;cursor:pointer;box-shadow:0 2px 8px rgb(0 0 0 / .25)}
 .lockbtn:hover{color:var(--accent);border-color:var(--accent)}
 .lockbtn .ic{width:1.05rem;height:1.05rem}
@@ -1003,6 +1012,7 @@ button.hw{cursor:pointer}button.hw:hover{border-color:var(--accent)}
 </head>
 <body>
   <button type="button" class="lockbtn" id="lockBtn" data-act="lockNow" hidden title="화면 잠금 (Ctrl+Shift+L)" aria-label="화면 잠금"><span data-ic="lock"></span></button>
+  <div class="winbar" id="winBar" hidden></div>
   <div class="lockscreen" id="lockScreen" hidden role="dialog" aria-modal="true" aria-labelledby="lockTitle">
     <form class="lockbox" id="lockForm" autocomplete="off">
       <span class="lockic" data-ic="lock"></span>
@@ -1133,7 +1143,6 @@ button.hw{cursor:pointer}button.hw:hover{border-color:var(--accent)}
         <button class="iconbtn" data-act="openBusy" data-ok="busy" draggable="true" type="button"><span data-ic="lock"></span>불가 시간</button>
         <button class="iconbtn" id="gemBtn" data-act="gemDockOpen" data-ok="gemini" draggable="true" type="button" hidden title="Gemini 창 열기/닫기"><span data-ic="spark"></span>Gemini</button>
         <button class="iconbtn" data-act="settings" data-ok="settings" draggable="true" type="button"><span data-ic="gear"></span>설정</button>
-        <div class="winbar" id="winBar" hidden></div>
       </div>
   </div>
 </div>
@@ -7416,14 +7425,23 @@ if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__dd = { S, sam
   // 3) saved layouts: small buttons at the bottom left
   const bar = document.getElementById('winBar'); if (!bar) return;
   const say = m => { try { toast(m); } catch {} };
+  const WIN_IC = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M10 9v11"/></svg>';
+  let open = false;
   const draw = () => {
     const ps = get(PK) || [];
-    bar.innerHTML = `<span class="wl" title="창 크기·위치를 저장해 두고 번호로 바로 바꿉니다">창 배치</span>` + ps.map((p, i) => `<button type="button" data-i="${i}" title="창 배치 ${i + 1}: ${p.w}×${p.h} (${p.x}, ${p.y})\n누르면 이 창 크기·위치와 안쪽 칸 크기로 · 오른쪽 클릭하면 지우기">${i + 1}</button>`).join('')
-      + (ps.length < 6 ? `<button type="button" class="add" data-add="1" title="지금 창 크기·위치를 ${ps.length + 1}번으로 저장">＋${ps.length ? '' : ' 저장'}</button>` : '');
-    bar.hidden = false;
+    bar.innerHTML = `<button type="button" class="winbtn" data-tog="1" title="창 배치 (크기·위치·안쪽 칸 크기 저장)" aria-label="창 배치">${WIN_IC}</button>
+      <div class="winpop" ${open ? '' : 'hidden'}><span class="wl">창 배치 · 번호를 누르면 그대로</span><div class="wrow">`
+      + ps.map((p, i) => `<button type="button" data-i="${i}" title="창 배치 ${i + 1}: ${p.w}×${p.h} (${p.x}, ${p.y})\n누르면 이 창 크기·위치와 안쪽 칸 크기로 · 오른쪽 클릭하면 지우기">${i + 1}</button>`).join('')
+      + (ps.length < 6 ? `<button type="button" class="add" data-add="1" title="지금 창 크기·위치를 ${ps.length + 1}번으로 저장">＋${ps.length ? '' : ' 저장'}</button>` : '')
+      + `</div><span class="wl">오른쪽 클릭: 지우기</span></div>`;
+    bar.classList.toggle('open', open);
+    bar.hidden = false; document.body.classList.add('has-winbtn');
   };
+  document.addEventListener('pointerdown', e => { if (open && !bar.contains(e.target)) { open = false; draw(); } });
+  document.addEventListener('keydown', e => { if (open && e.key === 'Escape') { open = false; draw(); } });
   bar.addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.tog) { open = !open; draw(); return; }
     const ps = get(PK) || [];
     const L = window.__dashLayout;
     if (b.dataset.add) { ps.push({ ...now(), lay: L ? L.get() : null }); put(PK, ps); draw(); say(`지금 창 배치(창 크기·위치와 안쪽 칸 크기)를 ${ps.length}번으로 저장했습니다.`); return; }
