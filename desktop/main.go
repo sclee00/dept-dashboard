@@ -30,6 +30,26 @@ func candidates() []string {
 	return out
 }
 
+// the dashboard installed as an app (Chrome/Edge "설치") can hide its title bar, so prefer its own shortcut
+func installedShortcut() string {
+	appdata, profile := os.Getenv("APPDATA"), os.Getenv("USERPROFILE")
+	var roots []string
+	if appdata != "" {
+		roots = append(roots, filepath.Join(appdata, `Microsoft\Windows\Start Menu\Programs`))
+	}
+	if profile != "" {
+		roots = append(roots, filepath.Join(profile, "Desktop"), filepath.Join(profile, "OneDrive", "Desktop"), filepath.Join(profile, "OneDrive", "바탕 화면"))
+	}
+	for _, r := range roots {
+		for _, pat := range []string{"업무 대시보드.lnk", "*\\업무 대시보드.lnk"} {
+			if m, _ := filepath.Glob(filepath.Join(r, pat)); len(m) > 0 {
+				return m[0]
+			}
+		}
+	}
+	return ""
+}
+
 func msgBox(text, title string) {
 	u := syscall.NewLazyDLL("user32.dll").NewProc("MessageBoxW")
 	t, _ := syscall.UTF16PtrFromString(text)
@@ -41,6 +61,14 @@ func main() {
 	url := appURL
 	if len(os.Args) > 1 && len(os.Args[1]) > 8 && os.Args[1][:8] == "https://" {
 		url = os.Args[1] // optional: another address as the first argument
+	}
+	if len(os.Args) < 2 {
+		if lnk := installedShortcut(); lnk != "" {
+			cmd := exec.Command("explorer.exe", lnk)
+			if cmd.Start() == nil {
+				return
+			}
+		}
 	}
 	for _, b := range candidates() {
 		if _, err := os.Stat(b); err == nil {

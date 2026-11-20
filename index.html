@@ -957,6 +957,16 @@ button.hw{cursor:pointer}button.hw:hover{border-color:var(--accent)}
 /* header cards share one height (as tall as the header allows); long lists scroll inside the card */
 /* the cards sit beside the header AND the "지금 볼 것" bar, so they are tall without taking height from the calendar */
 .topwrap{display:contents}
+/* installed desktop app with the title bar hidden (window controls overlay): the page reaches the top edge,
+   the date area drags the window, and nothing sits under the minimise / maximise / close buttons */
+@media (display-mode: window-controls-overlay){
+  :root{--wco-r:calc(100vw - env(titlebar-area-x,0px) - env(titlebar-area-width,100vw));--wco-h:env(titlebar-area-height,0px)}
+  .app{padding-top:.35rem}
+  .topwrap{padding-right:var(--wco-r)}
+  header.top{-webkit-app-region:drag;app-region:drag}
+  header.top :is(button,a,input,select,textarea,[data-act],.stats,.gutter){-webkit-app-region:no-drag;app-region:no-drag}
+  .lockbtn{top:calc(var(--wco-h) + .3rem)}
+}
 @media (min-width:1100px){
   .topwrap{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:1rem 1rem;align-items:start}
   .topwrap>header.top{grid-column:1;grid-row:1;min-width:0}
