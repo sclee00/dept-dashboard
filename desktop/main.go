@@ -12,7 +12,7 @@ import (
 	"unsafe"
 )
 
-const appURL = "https://sclee00.github.io/dept-dashboard/"
+const appURL = "https://sclee00.github.io/dept-dashboard/?app=1"
 
 func candidates() []string {
 	pf, pf86, local := os.Getenv("ProgramFiles"), os.Getenv("ProgramFiles(x86)"), os.Getenv("LOCALAPPDATA")
@@ -44,7 +44,7 @@ func main() {
 	}
 	for _, b := range candidates() {
 		if _, err := os.Stat(b); err == nil {
-			cmd := exec.Command(b, "--app="+url, "--start-maximized")
+			cmd := exec.Command(b, "--app="+url) // the page itself restores the last size and position
 			cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 			if cmd.Start() == nil {
 				return

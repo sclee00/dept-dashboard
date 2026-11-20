@@ -894,6 +894,11 @@ label.inl{display:inline-flex;align-items:center;gap:.3rem;font-size:.85rem} lab
 #tipBubble::after{content:'';position:absolute;left:calc(var(--ax,50%) - 6px);bottom:-6px;width:10px;height:10px;background:inherit;border-right:1px solid var(--line,#333);border-bottom:1px solid var(--line,#333);transform:rotate(45deg)}
 #tipBubble.below::after{bottom:auto;top:-6px;transform:rotate(225deg)}
 /* screen lock */
+.winbar{position:fixed;left:.5rem;bottom:.5rem;z-index:40;display:flex;gap:3px;opacity:.45;transition:opacity .15s}
+.winbar:hover,.winbar:focus-within{opacity:1}
+.winbar button{min-width:1.55rem;height:1.55rem;padding:0 .35rem;border-radius:6px;border:1px solid var(--line);background:var(--surface);color:var(--muted);font:600 .74rem/1 inherit;cursor:pointer}
+.winbar button:hover{color:var(--ink);border-color:var(--accent,#7aa2f7)}
+.winbar button.add{font-weight:400}
 .lockbtn{position:fixed;top:.6rem;right:.7rem;z-index:50;width:2.1rem;height:2.1rem;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--muted);display:grid;place-items:center;cursor:pointer;box-shadow:0 2px 8px rgb(0 0 0 / .25)}
 .lockbtn:hover{color:var(--accent);border-color:var(--accent)}
 .lockbtn .ic{width:1.05rem;height:1.05rem}
@@ -986,6 +991,7 @@ button.hw{cursor:pointer}button.hw:hover{border-color:var(--accent)}
 
 </head>
 <body>
+  <div class="winbar" id="winBar" hidden></div>
   <button type="button" class="lockbtn" id="lockBtn" data-act="lockNow" hidden title="화면 잠금 (Ctrl+Shift+L)" aria-label="화면 잠금"><span data-ic="lock"></span></button>
   <div class="lockscreen" id="lockScreen" hidden role="dialog" aria-modal="true" aria-labelledby="lockTitle">
     <form class="lockbox" id="lockForm" autocomplete="off">
@@ -7331,6 +7337,53 @@ try {
 } catch {}
 setInterval(() => { if (UI.qtab === 'stat' && !document.hidden) renderStat(); }, 30000);
 if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__dd = { S, sample, gLoad, add, UNDO, undoArm, doUndo, patchItem: (c, id, d) => patch(c, id, d), replyFmt, delegFmt, fixNames, keyLine, snapshot, mergeIn, renderAll, FS, G, parseEdit, normalizeCmd, pickDT, parseCommand };
+})();
+</script>
+
+<script>
+/* ---------- desktop app window (업무대시보드.exe opens ?app=1): remember size and position, and keep a few saved layouts ---------- */
+(() => {
+  const q = new URLSearchParams(location.search);
+  // ?app=1 from the exe; also any window without a tab bar (Chrome --app window, installed app)
+  let app = q.get('app') === '1' || (window.toolbar && window.toolbar.visible === false) || matchMedia('(display-mode: standalone)').matches;
+  try { if (app) sessionStorage.setItem('dashApp', '1'); else app = sessionStorage.getItem('dashApp') === '1'; } catch {}
+  if (!app) return;
+  const LK = 'dashWinLast', PK = 'dashWinPresets';
+  const get = k => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch { return null; } };
+  const put = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
+  const now = () => ({ x: window.screenX, y: window.screenY, w: window.outerWidth, h: window.outerHeight });
+  const apply = b => { if (!b || !(b.w > 200) || !(b.h > 200)) return; try { window.moveTo(b.x, b.y); window.resizeTo(b.w, b.h); window.moveTo(b.x, b.y); } catch {} };
+  // 1) open where it was last time (first time: fill the screen)
+  const last = get(LK);
+  if (last) apply(last); else apply({ x: screen.availLeft || 0, y: screen.availTop || 0, w: screen.availWidth, h: screen.availHeight });
+  // 2) keep remembering (there is no "moved" event, so check every couple of seconds as well)
+  let sig = '';
+  const save = () => { const b = now(), s = JSON.stringify(b); if (s !== sig) { sig = s; put(LK, b); } };
+  setTimeout(() => { save(); setInterval(save, 2000); }, 1500);
+  addEventListener('resize', () => { clearTimeout(save._t); save._t = setTimeout(save, 400); });
+  addEventListener('beforeunload', save);
+  // 3) saved layouts: small buttons at the bottom left
+  const bar = document.getElementById('winBar'); if (!bar) return;
+  const say = m => { try { toast(m); } catch {} };
+  const draw = () => {
+    const ps = get(PK) || [];
+    bar.innerHTML = ps.map((p, i) => `<button type="button" data-i="${i}" title="창 배치 ${i + 1}: ${p.w}×${p.h} (${p.x}, ${p.y})\n누르면 이 크기·위치로 · 오른쪽 클릭하면 지우기">${i + 1}</button>`).join('')
+      + (ps.length < 6 ? `<button type="button" class="add" data-add="1" title="지금 창 크기·위치를 ${ps.length + 1}번으로 저장">＋</button>` : '');
+    bar.hidden = false;
+  };
+  bar.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    const ps = get(PK) || [];
+    if (b.dataset.add) { ps.push(now()); put(PK, ps); draw(); say(`지금 창 배치를 ${ps.length}번으로 저장했습니다.`); return; }
+    const p = ps[+b.dataset.i]; if (p) { apply(p); setTimeout(save, 300); }
+  });
+  bar.addEventListener('contextmenu', e => {
+    const b = e.target.closest('button[data-i]'); if (!b) return; e.preventDefault();
+    const ps = get(PK) || [], i = +b.dataset.i;
+    if (!confirm(`창 배치 ${i + 1}번을 지울까요?`)) return;
+    ps.splice(i, 1); put(PK, ps); draw();
+  });
+  draw();
 })();
 </script>
 </body>
