@@ -902,6 +902,10 @@ body.mini .miniview{display:flex;flex-direction:column;gap:.45rem;height:100vh;p
 .miniview .mvtop{display:flex;align-items:center;gap:.5rem;font-size:.95rem}
 .miniview .mvtop .mono{color:var(--muted);font-size:.85rem}
 .miniview .mvopen{margin-left:auto;display:inline-flex;align-items:center;gap:.25rem;border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:7px;padding:.2rem .45rem;font-size:.75rem;cursor:pointer}
+.miniview .mvpos{display:flex;align-items:center;gap:.25rem;flex:none}
+.miniview .mvpos button{-webkit-app-region:no-drag;app-region:no-drag;min-width:1.6rem;height:1.6rem;padding:0 .35rem;border-radius:6px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:700 .76rem/1 inherit;cursor:pointer}
+.miniview .mvpos button:hover{border-color:var(--accent,#7aa2f7)}
+.miniview .mvpos button.add{font-weight:500;color:var(--muted)}
 .miniview .mvopen.on{color:var(--accent,#7aa2f7);border-color:var(--accent,#7aa2f7)}
 .miniview .mvopen:hover{color:var(--ink);border-color:var(--accent,#7aa2f7)}
 .miniview .hw{width:100%;box-sizing:border-box}
@@ -1997,7 +2001,9 @@ function renderMini(nx, dl, ddRow) {
       ${window.__dashApp ? `<button type="button" class="mvopen ${pinned ? 'on' : ''}" data-pip="${pinned ? 0 : 1}" title="${pinned ? '항상 위 끄기' : '다른 창보다 항상 위에 띄우기'}"><span>📌${pinned ? ' 고정됨' : ' 항상 위'}</span></button>` : ''}
       <button type="button" class="mvopen" data-mini="0" title="원래 크기로 펼치기" style="margin-left:0"><span>⤢ 펼치기</span></button></div>
     ${nx}
-    <div class="hw ddhw"><span class="hwl">${ic('flag')}D-day</span><div class="ddlist">${dl.length ? dl.map(ddRow).join('') : '<span class="count">지정한 날이 없습니다</span>'}</div></div>`;
+    <div class="hw ddhw"><span class="hwl">${ic('flag')}D-day</span><div class="ddlist">${dl.length ? dl.map(ddRow).join('') : '<span class="count">지정한 날이 없습니다</span>'}</div></div>
+    ${window.__dashApp ? (() => { let ps = []; try { ps = JSON.parse(localStorage.getItem('dashMiniPresets') || '[]') || []; } catch {}
+      return `<div class="mvpos"><span class="count">위치</span>${ps.map((p, i) => `<button type="button" data-mpos="${i}" title="위젯 위치 ${i + 1}: ${p.w}×${p.h} (${p.x}, ${p.y})\n누르면 바로 옮김 · 오른쪽 클릭하면 지우기">${i + 1}</button>`).join('')}${ps.length < 6 ? `<button type="button" class="add" data-mpadd="1" title="지금 위젯 위치·크기를 ${ps.length + 1}번으로 저장">＋</button>` : ''}</div>`; })() : ''}`;
   el.innerHTML = html;
   if (pip) pip(html);
 }
@@ -7569,6 +7575,20 @@ if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__dd = { S, sam
     try { toast(app ? '고정해 줄 업무대시보드.exe가 실행 중이 아닙니다. 대시보드를 닫고 새로 받은 exe로 다시 열어 주세요.' : '항상 위는 업무대시보드.exe로 연 창에서만 됩니다.'); } catch {}
   }, true);
   if (app) { let on = false; try { on = localStorage.getItem(PINK) === '1' && localStorage.getItem(MK) === '1'; } catch {} if (on) { window.__dashPinned = true; setPinTitle(true); } }
+  // widget places saved by hand (like the numbered layouts of the normal window)
+  const MPK = 'dashMiniPresets';
+  const reMini = () => { try { window.__dashMain.renderWidgets(); } catch {} };
+  document.addEventListener('click', e => {
+    const q = e.target.closest && e.target.closest('[data-mpos],[data-mpadd]'); if (!q) return; e.preventDefault(); e.stopPropagation();
+    const ps = get(MPK) || [];
+    if (q.dataset.mpadd) { ps.push(now()); put(MPK, ps); reMini(); try { toast(`위젯 위치를 ${ps.length}번으로 저장했습니다.`); } catch {} return; }
+    const p = ps[+q.dataset.mpos]; if (p) { apply(p, true); setTimeout(save, 400); }
+  }, true);
+  document.addEventListener('contextmenu', e => {
+    const q = e.target.closest && e.target.closest('[data-mpos]'); if (!q) return; e.preventDefault();
+    const ps = get(MPK) || [], i = +q.dataset.mpos; if (!confirm(`위젯 위치 ${i + 1}번을 지울까요?`)) return;
+    ps.splice(i, 1); put(MPK, ps); reMini();
+  });
   document.addEventListener('click', e => { const m = e.target.closest && e.target.closest('[data-mini]'); if (!m) return; e.preventDefault(); e.stopPropagation(); m.dataset.mini === '1' ? toMini() : fromMini(); }, true);
   if (app) { let on = false; try { on = localStorage.getItem(MK) === '1'; } catch {} if (on) setMini(true); }
   bar.addEventListener('click', e => {
