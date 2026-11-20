@@ -66,6 +66,7 @@ func main() {
 		if lnk := installedShortcut(); lnk != "" {
 			cmd := exec.Command("explorer.exe", lnk)
 			if cmd.Start() == nil {
+				watch()
 				return
 			}
 		}
@@ -75,6 +76,7 @@ func main() {
 			cmd := exec.Command(b, "--app="+url) // the page itself restores the last size and position
 			cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 			if cmd.Start() == nil {
+				watch()
 				return
 			}
 		}
