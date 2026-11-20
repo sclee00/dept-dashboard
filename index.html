@@ -894,6 +894,20 @@ label.inl{display:inline-flex;align-items:center;gap:.3rem;font-size:.85rem} lab
 #tipBubble::after{content:'';position:absolute;left:calc(var(--ax,50%) - 6px);bottom:-6px;width:10px;height:10px;background:inherit;border-right:1px solid var(--line,#333);border-bottom:1px solid var(--line,#333);transform:rotate(45deg)}
 #tipBubble.below::after{bottom:auto;top:-6px;transform:rotate(225deg)}
 /* screen lock */
+.miniview{display:none}
+body.mini .app,body.mini #winBar,body.mini #lockBtn{display:none!important}
+body.mini{overflow:hidden}
+body.mini .miniview{display:flex;flex-direction:column;gap:.45rem;height:100vh;padding:.55rem .65rem;box-sizing:border-box;-webkit-app-region:drag;app-region:drag}
+.miniview button,.miniview .ddlist{-webkit-app-region:no-drag;app-region:no-drag}
+.miniview .mvtop{display:flex;align-items:center;gap:.5rem;font-size:.95rem}
+.miniview .mvtop .mono{color:var(--muted);font-size:.85rem}
+.miniview .mvopen{margin-left:auto;display:inline-flex;align-items:center;gap:.25rem;border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:7px;padding:.2rem .45rem;font-size:.75rem;cursor:pointer}
+.miniview .mvopen:hover{color:var(--ink);border-color:var(--accent,#7aa2f7)}
+.miniview .hw{width:100%;box-sizing:border-box}
+.miniview .nexthw{flex:none!important;height:auto!important;min-height:0}
+.miniview .ddhw{flex:1;min-height:0;display:flex;flex-direction:column}
+.miniview .ddlist{flex:1;min-height:0;overflow:auto}
+@media (display-mode: window-controls-overlay){body.mini .miniview{padding-top:calc(env(titlebar-area-height,0px) + .2rem)}}
 .winbar{position:fixed;top:.6rem;right:.7rem;z-index:50}
 .lockbtn:not([hidden])~.winbar{top:3rem}
 .winbar[hidden]{display:none}
@@ -902,6 +916,7 @@ label.inl{display:inline-flex;align-items:center;gap:.3rem;font-size:.85rem} lab
 .winbar button:hover{border-color:var(--accent,#7aa2f7)}
 .winbar button.add{font-weight:500;color:var(--muted);opacity:.7}
 .winbar button.add:hover{opacity:1}
+.winbar button.mini{color:var(--muted)}
 .winbar button.just{border-color:var(--accent,#7aa2f7);color:var(--accent,#7aa2f7)}
 .has-winbtn .topwrap{padding-right:2.7rem}.has-winbtn.winbtn2 .topwrap{padding-right:4.7rem}
 @media (display-mode: window-controls-overlay){.winbar{top:calc(env(titlebar-area-height,0px) + .3rem)}.lockbtn:not([hidden])~.winbar{top:calc(env(titlebar-area-height,0px) + 2.7rem)}.has-winbtn .topwrap{padding-right:var(--wco-r)}}
@@ -1018,6 +1033,7 @@ button.hw{cursor:pointer}button.hw:hover{border-color:var(--accent)}
       <div class="status" id="lockMsg" role="status"></div>
     </form>
   </div>
+<div class="miniview" id="miniView"></div>
 <div class="app">
   <div class="topwrap">
   <header class="top">
@@ -1945,6 +1961,8 @@ function ddayList() {
 }
 function renderWidgets() {
   const box = $('hwidgets'); if (!box) return;
+  // D-day dates that have passed are dropped from the list
+  { const t = todayStr(), cur = lst('ddayPins'); if ((S.lists && S.lists.ddayPins || Array.isArray(S.settings.ddayPins)) && cur.some(d => d && isDate(d.date) && d.date < t)) lstSet('ddayPins', cur.filter(d => !(d && isDate(d.date) && d.date < t))); }
   const ne = nextEvent(), nm = new Date().getHours() * 60 + new Date().getMinutes();
   let nx = `<div class="hw nexthw"><span class="hwl">${ic('clock')}다음 일정</span><span class="hwv">없음</span></div>`;
   if (ne) {
@@ -1965,6 +1983,16 @@ function renderWidgets() {
   const ct = `<div class="hw cthw"><span class="hwl">${ic('user')}연락처${cl.length ? ` <span class="mono">${UI.ctIdx + 1}/${cl.length}</span>` : ''}<span class="ctnav">${cl.length > 1 ? `<button type="button" class="hwedit" data-act="ctNav" data-d="-1" aria-label="이전 연락처">‹</button><button type="button" class="hwedit" data-act="ctNav" data-d="1" aria-label="다음 연락처">›</button>` : ''}${c ? `<button type="button" class="hwedit" data-act="ctEdit" title="이 연락처 고치기" aria-label="연락처 고치기">${ic('pen')}</button>` : ''}<button type="button" class="hwedit" data-act="ctNew" title="연락처 직접 추가" aria-label="연락처 추가">＋</button></span></span>
     ${c ? `<span class="hwv">${esc(c.name)}${c.title || c.org ? ` <small>${esc([c.title, c.org].filter(Boolean).join(' · '))}</small>` : ''}</span><span class="ctlines">${cp(c.phone, '전화번호')}${cp(c.email, '이메일')}</span>` : `<span class="count">아직 없음 ${tip('메일을 분석하면 서명의 연락처를 확인 후 추가할 수 있습니다. ＋로 직접 넣어도 됩니다.')}</span>`}</div>`;
   box.innerHTML = nx + dd + ct + sp;
+  renderMini(nx, dl, ddRow);
+}
+// widget view: only today's date, the next event and the D-days, in a small window
+function renderMini(nx, dl, ddRow) {
+  const el = $('miniView'); if (!el || !document.body.classList.contains('mini')) return;
+  const d = parse(todayStr()), now = new Date();
+  el.innerHTML = `<div class="mvtop"><b>${d.getMonth() + 1}월 ${d.getDate()}일 ${WD[d.getDay()]}요일</b><span class="mono">${pad(now.getHours())}:${pad(now.getMinutes())}</span>
+      <button type="button" class="mvopen" data-mini="0" title="원래 크기로 펼치기"><span>⤢ 펼치기</span></button></div>
+    ${nx}
+    <div class="hw ddhw"><span class="hwl">${ic('flag')}D-day</span><div class="ddlist">${dl.length ? dl.map(ddRow).join('') : '<span class="count">지정한 날이 없습니다</span>'}</div></div>`;
 }
 // 2026-12-18, 2026.12.18, 12/18, 12.18 → YYYY-MM-DD (a date without a year is the next one to come)
 function normDate(t) {
@@ -4531,6 +4559,7 @@ function setSplit(kind, [a, b], dx, dy) {
 }
 function splitDone() { saveLayout(); UI.cap = 9; renderCal(); }
 // the desktop window's saved layouts also carry the inner panel sizes
+window.__dashMain = { renderWidgets: () => renderWidgets(), renderAll: () => renderAll() };
 window.__dashLayout = { get: () => JSON.parse(JSON.stringify(LAY)), set: o => { LAY = o && typeof o === 'object' ? JSON.parse(JSON.stringify(o)) : {}; applyLayout(); splitDone(); } };
 document.addEventListener('pointerdown', e => {
   const g = e.target.closest && e.target.closest('.gutter'); if (!g || e.button !== 0) return;
@@ -7427,10 +7456,29 @@ if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__dd = { S, sam
   const say = m => { try { toast(m); } catch {} };
   const draw = () => {
     const ps = get(PK) || [], kind = app ? '창 배치' : '칸 배치';
-    bar.innerHTML = ps.map((p, i) => `<button type="button" data-i="${i}" title="${kind} ${i + 1}${app ? `: ${p.w}×${p.h} (${p.x}, ${p.y})` : ' (탭에서는 안쪽 칸 크기만)'}\n누르면 바로 바뀜 · 오른쪽 클릭하면 지우기">${i + 1}</button>`).join('')
+    bar.innerHTML = (app ? `<button type="button" class="mini" data-mini="1" title="위젯으로 줄이기 (오늘 날짜·다음 일정·D-day만)" aria-label="위젯으로 줄이기"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7"/></svg></button>` : '') + ps.map((p, i) => `<button type="button" data-i="${i}" title="${kind} ${i + 1}${app ? `: ${p.w}×${p.h} (${p.x}, ${p.y})` : ' (탭에서는 안쪽 칸 크기만)'}\n누르면 바로 바뀜 · 오른쪽 클릭하면 지우기">${i + 1}</button>`).join('')
       + (ps.length < 6 ? `<button type="button" class="add" data-add="1" title="지금 ${app ? '창 크기·위치와 안쪽 칸 크기' : '안쪽 칸 크기'}를 ${ps.length + 1}번으로 저장">＋</button>` : '');
-    bar.hidden = false; document.body.classList.add('has-winbtn'); document.body.classList.toggle('winbtn2', ps.length + (ps.length < 6 ? 1 : 0) > 4);
+    bar.hidden = false; document.body.classList.add('has-winbtn'); document.body.classList.toggle('winbtn2', ps.length + (ps.length < 6 ? 1 : 0) + (app ? 1 : 0) > 4);
   };
+  // widget mode: a small window with only today's date, the next event and the D-days
+  const MK = 'dashMini', MP = 'dashMiniPrev', MW = 320, MH = 300;
+  const setMini = on => {
+    document.body.classList.toggle('mini', on);
+    try { localStorage.setItem(MK, on ? '1' : '0'); } catch {}
+    try { window.__dashMain.renderWidgets(); } catch {}
+  };
+  const toMini = () => {
+    const cur = now(); put(MP, cur);
+    setMini(true);
+    place({ x: cur.x + cur.w - MW, y: cur.y, w: MW, h: MH });
+  };
+  const fromMini = () => {
+    setMini(false);
+    const prev = get(MP); if (prev) apply(prev, true);
+    setTimeout(() => { try { window.__dashMain.renderAll(); } catch {} }, 300);
+  };
+  document.addEventListener('click', e => { const m = e.target.closest && e.target.closest('[data-mini]'); if (!m) return; e.preventDefault(); e.stopPropagation(); m.dataset.mini === '1' ? toMini() : fromMini(); }, true);
+  if (app) { let on = false; try { on = localStorage.getItem(MK) === '1'; } catch {} if (on) setMini(true); }
   bar.addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b) return;
     const ps = get(PK) || [];
