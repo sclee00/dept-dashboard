@@ -1529,13 +1529,13 @@ function gAsk(o) {
     const first = root.querySelector('.btn.primary:not([disabled])') || root.querySelector('[data-ask]:not(.scrim)'); if (first) first.focus();
   });
 }
-const gWhen = g => `${fmtShort(g.date)}${g.allDay ? ' 종일' : ' ' + g.time + '–' + (g.endTime === '24:00' ? '24:00' : g.endTime)}`;
-const docWhen = d => `${fmtShort(d.date)}${d.time ? ' ' + d.time + '–' + (d.endTime || '') : ' 종일'}`;
+const gWhen = g => `${fmtShort(g.date)}${g.allDay ? (g.endDate && g.endDate > g.date ? '~' + fmtShort(g.endDate) : '') + ' 종일' : ' ' + g.time + '–' + (g.endTime === '24:00' ? '24:00' : g.endTime)}`;
+const docWhen = d => `${fmtShort(d.date)}${d.time ? ' ' + d.time + '–' + (d.endTime || '') : (d.endDate && d.endDate > d.date ? '~' + fmtShort(d.endDate) : '') + ' 종일'}`;
 // rows that changed, for the confirmation
 function gDiffRows(g, d) {
   const r = [];
   if (d.title && d.title !== g.title) r.push(['제목', g.title, d.title]);
-  if (!d.titleOnly && (d.date || d.time)) { const a = gWhen(g), b = docWhen({ date: d.date || g.date, time: d.time, endTime: d.endTime }); if (a !== b) r.push(['언제', a, b]); }
+  if (!d.titleOnly && (d.date || d.time)) { const a = gWhen(g), b = docWhen({ date: d.date || g.date, time: d.time, endTime: d.endTime, endDate: d.endDate }); if (a !== b) r.push(['언제', a, b]); }
   if (d.location !== undefined && (d.location || '') !== (g.loc || '')) r.push(['장소', g.loc || '', d.location || '']);
   return r;
 }
@@ -1758,7 +1758,7 @@ function renderEdit() {
       <label class="chk" style="align-self:end"><input type="checkbox" id="edAll" ${d.allDay ? 'checked' : ''}>종일</label>
       <label>시작<input class="field" type="time" id="edStart" value="${esc(d.time)}" ${d.allDay ? 'disabled' : ''}></label>
       <label>끝<input class="field" type="time" id="edEnd" value="${esc(d.endTime)}" ${d.allDay ? 'disabled' : ''}></label>
-      ${!d.days ? `<label>여러 날이면 마지막 날<input class="field" type="date" id="edEndDate" value="${esc(d.endDate)}"></label>` : ''}
+      ${!d.days ? `<label>여러 날이면 마지막 날 <span class="count">(넣으면 종일 일정으로)</span><input class="field" type="date" id="edEndDate" value="${esc(d.endDate)}"></label>` : ''}
       ${d.kind === 'e' && gReady() && gWritable().length ? `<label>구글 캘린더<select class="field" id="edGCal">${d.gCal ? calOptions(d.gCal) : calOptions('', '<option value="" selected>보내지 않음</option>')}</select></label>` : ''}
       ${d.kind === 'e' ? `<label>종류<select class="field" id="edKind">${['회의', '행사', '학사', '마감', '개인'].map(k => `<option ${k === d.ekind ? 'selected' : ''}>${k}</option>`).join('')}</select></label>` : ''}
       <label class="full">장소<input class="field" id="edLoc" value="${esc(d.location)}" autocomplete="off"></label>
@@ -1779,17 +1779,19 @@ async function saveEdit(btn) {
   const err = m => { $('edErr').textContent = m; };
   if (!title) return err('제목을 넣어 주세요.');
   if (!isDate(date)) return err('날짜를 확인해 주세요.');
-  if (!all && st == null) return err('시작 시간을 넣거나 종일로 체크해 주세요.');
+  if (!all && st == null && !(isDate(endDate) && endDate > date)) return err('시작 시간을 넣거나 종일로 체크해 주세요.');
   if (!all && (en == null || en <= st)) en = Math.min(st + 60, 1439);
   if (d.days && !d.days.length) return err('반복 요일을 하나 이상 골라 주세요.');
-  const doc = { title, date, time: all ? '' : fromMin(st), endTime: all ? '' : fromMin(en), endDate: !d.days && isDate(endDate) && endDate > date ? endDate : '', location: $('edLoc').value.trim() };
+  const multi = !d.days && isDate(endDate) && endDate > date;
+  // an event over several days is kept as an all-day span (the calendar shows it on every day)
+  const doc = { title, date, time: all || multi ? '' : fromMin(st), endTime: all || multi ? '' : fromMin(en), endDate: multi ? endDate : '', location: $('edLoc').value.trim() };
   btn.disabled = true;
   if (d.kind === 'e') {
     const e = S.events.find(x => x.id === d.id); if (!e) return;
     const upd = { ...doc, kind: $('edKind').value, imp: $('edImp').value };
     if (d.days) upd.repeat = { days: d.days, ...(isDate($('edUntil').value) ? { until: $('edUntil').value } : {}) };
     if (e.googleId && e.googleId !== 'pushed') {
-      const before = { title: e.title, date: e.date, time: e.time || '', endTime: e.time ? fromMin(Math.min(evEnd(e), 1439)) : '', loc: e.location || '', allDay: !e.time };
+      const before = { title: e.title, date: e.date, endDate: e.endDate || '', time: e.time || '', endTime: e.time ? fromMin(Math.min(evEnd(e), 1439)) : '', loc: e.location || '', allDay: !e.time };
       const rows = gDiffRows({ ...before, time: before.time, endTime: before.endTime }, doc).map(r => r[0] === '언제' ? ['언제', docWhen(before), docWhen(doc)] : r);
       if (rows.length) { btn.disabled = false; if (!await gAsk({ title: '구글 캘린더에도 반영할까요?', rows: [['일정', e.title], ...rows], note: '대시보드와 구글 캘린더 모두 바뀝니다.', choices: [{ v: 'ok', label: '저장하고 반영', primary: true }] })) return; btn.disabled = true; }
     }
