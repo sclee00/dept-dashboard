@@ -946,6 +946,7 @@ button.hw{cursor:pointer}button.hw:hover{border-color:var(--accent)}
 .ddrow b{font-family:var(--mono,monospace);font-size:.75rem;min-width:2.6rem;color:var(--accent)}.ddrow b.warm{color:var(--amber)}.ddrow b.hot{color:var(--red)}
 .ddrow span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ddrow:hover span{text-decoration:underline}
 .snhw{max-width:24rem}
+.snrows{display:flex;flex-direction:column;gap:.35rem;max-height:50vh;overflow:auto}.snrow{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.6fr) auto;gap:.35rem;align-items:center}
 .snlist{display:flex;flex-wrap:wrap;gap:.25rem;max-height:3.6rem;overflow:auto}
 .snchip{display:inline-flex;align-items:center;gap:.25rem;border:1px solid var(--line);background:var(--surface-2);color:var(--ink);border-radius:999px;padding:.1rem .5rem;font:inherit;font-size:.76rem;cursor:pointer;white-space:nowrap}
 .snchip .ic{width:.75rem;height:.75rem;opacity:.6}.snchip:hover{border-color:var(--accent)}.snchip.done{border-color:var(--green,#4caf7a);color:var(--green,#4caf7a)}
@@ -1976,7 +1977,7 @@ function renderWidgets() {
   const ddRowX = x => `<div class="ddwrap">${ddRow(x)}<button type="button" class="ddx" data-act="ddayX" data-date="${x.date}" data-title="${esc(x.title)}" data-pin="${x.pin ? 1 : ''}" title="${x.pin ? 'D-day에서 빼기' : '이 일정은 D-day에 안 보이기 (다음 중요 일정이 나옴)'}" aria-label="${esc(x.title)} D-day에서 빼기">✕</button></div>`;
   const dd = `<div class="hw ddhw"><span class="hwl">${ic('flag')}D-day <button type="button" class="hwedit" data-act="ddayEdit" title="내가 지정하는 D-day 고르기" aria-label="D-day 지정">${ic('pen')}</button></span><div class="ddlist">${dl.map(ddRowX).join('')}<button type="button" class="ddrow add" data-act="ddayEdit"><b>＋</b><span>D-day ${hasPin ? '더 ' : ''}추가하기</span></button></div></div>`;
   const sn = lst('snippets');
-  const sp = `<div class="hw snhw"><span class="hwl">${ic('copy')}상용구 <button type="button" class="hwedit" data-act="snipEdit" title="상용구 추가·편집" aria-label="상용구 편집">${ic('pen')}</button></span><div class="snlist">${sn.length ? sn.map((x, i) => `<button type="button" class="snchip" data-act="snipCopy" data-i="${i}" title="${esc(x.text)}">${esc(x.label || x.text)}${ic('copy')}</button>`).join('') : ''}</div></div>`;
+  const sp = `<div class="hw snhw"><span class="hwl">${ic('copy')}상용구 <button type="button" class="hwedit" data-act="snipEdit" title="상용구 편집" aria-label="상용구 편집">${ic('pen')}</button><button type="button" class="hwedit" data-act="snipAdd" title="상용구 하나 더 추가" aria-label="상용구 추가">${ic('plus')}</button></span><div class="snlist">${sn.length ? sn.map((x, i) => `<button type="button" class="snchip" data-act="snipCopy" data-i="${i}" title="${esc(x.text)}">${esc(x.label || x.text)}${ic('copy')}</button>`).join('') : ''}</div></div>`;
   const cl = contactsAll(); if (UI.ctIdx == null || UI.ctIdx >= cl.length) UI.ctIdx = 0;
   const c = cl[UI.ctIdx];
   const cp = (v, label) => v ? `<button type="button" class="ctcopy" data-act="ctCopy" data-v="${esc(v)}" title="${label} 복사">${esc(v)}${ic('copy')}</button>` : '';
@@ -2016,7 +2017,23 @@ function ddayDlg() {
   UI.dlg = 'dday';
   $('ddPick').onchange = e => { const x = opts[+e.target.value]; if (x) { $('ddDate').value = x.date; $('ddTitle').value = x.title; } };
 }
+// 상용구: one row per snippet (이름 · 복사할 내용), add as many as wanted
+function snipRowHtml(x) {
+  return `<div class="snrow"><input class="field" data-sn="label" placeholder="이름 (예: 학과 사무실)" value="${esc(x.label || '')}"><input class="field" data-sn="text" placeholder="복사할 내용 (예: 032-860-7427)" value="${esc(x.text || '')}"><button type="button" class="x" data-act="snRowDel" aria-label="이 줄 지우기" title="지우기">✕</button></div>`;
+}
+function snipDlg(addOne) {
+  const list = lst('snippets'), rows = [...list, ...(addOne || !list.length ? [{}] : [])];
+  $('dlgRoot').innerHTML = `<div class="scrim" data-act="closeDlg"></div><div class="dlg"><div class="dlgbox" role="dialog" aria-modal="true" aria-labelledby="dlgT">
+    <h3 id="dlgT">${ic('copy')}상용구</h3>
+    <span class="count">누르면 바로 복사되는 버튼입니다. 이메일·전화번호·계좌·주소 등 몇 개든 넣을 수 있습니다. 이름을 비우면 내용이 그대로 버튼이 됩니다.</span>
+    <div class="snrows" id="snRows">${rows.map(snipRowHtml).join('')}</div>
+    <div class="row"><button class="btn small" type="button" data-act="snRowAdd">${ic('plus')}한 줄 더</button></div>
+    <div class="row" style="justify-content:flex-end"><button class="btn" type="button" data-act="closeDlg">취소</button><button class="btn primary" type="button" data-act="snSave">저장</button></div></div></div>`;
+  UI.dlg = 'listedit';
+  setTimeout(() => { const ins = $('snRows').querySelectorAll('input[data-sn="label"]'); const f = addOne ? ins[ins.length - 1] : ins[0]; if (f) f.focus(); }, 30);
+}
 function listEditDlg(kind) {
+  if (kind === 'snip') return snipDlg(false);
   const isSn = kind === 'snip', list = isSn ? lst('snippets') : (S.settings.ddays || []);
   const text = list.map(x => isSn ? `${x.label} | ${x.text}` : `${x.date} | ${x.title}`).join('\n');
   $('dlgRoot').innerHTML = `<div class="scrim" data-act="closeDlg"></div><div class="dlg"><div class="dlgbox" role="dialog" aria-modal="true" aria-labelledby="dlgT">
@@ -3672,7 +3689,7 @@ const UNDO_LABEL = {
   delRule: '아이콘 규칙 삭제', skipOcc: '반복 일정 한 번 빼기', edSave: '일정 편집', bdSave: '불가 시간 설정', saveSettings: '설정 변경', imSave: '아이콘 색·이름',
   pushG: '구글에 추가', fEvent: '일정 추가', fBlock: '불가 시간 추가', taskForm: '할 일 추가', importData: '파일 가져오기'
 };
-const UNDO_SKIP = new Set(['cmdImp', 'gGone', 'cmdIcon', 'cmdIconSet', 'ddayX', 'ddayUnhide', 'ddayDel', 'ctNav', 'ctCopy', 'ctNew', 'ctEdit', 'ctAdd', 'ctSave', 'ctDel', 'ddaySave', 'ddayClear', 'verReload', 'attEvents', 'snipCopy', 'snipEdit', 'ddayEdit', 'lockNow', 'lockSave', 'tip', 'daySel', 'dayMode', 'dayNav', 'dayGo', 'fwdCopy', 'gemCancel', 'scriptCopy', 'scriptSetup', 'scriptTest', 'scriptOn', 'copyReply', 'copyDraft', 'gemEmbed', 'gemDockOpen', 'qTab', 'gemNew', 'gemTall', 'gemZoom', 'histUndo', 'histRedo', 'histOne', 'histGroup', 'histFold', 'stPing', 'pushAllG', 'aiKeySave', 'aiKeyClear', 'aiTest', 'aiMode', 'aiModelSel', 'relayClip', 'stOpen', 'tidyOpen', 'tidyDel', 'tidyTime', 'tidyMerge', 'inboxRun', 'analyzeMail', 'tgShow', 'tgHide', 'phoneLink', 'gDel', 'fltImp', 'fltIcons', 'fltTog', 'fltClear', 'fltClose', 'cmdToAI', 'cmdPick', 'cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
+const UNDO_SKIP = new Set(['snRowAdd', 'snRowDel', 'snipAdd', 'cmdImp', 'gGone', 'cmdIcon', 'cmdIconSet', 'ddayX', 'ddayUnhide', 'ddayDel', 'ctNav', 'ctCopy', 'ctNew', 'ctEdit', 'ctAdd', 'ctSave', 'ctDel', 'ddaySave', 'ddayClear', 'verReload', 'attEvents', 'snipCopy', 'snipEdit', 'ddayEdit', 'lockNow', 'lockSave', 'tip', 'daySel', 'dayMode', 'dayNav', 'dayGo', 'fwdCopy', 'gemCancel', 'scriptCopy', 'scriptSetup', 'scriptTest', 'scriptOn', 'copyReply', 'copyDraft', 'gemEmbed', 'gemDockOpen', 'qTab', 'gemNew', 'gemTall', 'gemZoom', 'histUndo', 'histRedo', 'histOne', 'histGroup', 'histFold', 'stPing', 'pushAllG', 'aiKeySave', 'aiKeyClear', 'aiTest', 'aiMode', 'aiModelSel', 'relayClip', 'stOpen', 'tidyOpen', 'tidyDel', 'tidyTime', 'tidyMerge', 'inboxRun', 'analyzeMail', 'tgShow', 'tgHide', 'phoneLink', 'gDel', 'fltImp', 'fltIcons', 'fltTog', 'fltClear', 'fltClose', 'cmdToAI', 'cmdPick', 'cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
 function undoSnap() {
   const o = { settings: JSON.parse(JSON.stringify(S.settings)) };
   for (const c of COLS) o[c] = JSON.parse(JSON.stringify(S[c]));
@@ -6544,6 +6561,13 @@ document.addEventListener('click', async ev0 => {
       case 'lockNow': lockNow(); return;
       case 'snipCopy': { const x = lst('snippets')[+el.dataset.i]; if (!x) return; try { await navigator.clipboard.writeText(x.text); } catch { prompt('복사할 내용', x.text); return; } el.classList.add('done'); setTimeout(() => el.classList.remove('done'), 900); toast(`복사했습니다: ${x.label || x.text}`); return; }
       case 'snipEdit': listEditDlg('snip'); return;
+      case 'snipAdd': snipDlg(true); return;
+      case 'snRowAdd': { const box = $('snRows'); box.insertAdjacentHTML('beforeend', snipRowHtml({})); const ins = box.querySelectorAll('input[data-sn="label"]'); ins[ins.length - 1].focus(); return; }
+      case 'snRowDel': { const r = el.closest('.snrow'); if (r) r.remove(); return; }
+      case 'snSave': {
+        const snippets = [...$('snRows').querySelectorAll('.snrow')].map(r => ({ label: r.querySelector('[data-sn="label"]').value.trim(), text: r.querySelector('[data-sn="text"]').value.trim() })).filter(x => x.text);
+        lstSet('snippets', snippets); $('dlgRoot').innerHTML = ''; UI.dlg = null; renderHeader(); toast(`상용구 ${snippets.length}개를 저장했습니다.`); return;
+      }
       case 'ddayEdit': ddayDlg(); return;
       case 'gGone': { el.disabled = true; try { await gGoneCheck(true); } finally { el.disabled = false; } return; }
       case 'cmdImp': { cmdSync(); const a = UI.cmd && UI.cmd.actions[+el.dataset.i]; if (a) { a.imp = a.imp === 'high' ? 'normal' : 'high'; cmdRedraw(); } return; }
