@@ -902,6 +902,7 @@ body.mini .miniview{display:flex;flex-direction:column;gap:.45rem;height:100vh;p
 .miniview .mvtop{display:flex;align-items:center;gap:.5rem;font-size:.95rem}
 .miniview .mvtop .mono{color:var(--muted);font-size:.85rem}
 .miniview .mvopen{margin-left:auto;display:inline-flex;align-items:center;gap:.25rem;border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:7px;padding:.2rem .45rem;font-size:.75rem;cursor:pointer}
+.miniview .mvopen.on{color:var(--accent,#7aa2f7);border-color:var(--accent,#7aa2f7)}
 .miniview .mvopen:hover{color:var(--ink);border-color:var(--accent,#7aa2f7)}
 .miniview .hw{width:100%;box-sizing:border-box}
 .miniview .nexthw{flex:none!important;height:auto!important;min-height:0}
@@ -1988,12 +1989,15 @@ function renderWidgets() {
 }
 // widget view: only today's date, the next event and the D-days, in a small window
 function renderMini(nx, dl, ddRow) {
-  const el = $('miniView'); if (!el || !document.body.classList.contains('mini')) return;
-  const d = parse(todayStr()), now = new Date();
-  el.innerHTML = `<div class="mvtop"><b>${d.getMonth() + 1}월 ${d.getDate()}일 ${WD[d.getDay()]}요일</b><span class="mono">${pad(now.getHours())}:${pad(now.getMinutes())}</span>
-      <button type="button" class="mvopen" data-mini="0" title="원래 크기로 펼치기"><span>⤢ 펼치기</span></button></div>
+  const el = $('miniView'), pip = window.__pipPaint; if (!el || (!document.body.classList.contains('mini') && !pip)) return;
+  const d = parse(todayStr()), now = new Date(), pinned = !!pip;
+  const html = `<div class="mvtop"><b>${d.getMonth() + 1}월 ${d.getDate()}일 ${WD[d.getDay()]}요일</b><span class="mono">${pad(now.getHours())}:${pad(now.getMinutes())}</span>
+      ${'documentPictureInPicture' in window ? `<button type="button" class="mvopen ${pinned ? 'on' : ''}" data-pip="${pinned ? 0 : 1}" title="${pinned ? '항상 위 끄기' : '다른 창보다 항상 위에 띄우기'}"><span>📌${pinned ? ' 고정됨' : ' 항상 위'}</span></button>` : ''}
+      <button type="button" class="mvopen" data-mini="0" title="원래 크기로 펼치기" style="margin-left:0"><span>⤢ 펼치기</span></button></div>
     ${nx}
     <div class="hw ddhw"><span class="hwl">${ic('flag')}D-day</span><div class="ddlist">${dl.length ? dl.map(ddRow).join('') : '<span class="count">지정한 날이 없습니다</span>'}</div></div>`;
+  el.innerHTML = html;
+  if (pip) pip(html);
 }
 // 2026-12-18, 2026.12.18, 12/18, 12.18 → YYYY-MM-DD (a date without a year is the next one to come)
 function normDate(t) {
@@ -7501,6 +7505,29 @@ if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__dd = { S, sam
     const prev = get(MP); if (prev) apply(prev, true);
     setTimeout(() => { try { window.__dashMain.renderAll(); } catch {} }, 300);
   };
+  // always on top: Chrome's picture-in-picture window holds the widget (it stays above other windows)
+  let pipWin = null;
+  const pipClose = () => { window.__pipPaint = null; if (pipWin) { try { pipWin.close(); } catch {} } pipWin = null; try { window.__dashMain.renderWidgets(); } catch {} };
+  const pipOpen = async () => {
+    if (!('documentPictureInPicture' in window)) { try { toast('이 크롬에서는 항상 위 기능을 쓸 수 없습니다.'); } catch {} return; }
+    try { pipWin = await documentPictureInPicture.requestWindow({ width: MW, height: MH }); } catch (e) { try { toast('항상 위 창을 열지 못했습니다.'); } catch {} return; }
+    const d = pipWin.document;
+    let css = ''; for (const sh of document.styleSheets) { try { for (const r of sh.cssRules) css += r.cssText + '\n'; } catch {} }
+    d.head.innerHTML = `<meta charset="utf-8"><title>업무대시보드</title><style>${css}</style>`;
+    d.documentElement.className = document.documentElement.className; d.documentElement.setAttribute('style', document.documentElement.getAttribute('style') || '');
+    for (const a of document.documentElement.attributes) if (a.name.startsWith('data-')) d.documentElement.setAttribute(a.name, a.value);
+    d.body.className = 'mini'; d.body.innerHTML = '<div class="miniview" id="miniView"></div>';
+    window.__pipPaint = html => { const el = d.getElementById('miniView'); if (el) el.innerHTML = html; };
+    d.addEventListener('click', e => {
+      const b = e.target.closest('[data-pip],[data-mini]'); if (!b) return; e.preventDefault();
+      if (b.dataset.pip === '0') return pipClose();
+      if (b.dataset.mini === '0') { pipClose(); if (document.body.classList.contains('mini')) fromMini(); try { window.focus(); } catch {} }
+    });
+    pipWin.addEventListener('pagehide', () => { window.__pipPaint = null; pipWin = null; try { window.__dashMain.renderWidgets(); } catch {} });
+    try { window.__dashMain.renderWidgets(); } catch {}
+    try { toast('위젯을 항상 위에 띄웠습니다. 이 창은 최소화해 두셔도 됩니다.'); } catch {}
+  };
+  document.addEventListener('click', e => { const q = e.target.closest && e.target.closest('[data-pip]'); if (!q) return; e.preventDefault(); e.stopPropagation(); q.dataset.pip === '1' ? pipOpen() : pipClose(); }, true);
   document.addEventListener('click', e => { const m = e.target.closest && e.target.closest('[data-mini]'); if (!m) return; e.preventDefault(); e.stopPropagation(); m.dataset.mini === '1' ? toMini() : fromMini(); }, true);
   if (app) { let on = false; try { on = localStorage.getItem(MK) === '1'; } catch {} if (on) setMini(true); }
   bar.addEventListener('click', e => {
