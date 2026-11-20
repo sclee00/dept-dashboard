@@ -2489,6 +2489,11 @@ function parseG(payload) {
       const a = new Date(st.dateTime), b = new Date(en.dateTime || st.dateTime);
       if (isNaN(a)) continue;
       const day = ymd(a), s = a.getHours() * 60 + a.getMinutes();
+      // a timed event that runs into later days (e.g. 2/17 11:00 – 2/19 18:00) is shown as a span over those days
+      if (!isNaN(b) && ymd(b) > day) {
+        const bm = b.getHours() * 60 + b.getMinutes(), last = bm === 0 ? addDays(ymd(b), -1) : ymd(b);
+        if (last > day) { out.push({ id: String(x.id || ''), title, date: day, endDate: last, allDay: true, spanTimed: true, stTime: fromMin(s), enTime: fromMin(bm), free, link, loc: String(x.location || ''), recurring: !!(x.recurring || x.recurringEventId), rid: String(x.recurringEventId || ''), desc: typeof x.description === 'string' ? x.description : '', updated: typeof x.updated === 'number' ? x.updated : (Date.parse(x.updated || '') || 0) }); continue; }
+      }
       let e = !isNaN(b) && ymd(b) === day ? b.getHours() * 60 + b.getMinutes() : 1440;
       if (e <= s) e = Math.min(s + 30, 1440);
       out.push({ id: String(x.id || ''), title, date: day, allDay: false, s, e, time: fromMin(s), endTime: e >= 1440 ? '24:00' : fromMin(e), free, link, loc: String(x.location || ''), recurring: !!(x.recurring || x.recurringEventId), rid: String(x.recurringEventId || ''), desc: typeof x.description === 'string' ? x.description : '', updated: typeof x.updated === 'number' ? x.updated : (Date.parse(x.updated || '') || 0) });
@@ -7434,7 +7439,7 @@ try {
     .observe(ps, { childList: true, subtree: true, characterData: true });
 } catch {}
 setInterval(() => { if (UI.qtab === 'stat' && !document.hidden) renderStat(); }, 30000);
-if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__dd = { S, sample, gLoad, impOfEvent, impLegacyAsk, G, add, UNDO, undoArm, doUndo, patchItem: (c, id, d) => patch(c, id, d), replyFmt, delegFmt, fixNames, keyLine, snapshot, mergeIn, renderAll, FS, G, parseEdit, normalizeCmd, pickDT, parseCommand };
+if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__dd = { S, sample, gLoad, parseG, impOfEvent, impLegacyAsk, G, add, UNDO, undoArm, doUndo, patchItem: (c, id, d) => patch(c, id, d), replyFmt, delegFmt, fixNames, keyLine, snapshot, mergeIn, renderAll, FS, G, parseEdit, normalizeCmd, pickDT, parseCommand };
 })();
 </script>
 
