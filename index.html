@@ -4490,7 +4490,14 @@ const FONTS = [
   ['plex', 'IBM Plex Sans KR', '"IBM Plex Sans KR"', '', '지금 쓰는 글꼴']
 ];
 const FONT_DEF = { body: 'plex', head: 'serif', small: 'mono', size: 1 };
-const fontCfg = () => UI.fontDraft || { ...FONT_DEF, ...((S.settings && S.settings.font) || {}) };
+// sizes (overall and per part) belong to this device only — the iPhone and the PC keep their own
+const FONT_LOCAL = ['size', 'zcal', 'zrail', 'ztop', 'zbot'];
+const fontLocal = () => {
+  try { const v = localStorage.getItem('dashFontSize'); if (v) return JSON.parse(v) || {}; } catch { return {}; }
+  // first time on this device: start from the sizes that used to be shared
+  const old = (S.settings && S.settings.font) || {}, o = {}; for (const k of FONT_LOCAL) if (old[k] != null) o[k] = old[k]; return o;
+};
+const fontCfg = () => { if (UI.fontDraft) return UI.fontDraft; const syn = { ...((S.settings && S.settings.font) || {}) }; for (const k of FONT_LOCAL) delete syn[k]; return { ...FONT_DEF, ...syn, ...fontLocal() }; };
 function loadFont(k) {
   const f = FONTS.find(x => x[0] === k); if (!f || !f[3] || document.querySelector(`link[data-font="${k}"]`)) return;
   const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = f[3]; l.dataset.font = k; document.head.appendChild(l);
@@ -6865,7 +6872,7 @@ document.addEventListener('click', async ev0 => {
         const data = { ...S.settings, semesterLabel: $('sLabel').value.trim() || DEFAULTS.semesterLabel, semesterStart: isDate($('sStart').value) ? $('sStart').value : DEFAULTS.semesterStart, signature: $('sSig') ? $('sSig').value.trim() || DEFAULTS.signature : S.settings.signature, assistant: $('sAsst') ? $('sAsst').value.trim() || DEFAULTS.assistant : S.settings.assistant,
           ...($('sUseDeleg') ? { useDelegate: $('sUseDeleg').checked } : {}),
           ...($('mfName') ? { mf: { dtBlock: !$('mfDt') || $('mfDt').checked, name: $('mfName').value.trim(), title: $('mfTitle').value.trim(), greet: $('mfGreet').value.trim(), close: $('mfClose').value.trim(), tone: $('mfTone').value, len: $('mfLen').value, rules: $('mfRules').value.trim(), style: $('mfStyle').value.trim(), dGreet: $('mfDGreet').value.trim(), dSig: $('mfDSig').value.trim() || '{이름}', dTone: $('mfDTone').value, dRules: $('mfDRules').value.trim() } } : {}),
-          ...(fxData ? { fx: fxData } : {}), ...(fontData ? { font: fontData } : {}), ...(wcData ? { wordColors: wcData } : {}), cellMode: $('sCellMode') && $('sCellMode').value === 'titles' ? 'titles' : 'icons', ...($('sCalTime') ? { calTime: $('sCalTime').value } : {}), ...($('sMailTab') ? { mailTab: $('sMailTab').value === 'tab' } : {}), googleShow: $('sGShow').checked, googleBusy: $('sGBusy').checked, gAutoPush: $('sGPush').checked };
+          ...(fxData ? { fx: fxData } : {}), ...(fontData ? { font: (() => { const loc = {}, syn = { ...fontData }; for (const k of FONT_LOCAL) if (k in syn) { loc[k] = syn[k]; delete syn[k]; } try { localStorage.setItem('dashFontSize', JSON.stringify(loc)); } catch {} return syn; })() } : {}), ...(wcData ? { wordColors: wcData } : {}), cellMode: $('sCellMode') && $('sCellMode').value === 'titles' ? 'titles' : 'icons', ...($('sCalTime') ? { calTime: $('sCalTime').value } : {}), ...($('sMailTab') ? { mailTab: $('sMailTab').value === 'tab' } : {}), googleShow: $('sGShow').checked, googleBusy: $('sGBusy').checked, gAutoPush: $('sGPush').checked };
         if ($('tripOn')) data.trip = tripReadForm();
         if ($('impMode')) { const iv = impFormValues(); const amber = getComputedStyle(document.documentElement).getPropertyValue('--amber').trim(); data.impStyle = { ...iv, color: iv.color.toLowerCase() === amber.toLowerCase() ? '' : iv.color }; }
         { const gu = $('sGasUrl').value.trim(), gk = $('sGasKey').value.trim();
