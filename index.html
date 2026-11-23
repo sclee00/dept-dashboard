@@ -3401,7 +3401,8 @@ function relayApply() {
 }
 function relayCancel() { const r = UI.relay; UI.relay = null; UI.dlg = null; $('dlgRoot').innerHTML = ''; if (r) r.reject({ code: 'cancelled' }); }
 /* ---------- Gemini: answers come back by themselves through the Apps Script (no copy and paste) ---------- */
-const aiAuto = () => S.settings.aiMode === 'gemini' && gasOn();
+// in the Windows program there is no Chrome extension, so 'Gemini 웹 자동' goes through the API there
+const aiAuto = () => (S.settings.aiMode === 'gemini' || (typeof window.hostBounds === 'function' && S.settings.aiMode !== 'copy')) && gasOn();
 function pickModel(list) {
   const ids = (list || []).map(m => m.id);
   const ver = id => { const m = id.match(/^gemini-(\d+(?:\.\d+)?)-flash$/); return m ? +m[1] : -1; };
@@ -5670,6 +5671,26 @@ document.addEventListener('submit', async e => {
   $('lockMsg').className = 'status err'; $('lockMsg').textContent = '비밀번호가 다릅니다.'; $('lockPw').select();
 });
 document.addEventListener('keydown', e => { if (e.ctrlKey && e.shiftKey && (e.key === 'L' || e.key === 'l') && lockOn()) { e.preventDefault(); lockNow(); } }, true);
+// Windows program options (업무대시보드.exe): start with Windows, and the minimise button shrinking to the widget
+function autostartHtml() {
+  const host = typeof window.hostAutostart === 'function';
+  if (!host) return '';
+  let mw = true; try { mw = localStorage.getItem('dashMinWidget') !== '0'; } catch {}
+  setTimeout(() => window.hostAutostart(-1).then(on => { const c = $('autoStartChk'); if (c) c.checked = !!on; }).catch(() => {}), 0);
+  return `<div class="bsec"><b>${ic('clock')} 윈도우 프로그램</b>
+    <label class="chk"><input type="checkbox" id="autoStartChk"> 윈도우를 시작할 때 업무대시보드 자동 실행</label>
+    <label class="chk"><input type="checkbox" id="minWidgetChk" ${mw ? 'checked' : ''}> 창의 최소화(—) 버튼을 누르면 위젯으로 줄이기 (위젯에서 누르면 그냥 최소화)</label>
+    <span class="count">바로 적용됩니다.</span></div>`;
+}
+async function autostartSet(on) {
+  try { const r = await window.hostAutostart(on ? 1 : 0); const c = $('autoStartChk'); if (c) c.checked = !!r; toast(r ? 'PC를 켜면 업무대시보드가 자동으로 열립니다.' : '자동 실행을 껐습니다.'); }
+  catch { toast('자동 실행 설정을 바꾸지 못했습니다.'); }
+}
+document.addEventListener('change', e => {
+  if (!e.target) return;
+  if (e.target.id === 'autoStartChk') autostartSet(e.target.checked);
+  if (e.target.id === 'minWidgetChk') { try { localStorage.setItem('dashMinWidget', e.target.checked ? '1' : '0'); } catch {} if (window.__hostMinSync) window.__hostMinSync(); }
+});
 function lockSettingsHtml(s) {
   const c = (s && s.lock) || {};
   return `<div class="bsec"><b>${ic('lock')} 화면 잠금</b>
@@ -7192,6 +7213,7 @@ function openSettings() {
     <div class="settabs" role="tablist">${SET_TABS.map(([k, l, i]) => `<button type="button" role="tab" data-act="setTab" data-t="${k}" aria-selected="${tab === k}">${ic(i)}${l}</button>`).join('')}</div>
     <div class="setbody">
     <div class="stab" data-tab="general" ${tab === 'general' ? '' : 'hidden'}>
+    ${autostartHtml()}
     ${lockSettingsHtml(s)}
     ${aiSettingsHtml(s)}
     <label>학기 이름<input class="field" id="sLabel" value="${esc(s.semesterLabel)}"></label>
@@ -7471,14 +7493,19 @@ if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__dd = { S, sam
 (() => {
   const q = new URLSearchParams(location.search);
   // ?app=1 from the exe; also any window without a tab bar (Chrome --app window, installed app)
-  let app = q.get('app') === '1' || (window.toolbar && window.toolbar.visible === false) || !matchMedia('(display-mode: browser)').matches; // standalone, window-controls-overlay, minimal-ui …
+  // inside the Windows program (업무대시보드.exe with WebView2) the program places the window itself
+  const H = typeof window.hostBounds === 'function';
+  window.__dashHost = H;
+  let app = H || q.get('app') === '1' || (window.toolbar && window.toolbar.visible === false) || !matchMedia('(display-mode: browser)').matches; // standalone, window-controls-overlay, minimal-ui …
   try { if (app) sessionStorage.setItem('dashApp', '1'); else app = sessionStorage.getItem('dashApp') === '1'; } catch {}
   // in an ordinary browser tab the page cannot move or resize its window, so only the inner panel sizes are switched there
   window.__dashApp = app;
   const LK = 'dashWinLast', PK = 'dashWinPresets';
   const get = k => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch { return null; } };
   const put = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
-  const now = () => ({ x: window.screenX, y: window.screenY, w: window.outerWidth, h: window.outerHeight });
+  let hb = null;
+  const hostPoll = async () => { try { const b = await window.hostBounds(); if (b && !b.min && b.w > 0) hb = { x: b.x, y: b.y, w: b.w, h: b.h }; } catch {} };
+  const now = () => H ? (hb ? { ...hb } : null) : ({ x: window.screenX, y: window.screenY, w: window.outerWidth, h: window.outerHeight });
   // moving onto another monitor needs Chrome's "창 관리" (window management) permission; asked once, on a button press
   const onThisScreen = b => { const l = screen.availLeft || 0, t = screen.availTop || 0; return b.x >= l - 20 && b.y >= t - 20 && b.x < l + screen.availWidth && b.y < t + screen.availHeight; };
   const wmState = async () => { try { return (await navigator.permissions.query({ name: 'window-management' })).state; } catch { return 'unsupported'; } };
@@ -7488,12 +7515,14 @@ if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__dd = { S, sam
     if (st === 'denied' || (st === 'prompt' && !ask)) return false;
     try { await window.getScreenDetails(); return true; } catch { return false; }
   };
-  const place = b => { if (!app) return; try { window.moveTo(b.x, b.y); window.resizeTo(b.w, b.h); window.moveTo(b.x, b.y); } catch {}
+  const place = b => { if (!app) return;
+    if (H) { window.hostSetBounds(Math.round(b.x), Math.round(b.y), Math.round(b.w), Math.round(b.h)).then(hostPoll).catch(() => {}); return; }
+    try { window.moveTo(b.x, b.y); window.resizeTo(b.w, b.h); window.moveTo(b.x, b.y); } catch {}
     // tell when Chrome refused (a maximised window cannot be resized: restore it first)
     setTimeout(() => { if (Math.abs(window.outerWidth - b.w) > 40 || Math.abs(window.outerHeight - b.h) > 40) try { toast(window.outerWidth >= screen.availWidth - 4 ? '창이 최대화되어 있어 크기를 못 바꿨습니다. 최대화를 풀고 다시 눌러 주세요.' : '크롬이 창 크기·위치 변경을 막았습니다.'); } catch {} }, 400); };
   const apply = async (b, ask) => {
     if (!b || !(b.w > 200) || !(b.h > 200)) return;
-    if (app && !onThisScreen(b)) {
+    if (app && !H && !onThisScreen(b)) {
       const ok = await allowScreens(ask);
       if (!ok && ask) { const st = await wmState(); if (st === 'denied') try { toast('다른 모니터로 옮기려면 크롬 설정 → 개인정보 보호 및 보안 → 사이트 설정 → 창 관리에서 이 사이트를 허용해 주세요.'); } catch {} }
     }
@@ -7504,10 +7533,11 @@ if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__dd = { S, sam
   const MLK = 'dashMiniLast', isMini = () => document.body.classList.contains('mini');
   let startMini = false; try { startMini = localStorage.getItem('dashMini') === '1'; } catch {}
   const last = app ? (startMini ? get(MLK) || get(LK) : get(LK)) : null;
-  if (app) { if (last) apply(last); else apply({ x: screen.availLeft || 0, y: screen.availTop || 0, w: screen.availWidth, h: screen.availHeight }); }
+  if (H) { hostPoll().then(() => { if (startMini && get(MLK)) apply(get(MLK)); }); setInterval(hostPoll, 700); }
+  else if (app) { if (last) apply(last); else apply({ x: screen.availLeft || 0, y: screen.availTop || 0, w: screen.availWidth, h: screen.availHeight }); }
   // 2) keep remembering (there is no "moved" event, so check every couple of seconds as well)
   let sig = '';
-  const save = () => { if (save.hold) return; const b = now(), s = JSON.stringify(b); if (s !== sig) { sig = s; put(isMini() ? MLK : LK, b); } };
+  const save = () => { if (save.hold) return; const b = now(); if (!b) return; const s = JSON.stringify(b); if (s !== sig) { sig = s; put(isMini() ? MLK : LK, b); } };
   if (app) {
   setTimeout(() => { save(); setInterval(save, 2000); }, 1500);
     addEventListener('resize', () => { clearTimeout(save._t); save._t = setTimeout(save, 400); });
@@ -7525,13 +7555,16 @@ if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__dd = { S, sam
   // widget mode: a small window with only today's date, the next event and the D-days
   const MK = 'dashMini', MP = 'dashMiniPrev', MW = 320, MH = 300;
   const hold = () => { save.hold = true; clearTimeout(hold._t); hold._t = setTimeout(() => { save.hold = false; sig = ''; }, 1500); };
+  const minWidget = () => { try { return localStorage.getItem('dashMinWidget') !== '0'; } catch { return true; } };
+  window.__hostMinSync = () => { if (H && window.hostWidgetOnMin) window.hostWidgetOnMin(minWidget() && !isMini()).catch(() => {}); };
   const setMini = on => {
     document.body.classList.toggle('mini', on);
+    setTimeout(window.__hostMinSync, 0);
     try { localStorage.setItem(MK, on ? '1' : '0'); } catch {}
     try { window.__dashMain.renderWidgets(); } catch {}
   };
   const toMini = () => {
-    const cur = now(); put(MP, cur); put(LK, cur);
+    const cur = now() || { x: 100, y: 100, w: 1400, h: 900 }; put(MP, cur); put(LK, cur);
     hold();
     setMini(true);
     const ml = get(MLK);
@@ -7541,7 +7574,7 @@ if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__dd = { S, sam
   const fromMini = () => {
     if (window.__dashUnpin && window.__dashPinned) window.__dashUnpin(true);
     setMini(false);
-    put(MLK, now()); hold();
+    if (now()) put(MLK, now()); hold();
     const prev = get(MP) || get(LK); if (prev) apply(prev, true);
     setTimeout(() => { try { window.__dashMain.renderAll(); } catch {} }, 300);
   };
@@ -7572,6 +7605,7 @@ if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__dd = { S, sam
   const PINK = 'dashPin', TITLE = document.title.replace(/\s*📌$/, '') || '업무대시보드';
   const setPinTitle = on => { document.title = on ? TITLE + ' 📌' : TITLE; };
   const helperPin = async () => {
+    if (H) { try { await window.hostTop(true); } catch { return false; } window.__dashPinned = true; try { localStorage.setItem(PINK, '1'); } catch {} try { window.__dashMain.renderWidgets(); } catch {} return true; }
     let acked = false; const h = () => { acked = true; };
     addEventListener('resize', h); setPinTitle(true);
     await new Promise(r => setTimeout(r, 2500));
@@ -7582,7 +7616,7 @@ if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__dd = { S, sam
     return true;
   };
   // keep = the widget should come back pinned next time it is shrunk (expanding only lets go of the big window)
-  const unpin = keep => { window.__dashPinned = false; setPinTitle(false); if (!keep) try { localStorage.setItem(PINK, '0'); } catch {} try { window.__dashMain.renderWidgets(); } catch {} };
+  const unpin = keep => { window.__dashPinned = false; if (H) window.hostTop(false).catch(() => {}); else setPinTitle(false); if (!keep) try { localStorage.setItem(PINK, '0'); } catch {} try { window.__dashMain.renderWidgets(); } catch {} };
   window.__dashUnpin = unpin;
   window.__dashRepin = () => { let on = false; try { on = localStorage.getItem(PINK) === '1'; } catch {} if (on) setTimeout(() => helperPin(), 500); };
   document.addEventListener('click', async e => {
@@ -7591,7 +7625,7 @@ if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__dd = { S, sam
     if (app && await helperPin()) { try { toast('이 창을 항상 맨 앞에 고정했습니다.'); } catch {} return; }
     try { toast(app ? '고정해 줄 업무대시보드.exe가 실행 중이 아닙니다. 대시보드를 닫고 새로 받은 exe로 다시 열어 주세요.' : '항상 위는 업무대시보드.exe로 연 창에서만 됩니다.'); } catch {}
   }, true);
-  if (app) { let on = false; try { on = localStorage.getItem(PINK) === '1' && localStorage.getItem(MK) === '1'; } catch {} if (on) { window.__dashPinned = true; setPinTitle(true); } }
+  if (app) { let on = false; try { on = localStorage.getItem(PINK) === '1' && localStorage.getItem(MK) === '1'; } catch {} if (on) { window.__dashPinned = true; if (H) window.hostTop(true).catch(() => {}); else setPinTitle(true); } }
   // widget places saved by hand (like the numbered layouts of the normal window)
   const MPK = 'dashMiniPresets';
   const reMini = () => { try { window.__dashMain.renderWidgets(); } catch {} };
@@ -7606,6 +7640,8 @@ if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__dd = { S, sam
     const ps = get(MPK) || [], i = +q.dataset.mpos; if (!confirm(`위젯 위치 ${i + 1}번을 지울까요?`)) return;
     ps.splice(i, 1); put(MPK, ps); reMini();
   });
+  window.__hostToMini = () => { if (!isMini()) toMini(); };
+  if (H) setTimeout(window.__hostMinSync, 800);
   document.addEventListener('click', e => { const m = e.target.closest && e.target.closest('[data-mini]'); if (!m) return; e.preventDefault(); e.stopPropagation(); m.dataset.mini === '1' ? toMini() : fromMini(); }, true);
   if (app) { let on = false; try { on = localStorage.getItem(MK) === '1'; } catch {} if (on) setMini(true); }
   bar.addEventListener('click', e => {
