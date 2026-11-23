@@ -18,7 +18,7 @@ import (
 const (
 	appTitle = "업무대시보드"
 	appURL   = "https://sclee00.github.io/dept-dashboard/?app=1&host=win"
-	version  = "1.1.0"
+	version  = "1.1.1"
 )
 
 var (
@@ -140,7 +140,7 @@ func loadLast() (Bounds, bool) {
 func darkTitle() {
 	one := int32(1)
 	pDwmSet.Call(hwnd, 20, uintptr(unsafe.Pointer(&one)), 4) // immersive dark mode
-	cap := uint32(0x000B0806)                                 // #06080B as COLORREF (BGR)
+	cap := uint32(0x000B0806)                                // #06080B as COLORREF (BGR)
 	pDwmSet.Call(hwnd, 35, uintptr(unsafe.Pointer(&cap)), 4) // caption colour (Windows 11)
 	txt := uint32(0x00E6E6E6)
 	pDwmSet.Call(hwnd, 36, uintptr(unsafe.Pointer(&txt)), 4) // caption text colour
@@ -186,6 +186,11 @@ func wndProc(h, m, wp, lp uintptr) uintptr {
 		return 0
 	}
 	if m == wmClose {
+		// always ask before quitting
+		r, _, _ := pMsgBox.Call(h, uintptr(unsafe.Pointer(u16("업무대시보드를 종료할까요?"))), uintptr(unsafe.Pointer(u16(appTitle))), 0x4|0x20) // MB_YESNO | MB_ICONQUESTION
+		if r != 6 {                                                                                                                  // IDYES
+			return 0
+		}
 		saveLast()
 	}
 	r, _, _ := pCallWP.Call(oldProc, h, m, wp, lp)
