@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"unsafe"
 
@@ -17,7 +18,7 @@ import (
 const (
 	appTitle = "업무대시보드"
 	appURL   = "https://sclee00.github.io/dept-dashboard/?app=1&host=win"
-	version  = "1.0.0"
+	version  = "1.1.0"
 )
 
 var (
@@ -238,6 +239,7 @@ func main() {
 	wv.Bind("hostTop", func(on bool) bool { setTop(on); return onTop })
 	wv.Bind("hostAutostart", func(set int) bool { return autostart(set) })
 	wv.Bind("hostWidgetOnMin", func(on bool) bool { widgetOnMin = on; return on })
+	wv.Bind("hostGemini", func(url string) bool { return strings.HasPrefix(url, "https://sclee00.github.io/") && askChrome(url) })
 	wv.Bind("hostMinimize", func() bool { pShowWin.Call(hwnd, 6); return true })
 	wv.Bind("hostOpen", func(url string) bool {
 		if len(url) > 8 && (url[:8] == "https://" || url[:7] == "http://" || url[:7] == "mailto:") {

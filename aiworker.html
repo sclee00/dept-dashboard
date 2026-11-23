@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>업무대시보드 · Gemini</title>
+<meta name="theme-color" content="#06080B">
+<style>
+  :root{color-scheme:dark}
+  body{margin:0;background:#06080B;color:#e6e6e6;font:14px/1.5 "Pretendard","Malgun Gothic",system-ui,sans-serif;display:grid;place-items:center;height:100vh}
+  .box{padding:18px 20px;max-width:360px}
+  b{display:block;font-size:15px;margin-bottom:4px}
+  .st{color:#9aa4b2;font-size:13px}
+  .err{color:#ff8a8a}
+  .spin{display:inline-block;width:12px;height:12px;border:2px solid #7aa2f7;border-right-color:transparent;border-radius:50%;animation:r .8s linear infinite;margin-right:6px;vertical-align:-1px}
+  @keyframes r{to{transform:rotate(1turn)}}
+</style>
+</head>
+<body>
+<div class="box"><b><span class="spin" id="spin"></span>Gemini에 묻는 중</b><div class="st" id="st">준비하는 중…</div></div>
+<script>
+/* The Windows program (업무대시보드.exe) cannot carry the Chrome extension, so it opens this small page in Chrome:
+   the page takes the question from my Apps Script job box, hands it to the Gemini extension, and puts the answer back.
+   Everything it needs comes in the address after # (never sent to any server). */
+(async () => {
+  const p = new URLSearchParams(location.hash.slice(1));
+  const url = p.get('u'), key = p.get('k'), id = p.get('id');
+  const st = t => { document.getElementById('st').textContent = t; };
+  const finish = (ok, t) => {
+    document.getElementById('spin').style.display = 'none';
+    const s = document.getElementById('st'); s.textContent = t; s.className = ok ? 'st' : 'st err';
+    document.title = '업무대시보드 AI 완료';
+    setTimeout(() => { try { window.close(); } catch (e) {} }, ok ? 300 : 8000);
+  };
+  const post = body => fetch(url, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ ...body, key }) }).then(r => r.json());
+  const done = (r) => post({ action: 'aiDone', id, text: r.text == null ? null : r.text, error: r.error || null, message: r.message || null }).catch(() => {});
+  if (!url || !key || !id) return finish(false, '질문 정보가 없습니다.');
+  // the extension marks the page when it is there
+  for (let i = 0; i < 50 && !document.documentElement.dataset.geminiBridge; i++) await new Promise(r => setTimeout(r, 100));
+  if (!document.documentElement.dataset.geminiBridge) {
+    await done({ error: 'nobridge', message: '크롬에 "업무대시보드 · Gemini 연결" 확장이 없습니다.' });
+    return finish(false, '크롬에 Gemini 연결 확장이 없습니다. 크롬에서 확장을 설치해 주세요.');
+  }
+  let job;
+  try {
+    const q = new URLSearchParams({ action: 'aiGet', id, key });
+    const r = await fetch(url + (url.includes('?') ? '&' : '?') + q, { redirect: 'follow' }).then(x => x.json());
+    if (!r.ok) throw new Error(r.message || '작업을 받지 못했습니다.');
+    job = r.job;
+  } catch (e) { return finish(false, String(e.message || e)); }
+  st(job.title || '질문을 넣는 중…');
+  const ask = new Promise(resolve => {
+    const on = e => {
+      if (e.source !== window || !e.data || e.data.id !== id) return;
+      if (e.data.type === 'gb-status') return st(e.data.text);
+      if (e.data.type !== 'gb-result') return;
+      window.removeEventListener('message', on); resolve(e.data);
+    };
+    window.addEventListener('message', on);
+    window.postMessage({ type: 'gb-ask', id, prompt: job.prompt, json: !!job.json, images: job.images || [] }, location.origin);
+  });
+  const r = await ask;
+  await done(r);
+  finish(!r.error, r.error ? (r.message || 'Gemini 처리 실패') : '답을 대시보드로 보냈습니다.');
+})();
+</script>
+</body>
+</html>

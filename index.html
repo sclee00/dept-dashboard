@@ -3402,7 +3402,27 @@ function relayApply() {
 function relayCancel() { const r = UI.relay; UI.relay = null; UI.dlg = null; $('dlgRoot').innerHTML = ''; if (r) r.reject({ code: 'cancelled' }); }
 /* ---------- Gemini: answers come back by themselves through the Apps Script (no copy and paste) ---------- */
 // in the Windows program there is no Chrome extension, so 'Gemini 웹 자동' goes through the API there
-const aiAuto = () => (S.settings.aiMode === 'gemini' || (typeof window.hostBounds === 'function' && S.settings.aiMode !== 'copy')) && gasOn();
+const aiAuto = () => S.settings.aiMode === 'gemini' && gasOn();
+// in the Windows program there is no Chrome extension: Gemini web is asked through Chrome (a small page there takes the job from my Apps Script)
+const hostWebOn = () => typeof window.hostGemini === 'function' && gasOn() && S.settings.aiMode !== 'gemini' && S.settings.aiMode !== 'copy';
+function hostWebAsk(prompt, title, json, images) {
+  return aiProgress(title, async setStatus => {
+    setStatus('크롬의 Gemini에 질문을 맡기는 중…');
+    const j = await gasPost({ action: 'aiPut', prompt, json: !!json, images: images || [], title: title || '' });
+    if (!j || !j.id) throw { code: 'host', message: '작업을 맡기지 못했습니다.' };
+    const page = location.origin + location.pathname.replace(/[^/]*$/, '') + 'aiworker.html#' + new URLSearchParams({ u: S.settings.gasUrl, k: S.settings.gasKey, id: j.id });
+    const ok = await window.hostGemini(page).catch(() => false);
+    if (!ok) throw { code: 'nochrome', message: '이 PC에서 크롬을 찾지 못했습니다.' };
+    setStatus('크롬에서 Gemini가 답하는 중입니다… (크롬 창은 끝나면 저절로 닫힙니다)');
+    const t0 = Date.now();
+    while (Date.now() - t0 < 8 * 60 * 1000) {
+      await new Promise(r => setTimeout(r, 2000));
+      let r; try { r = await gas({ action: 'aiResult', id: j.id }); } catch { continue; }
+      if (r && r.done) { if (r.error) throw { code: r.error, message: r.message || 'Gemini 처리 실패' }; return r.text; }
+    }
+    throw { code: 'timeout', message: '크롬의 Gemini 답을 기다리다 시간이 지났습니다.' };
+  }, json, 'Gemini 웹 (크롬)');
+}
 function pickModel(list) {
   const ids = (list || []).map(m => m.id);
   const ver = id => { const m = id.match(/^gemini-(\d+(?:\.\d+)?)-flash$/); return m ? +m[1] : -1; };
@@ -3544,6 +3564,10 @@ async function aiRun(prompt, opts, json) {
     try { return await bridgeAsk(prompt, opts.title, json, images); }
     catch (e) { if (e && e.code === 'cancelled') throw e; why = 'Gemini 웹 자동 처리 실패: ' + ((e && e.message) || '알 수 없는 오류'); { const v = bridgeVer(); if (/기다리다 시간이|보내지지 않은/.test(why) && !(v[0] > 1 || v[1] > 2 || (v[1] === 2 && (v[2] || 0) >= 5))) why += ' — Gemini 연결 확장을 1.2.5로 올리면 답을 제대로 읽습니다 (설정 → 기본 → AI에서 내려받아 다시 설치).'; } if (e && e.text) { pre = e.text; why += ' Gemini의 답을 아래 칸에 넣어 두었습니다. 고칠 곳이 있으면 고친 뒤 [적용]을 누르세요.'; glog('받은 답(JSON 아님): ' + String(e.text).slice(0, 160)); } }
   } else if (aiWeb() && images.length) why = '그림을 Gemini에 자동으로 넣으려면 Gemini 연결 확장을 1.2 이상으로 바꿔야 합니다.';
+  if (hostWebOn()) {
+    try { return await hostWebAsk(prompt, title, json, images); }
+    catch (e) { if (e && e.code === 'cancelled') throw e; why = 'Gemini 웹(크롬) 실패: ' + ((e && e.message) || ''); }
+  }
   if (aiAuto()) {
     try { return await geminiAsk(prompt, opts.title, json, images, opts.search); }
     catch (e) { if (e && e.code === 'cancelled') throw e; why = 'Gemini API 실패: ' + ((e && e.message) || ''); }
@@ -7484,7 +7508,7 @@ try {
     .observe(ps, { childList: true, subtree: true, characterData: true });
 } catch {}
 setInterval(() => { if (UI.qtab === 'stat' && !document.hidden) renderStat(); }, 30000);
-if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__dd = { S, sample, gLoad, parseG, impOfEvent, impLegacyAsk, G, add, UNDO, undoArm, doUndo, patchItem: (c, id, d) => patch(c, id, d), replyFmt, delegFmt, fixNames, keyLine, snapshot, mergeIn, renderAll, FS, G, parseEdit, normalizeCmd, pickDT, parseCommand };
+if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__dd = { S, sample, aiRun, gLoad, parseG, impOfEvent, impLegacyAsk, G, add, UNDO, undoArm, doUndo, patchItem: (c, id, d) => patch(c, id, d), replyFmt, delegFmt, fixNames, keyLine, snapshot, mergeIn, renderAll, FS, G, parseEdit, normalizeCmd, pickDT, parseCommand };
 })();
 </script>
 
