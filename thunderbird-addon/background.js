@@ -85,12 +85,29 @@ async function post(s, mail) {
   return j;
 }
 
+// progress on the toolbar button itself (label + badge), and a notification at the start and at the end
+const ACTIONS = () => [browser.browserAction, browser.messageDisplayAction].filter(Boolean);
+let statusTimer = null;
+async function status(label, badge, color, resetMs) {
+  clearTimeout(statusTimer);
+  for (const a of ACTIONS()) {
+    try { if (a.setLabel) await a.setLabel({ label }); } catch (e) {}
+    try { await a.setTitle({ title: label }); } catch (e) {}
+    try { await a.setBadgeText({ text: badge || '' }); } catch (e) {}
+    try { if (color) await a.setBadgeBackgroundColor({ color }); } catch (e) {}
+  }
+  if (resetMs) statusTimer = setTimeout(() => status('대시보드로 보내기', '', null, 0), resetMs);
+}
 async function send(messages) {
   const s = await settings();
   if (!s) { notify('대시보드로 보내기', '먼저 연결 설정이 필요합니다. 설정 창이 열립니다.'); browser.runtime.openOptionsPage(); return; }
   if (!messages.length) { notify('대시보드로 보내기', '보낼 메일을 먼저 선택해 주세요.'); return; }
   let ok = 0, dup = 0; const fails = [], log = [];
-  for (const m of messages.slice(0, 20)) {
+  const list = messages.slice(0, 20), total = list.length;
+  notify('대시보드로 보내는 중…', total === 1 ? (list[0].subject || '(제목 없음)') : `${total}통을 보내고 있습니다.`);
+  let n = 0;
+  for (const m of list) {
+    n++; await status(total === 1 ? '보내는 중…' : `보내는 중 ${n}/${total}`, '…', '#2f6fde', 0);
     const base = { at: new Date().toISOString(), subject: m.subject || '(제목 없음)', from: m.author || '', date: m.date ? new Date(m.date).toISOString() : '', folder: m.folder ? m.folder.name || '' : '', msgId: m.headerMessageId || '' };
     try {
       const mail = await packMessage(m);
@@ -106,6 +123,8 @@ async function send(messages) {
   }
   if (messages.length > 20) log.push({ at: new Date().toISOString(), subject: `(한 번에 20통까지만 보냅니다 · ${messages.length - 20}통은 보내지 않음)`, result: 'fail', error: '20통 초과' });
   await logAdd(log.reverse());
+  if (fails.length) await status(ok || dup ? '일부 보내기 실패' : '보내기 실패', '!', '#d33', 8000);
+  else await status('보내기 완료', '✓', '#2e9e5b', 5000);
   if (fails.length) notify('일부 메일을 보내지 못했습니다', fails.join('\n'));
   else notify('대시보드로 보냈습니다', (messages.length === 1 ? (messages[0].subject || '(제목 없음)') : `${ok}건`) + (dup ? ` · 이미 보낸 메일 ${dup}건` : '') + ' — 대시보드 이메일 처리 목록에 들어갑니다.');
 }
