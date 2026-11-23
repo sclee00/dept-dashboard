@@ -914,6 +914,8 @@ body.mini .miniview{display:flex;flex-direction:column;gap:.45rem;height:100vh;p
 .miniview .ddhw{flex:1;min-height:0;display:flex;flex-direction:column}
 .miniview .ddlist{flex:1;min-height:0;overflow:auto}
 @media (display-mode: window-controls-overlay){body.mini .miniview{padding-top:calc(env(titlebar-area-height,0px) + .2rem)}}
+.dlask{display:inline-flex;align-items:center;gap:.35rem;font-size:.82rem;color:var(--muted)}
+.dlask.need{color:var(--warn,#e0a03c);font-weight:600}.dlask.need input{border-color:var(--warn,#e0a03c);box-shadow:0 0 0 2px rgb(224 160 60 / .25)}
 .winbar{position:fixed;top:.6rem;right:.7rem;z-index:50}
 .lockbtn:not([hidden])~.winbar{top:3rem}
 .winbar[hidden]{display:none}
@@ -1469,7 +1471,7 @@ async function saveIconMgr() {
 }
 function renderLegend() {
   const el = $('legend'); if (!el) return;
-  el.innerHTML = `<span><span class="ci2">${ic('회의', 'kc-회의')}</span>내 일정</span><span><span class="ci2 g" style="--gc:#7DB6D4">${ic('gcal', 'kc-g')}</span>구글</span><span><span class="ci2 task">${ic('할일', 'kc-할일')}</span>할 일</span><span><span class="ci2 hot">${ic('마감', 'kc-마감')}</span>마감·중요</span><span><span class="ci2 warn">${ic('reply')}</span>답장 기한</span><span><span class="ci2 imp">${ic('회의', 'kc-회의')}</span>중요(깜빡임)</span><span><span class="ci2 busy">${ic('lock')}</span>불가</span><span><span class="ci2 absent">${ic('회의', 'kc-회의')}</span>불참</span><span title="시각은 12시간제, 오전·오후는 색으로 구분"><span class="tam">9:00</span>/<span class="tpm">3:00</span> 오전/오후</span><span><span class="free f-good">빈 4h</span>빈 시간</span>
+  el.innerHTML = `<span><span class="ci2">${ic('회의', 'kc-회의')}</span>내 일정</span><span><span class="ci2 g" style="--gc:#7DB6D4">${ic('gcal', 'kc-g')}</span>구글</span>${tasksOn() ? `<span><span class="ci2 task">${ic('할일', 'kc-할일')}</span>할 일</span>` : ''}<span><span class="ci2 hot">${ic('마감', 'kc-마감')}</span>마감·중요</span><span><span class="ci2 warn">${ic('reply')}</span>답장 기한</span><span><span class="ci2 imp">${ic('회의', 'kc-회의')}</span>중요(깜빡임)</span><span><span class="ci2 busy">${ic('lock')}</span>불가</span><span><span class="ci2 absent">${ic('회의', 'kc-회의')}</span>불참</span><span title="시각은 12시간제, 오전·오후는 색으로 구분"><span class="tam">9:00</span>/<span class="tpm">3:00</span> 오전/오후</span><span><span class="free f-good">빈 4h</span>빈 시간</span>
   <details class="iconhelp"><summary>아이콘 ${ICON_LEGEND.length}종</summary><div class="iconlist">${ICON_LEGEND.map(([k]) => `<span>${ic(k, ICON_GROUP[k] || '')}${esc(iconLabel(k))}</span>`).join('')}<span class="count" style="grid-column:1/-1">일정 제목의 단어로 아이콘을 고릅니다. 아이콘에 마우스를 올리거나 날짜를 누르면 내용이 보입니다.</span><button class="btn small" type="button" data-act="iconMgr" style="grid-column:1/-1;justify-self:start">${ic('pen')}색·이름 바꾸기</button></div></details>`;
 }
 
@@ -1516,6 +1518,15 @@ async function gUpdate(cal, gid, doc) {
 }
 /* ---------- every change to a Google event is confirmed first ---------- */
 // gAsk({ title, rows: [[label, before, after]], note, choices: [{ v, label, primary, danger, off, why }] }) → chosen v or null
+// "언제까지 할까요?" — a small question with a date box; resolves to the date or null
+async function askDue(title) {
+  let v = '';
+  setTimeout(() => { const i = document.getElementById('askDue'); if (i) { i.addEventListener('input', () => { v = i.value; }); i.focus(); try { i.showPicker(); } catch {} } }, 30);
+  const r = await gAsk({ icon: 'clock', title: '언제까지 할까요?', rows: [['할 일', title]], note: `<label class="dlask">언제까지<input class="field" type="date" id="askDue"></label><br>정한 날에 <b>마감</b> 일정으로 넣습니다.`, choices: [{ v: 'ok', label: '일정에 넣기', primary: true }], noLabel: '넣지 않기' });
+  if (r !== 'ok') return null;
+  if (!isDate(v)) { toast('날짜를 넣지 않아 일정에 넣지 않았습니다.'); return null; }
+  return v;
+}
 function gAsk(o) {
   return new Promise(res => {
     let root = document.getElementById('askRoot');
@@ -2069,7 +2080,7 @@ function renderHeader() {
   $('weekLabel').textContent = wk;
   try { renderWidgets(); } catch (e) { console.warn(e); }
   const t = todayStr();
-  const urgent = S.tasks.filter(x => !x.done && isDate(x.due) && x.due <= t).length;
+  const urgent = liveTasks().filter(x => !x.done && isDate(x.due) && x.due <= t).length;
   const reply = S.emails.filter(m => needsReplyNow(m)).length;
   const open = S.emails.filter(m => m.status === 'open' && !askIgnore(m)).length;
   const deleg = S.emails.filter(m => m.delegable && !m.delegated && isActive(m) && m.status !== 'done' && !askIgnore(m)).length;
@@ -2089,7 +2100,7 @@ function renderHeader() {
 /* ---------- focus rail: what needs attention now ---------- */
 function renderFocus() {
   const items = [];
-  for (const x of S.tasks) {
+  for (const x of liveTasks()) {
     if (x.done) continue;
     const n = isDate(x.due) ? diff(x.due) : null;
     let sc = 0, why = '';
@@ -2191,6 +2202,9 @@ function pendingCount(m) {
   return (a.events || []).filter(e => !e.added && !e.skipped).length + (a.tasks || []).filter(e => !e.added && !e.skipped).length;
 }
 const isActive = m => m.status !== 'archived' && m.status !== 'ignored';
+// 할 일 can be switched off in settings: then nothing becomes a to-do; work without a date is asked about and added as a 마감 event
+const tasksOn = () => S.settings.useTasks !== false;
+const liveTasks = () => tasksOn() ? S.tasks : [];
 const askIgnore = m => m.relevance === 'irrelevant' && !m.relevanceDecided && m.status === 'open';
 // a mail marked 처리 완료 no longer waits for a reply
 const needsReplyNow = m => m.needsReply && !m.replied && isActive(m) && m.status !== 'done' && !askIgnore(m);
@@ -3268,6 +3282,13 @@ async function applyActions(actions) {
   for (const a of actions) {
     if (a.ref && a.ref.startsWith('e:')) UI.lastEv = a.ref.slice(2);
     if (['update', 'delete', 'done', 'skip'].includes(a.type)) { const r = await applyRefAction(a); n += r.n; if (r.date) first = first || r.date; if (r.g === 'ok') gs.ok++; else if (r.g === 'fail' || r.g === 'none' || r.g === 'unknown') gs.fail++; gs.left += r.gLeft || 0; continue; }
+    if (a.type === 'task' && !tasksOn()) {
+      // 할 일 is off: the work goes in as a 마감 event, and without a date I am asked until when
+      let due = isDate(a.due) ? a.due : await askDue(a.title);
+      if (!due) continue;
+      const doc = { title: a.title, date: due, time: '', endTime: '', location: '', kind: '마감', imp: a.imp === 'high' ? 'high' : 'normal', source: 'command', createdAt: nowISO() };
+      const nid = await add('events', doc); if (gAuto() && gReady()) pushGoogle(doc, nid); n++; first = first || due; continue;
+    }
     if (a.type === 'task') { await add('tasks', { title: a.title, due: a.due || '', priority: a.imp === 'high' ? 'high' : 'mid', done: false, source: 'command', createdAt: nowISO() }); n++; if (a.due) first = first || a.due; continue; }
     if (a.type === 'block') {
       if (a.repeat && repComplex(a)) {
@@ -5287,7 +5308,7 @@ function cellItems(day) {
     const due = e.kind === '마감', timed = !e.span && toMin(e.time) != null, k = iconOfEvent(e), dk = (e.occ ? 'r:' : 'e:') + e.id;
     items.push({ ky: 'e:' + e.id, en: timed ? evEnd(e) : null, cal: evCal(S.events.find(x => x.id === e.id) || e), o: due ? 0 : timed ? 20 + toMin(e.time) / 1440 : 10, ic: k, kc: grp(k, 'kc-' + (e.kind || '학사')), tm: timed ? e.time : '', nm: withSt(e.title, statusOfE(e)), tx: (impOfEvent(e) === 'high' ? '[중요] ' : '') + withSt(e.title, statusOfE(e)) + (e.googleId ? ' (구글에도 있음)' : ''), cls: (due ? 'hot' : (e.googleId || e.googleSent) ? 'synced' : '') + (statusOfE(e) ? stCls(statusOfE(e)) : impOfEvent(e) === 'high' ? ' imp' : ''), dk, tr: itemTraits({ kind: 'event', absent: absentOfEvent(e), timed, s: toMin(e.time), e: timed ? evEnd(e) : 0, days: e.span && isDate(e.endDate) ? Math.round((parse(e.endDate) - parse(e.date)) / 86400000) + 1 : 1, recur: !!(e.occ || repDays(e)) }) });
   }
-  for (const t of S.tasks.filter(t => !t.done && t.due === day)) {
+  for (const t of liveTasks().filter(t => !t.done && t.due === day)) {
     const k = iconOfTask(t);
     items.push({ ky: 't:' + t.id, o: t.priority === 'high' ? 1 : 5, ic: k, kc: grp(k, 'kc-할일'), nm: t.title, tx: '할 일 · ' + t.title, dk: 't:' + t.id, cls: 'task' + (t.priority === 'high' ? ' hot' : t.priority === 'low' ? ' dim' : ''), tr: itemTraits({ kind: 'task' }) });
   }
@@ -5524,7 +5545,7 @@ function dayRows(day, evs, range) {
     const range = e.span ? `${fmtShort(e.endDate === day ? e.date : e.date)}–${fmtShort(e.endDate)}` : '종일';
     ad.push(srow({ t: e.kind === '마감' ? '마감' : range, chip: ch('e:' + e.id), icon: iconOfEvent(e), kc: iconKc(iconOfEvent(e), 'kc-' + (e.kind || '학사')), fixed: true, iconAct: `data-act="ipOpen" data-kind="e" data-id="${e.id}"`, memoKey: 'e:' + e.id, gs: gSyncIcon(e), title: e.title, sub: esc([repText(e), e.location].filter(Boolean).join(' · ')), cls: (e.kind === '마감' ? 'hot' : '') + (statusOfE(e) ? stCls(statusOfE(e)) : impOfEvent(e) === 'high' ? ' improw' : ''), acts: eventActs(e), tag: (statusOfE(e) ? ` <span class="tag st st-${statusOfE(e)}">${ST_KO[statusOfE(e)]}</span>` : '') + (e.example ? ' <span class="tag ex">예시</span>' : '') }));
   }
-  for (const t of S.tasks.filter(t => !t.done && t.due === day))
+  for (const t of liveTasks().filter(t => !t.done && t.due === day))
     ad.push(srow({ t: '할 일', chip: ch('t:' + t.id), icon: iconOfTask(t), kc: iconKc(iconOfTask(t), 'kc-할일'), fixed: true, iconAct: `data-act="ipOpen" data-kind="t" data-id="${t.id}"`, title: t.title, cls: t.priority === 'high' ? 'hot' : '', sub: t.emailId ? '메일에서 나온 할 일' : '', acts: `<button class="x" type="button" data-act="toggleTask" data-id="${t.id}" aria-label="완료" title="완료">${ic('check')}</button>`, tag: t.example ? ' <span class="tag ex">예시</span>' : '' }));
   for (const m of S.emails.filter(m => needsReplyNow(m) && m.replyDeadline === day))
     ad.push(srow({ t: '답장 기한', chip: ch('m:' + m.id), icon: 'reply', kc: 'kc-reply', title: m.subject, cls: 'warn', acts: `<button class="btn small" type="button" data-act="openMail" data-id="${m.id}">열기</button>` }));
@@ -5601,6 +5622,7 @@ function renderRail() {
   $('rail').classList.toggle('wide', wide);
   $('tab-mail').hidden = wide;
   if (wide && UI.rail === 'mail') UI.rail = 'day';
+  $('tab-tasks').hidden = !tasksOn(); if (!tasksOn() && UI.rail === 'tasks') UI.rail = 'day';
   $('tab-tasks').innerHTML = `${ic('list')}할 일${urgent ? `<span class="badge hot">${urgent}</span>` : `<span class="badge">${openTasks}</span>`}`;
   for (const r of ['day', 'mail', 'tasks']) {
     $('tab-' + r).setAttribute('aria-selected', String(UI.rail === r));
@@ -5787,7 +5809,7 @@ function renderSheet(force) {
       ${e.added ? '<span class="pill replied">추가됨</span>' : e.skipped ? '<span class="pill done">건너뜀</span>' : `<div class="row"><button class="btn small primary" type="button" data-act="addEv" data-i="${i}">${absent ? '불참으로 추가' : '일정 추가'}</button><button class="btn small" type="button" data-act="skipItem" data-kind="events" data-i="${i}">건너뛰기</button></div>`}
     </div>`;
   };
-  const itemTk = (t, i) => `<div class="item ${t.added || t.skipped ? 'added' : ''} ${t.forHead === false ? 'rest' : ''}">
+  const itemTk = (t, i) => !tasksOn() ? itemDl(t, i) : `<div class="item ${t.added || t.skipped ? 'added' : ''} ${t.forHead === false ? 'rest' : ''}">
       <div class="fields">
         <input class="field title" id="tk-t-${i}" value="${ev('tk-t-'+i, t.title)}" aria-label="할 일" ${t.added ? 'disabled' : ''}>
         <input class="field" type="date" id="tk-d-${i}" value="${ev('tk-d-'+i, t.due)}" aria-label="마감일" ${t.added ? 'disabled' : ''}>
@@ -5795,6 +5817,16 @@ function renderSheet(force) {
       </div>
       ${t.added ? '<span class="pill replied">추가됨</span>' : t.skipped ? '<span class="pill done">건너뜀</span>' : `<div class="row"><button class="btn small primary" type="button" data-act="addTk" data-i="${i}">할 일 추가</button><button class="btn small" type="button" data-act="skipItem" data-kind="tasks" data-i="${i}">건너뛰기</button></div>`}
     </div>`;
+  // with 할 일 switched off: the same item becomes "언제까지 할까요?" and goes into the calendar as a 마감 event
+  const itemDl = (t, i) => { const due = UI.edits['tk-d-'+i] ?? t.due ?? '';
+    return `<div class="item ${t.added || t.skipped ? 'added' : ''} ${t.forHead === false ? 'rest' : ''}">
+      <div class="fields">
+        <input class="field title" id="tk-t-${i}" value="${ev('tk-t-'+i, t.title)}" aria-label="할 일" ${t.added ? 'disabled' : ''}>
+        <label class="dlask ${!t.added && !isDate(due) ? 'need' : ''}">언제까지?<input class="field" type="date" id="tk-d-${i}" value="${esc(due)}" aria-label="언제까지 할지" ${t.added ? 'disabled' : ''}></label>
+        ${!t.added && !t.skipped && !isDate(due) ? `<div class="fullrow count">${ic('clock')} 날짜가 정해지지 않은 일입니다. 언제까지 할지 정해 주시면 그 날 <b>마감</b> 일정으로 넣습니다.</div>` : ''}
+      </div>
+      ${t.added ? '<span class="pill replied">마감 일정으로 추가됨</span>' : t.skipped ? '<span class="pill done">건너뜀</span>' : `<div class="row"><button class="btn small primary" type="button" data-act="addTk" data-i="${i}">마감 일정으로 추가</button><button class="btn small" type="button" data-act="skipItem" data-kind="tasks" data-i="${i}">건너뛰기</button></div>`}
+    </div>`; };
   // only what the head has to care about is shown; the rest is one click away
   const split = (arr, fn, key, noun) => {
     // an event I'm invited to but not going to is still asked about (add as 불참 or skip), never tucked away
@@ -5841,8 +5873,8 @@ function renderSheet(force) {
       ${m.analysis ? `
       <div class="sec"><h4><span>일정 ${evMain.length}${evs.length > evMain.length ? ` <span class="count">(전체 ${evs.length})</span>` : ''}</span>${evMain.filter(e => !e.added && !e.skipped).length > 1 ? '<button class="btn small" type="button" data-act="addAllEv">모두 추가</button>' : ''}</h4>
         ${evs.length ? split(evs, itemEv, 'Ev', '일정') : '<div class="count">이 메일에서 찾은 일정이 없습니다.</div>'}</div>
-      <div class="sec"><h4><span>할 일 ${tkMain.length}${tks.length > tkMain.length ? ` <span class="count">(전체 ${tks.length})</span>` : ''}</span>${tkMain.filter(e => !e.added && !e.skipped).length > 1 ? '<button class="btn small" type="button" data-act="addAllTk">모두 추가</button>' : ''}</h4>
-        ${tks.length ? split(tks, itemTk, 'Tk', '할 일') : '<div class="count">이 메일에서 찾은 할 일이 없습니다.</div>'}</div>` : ''}
+      <div class="sec"><h4><span>${tasksOn() ? '할 일' : '해야 할 일 → 마감 일정'} ${tkMain.length}${tks.length > tkMain.length ? ` <span class="count">(전체 ${tks.length})</span>` : ''}</span>${tkMain.filter(e => !e.added && !e.skipped).length > 1 ? '<button class="btn small" type="button" data-act="addAllTk">모두 추가</button>' : ''}</h4>
+        ${tks.length ? split(tks, itemTk, 'Tk', '할 일') : `<div class="count">이 메일에서 찾은 ${tasksOn() ? '할 일' : '해야 할 일'}이 없습니다.</div>`}</div>` : ''}
       <div class="sec delegsec" ${S.settings.useDelegate ? '' : 'hidden'}><h4><span>${ic('hand')} ${esc(S.settings.assistant)}에게 업무 지시</span>${m.delegated ? `<span class="pill replied">${ic('check')}전달함</span>` : m.delegable ? '<span class="pill deleg">전달 권장</span>' : ''}</h4>
         <div class="seg" role="group" aria-label="지시 메일 길이" style="margin-bottom:.5rem"><button type="button" data-act="dlgTab" data-v="short" aria-pressed="${tab === 'short'}">짧은 버전 · 개조식</button><button type="button" data-act="dlgTab" data-v="long" aria-pressed="${tab === 'long'}">자세한 버전</button></div>
         ${tab === 'short' ? (hasShort ? `<div class="count" style="margin-bottom:.3rem">넣을 항목을 고르세요. <b>넣을까요?</b> 표시는 AI가 판단을 맡긴 항목입니다.</div>
@@ -6605,6 +6637,13 @@ async function addFromItem(m, kind, i) {
     const doc = { title, date, time, endTime, location: UI.edits['ev-l-'+i] ?? it.location ?? '', kind: UI.edits['ev-k-'+i] ?? it.kind, imp: UI.edits['ev-i-'+i] ?? 'normal', emailId: m.id, source: 'email', createdAt: nowISO(), ...(itemAbsent(m, it, i) ? { absent: true, status: 'absent' } : {}) };
     const nid = await add('events', doc);
     if (gAuto() && gReady()) pushGoogle(doc, nid);
+  } else if (!tasksOn()) {
+    const title = (UI.edits['tk-t-'+i] ?? it.title).trim(), due = UI.edits['tk-d-'+i] ?? it.due;
+    if (!title) { toast('할 일 내용을 입력해 주세요.'); return false; }
+    if (!isDate(due)) { toast('언제까지 할지 날짜를 넣어 주세요.'); const d = $('tk-d-' + i); if (d) { d.focus(); try { d.showPicker(); } catch {} } return false; }
+    const doc = { title, date: due, time: '', endTime: '', location: '', kind: '마감', imp: 'normal', emailId: m.id, source: 'email', createdAt: nowISO() };
+    const nid = await add('events', doc);
+    if (gAuto() && gReady()) pushGoogle(doc, nid);
   } else {
     const title = (UI.edits['tk-t-'+i] ?? it.title).trim(), due = UI.edits['tk-d-'+i] ?? it.due;
     if (!title) { toast('할 일 내용을 입력해 주세요.'); return false; }
@@ -6948,6 +6987,7 @@ document.addEventListener('click', async ev0 => {
         const fxData = $('fxShort') ? fxReadForm() : null, fontData = $('fontSize') ? fontReadForm() : null, wcData = document.querySelector('.wclist') ? wcReadForm() : null;
         const data = { ...S.settings, semesterLabel: $('sLabel').value.trim() || DEFAULTS.semesterLabel, semesterStart: isDate($('sStart').value) ? $('sStart').value : DEFAULTS.semesterStart, signature: $('sSig') ? $('sSig').value.trim() || DEFAULTS.signature : S.settings.signature, assistant: $('sAsst') ? $('sAsst').value.trim() || DEFAULTS.assistant : S.settings.assistant,
           ...($('sUseDeleg') ? { useDelegate: $('sUseDeleg').checked } : {}),
+          ...($('sUseTasks') ? { useTasks: $('sUseTasks').checked } : {}),
           ...($('mfName') ? { mf: { dtBlock: !$('mfDt') || $('mfDt').checked, name: $('mfName').value.trim(), title: $('mfTitle').value.trim(), greet: $('mfGreet').value.trim(), close: $('mfClose').value.trim(), tone: $('mfTone').value, len: $('mfLen').value, rules: $('mfRules').value.trim(), style: $('mfStyle').value.trim(), dGreet: $('mfDGreet').value.trim(), dSig: $('mfDSig').value.trim() || '{이름}', dTone: $('mfDTone').value, dRules: $('mfDRules').value.trim() } } : {}),
           ...(fxData ? { fx: fxData } : {}), ...(fontData ? { font: (() => { const loc = {}, syn = { ...fontData }; for (const k of FONT_LOCAL) if (k in syn) { loc[k] = syn[k]; delete syn[k]; } try { localStorage.setItem('dashFontSize', JSON.stringify(loc)); } catch {} return syn; })() } : {}), ...(wcData ? { wordColors: wcData } : {}), cellMode: $('sCellMode') && $('sCellMode').value === 'titles' ? 'titles' : 'icons', ...($('sCalTime') ? { calTime: $('sCalTime').value } : {}), ...($('sMailTab') ? { mailTab: $('sMailTab').value === 'tab' } : {}), googleShow: $('sGShow').checked, googleBusy: $('sGBusy').checked, gAutoPush: $('sGPush').checked };
         if ($('tripOn')) data.trip = tripReadForm();
@@ -7011,7 +7051,7 @@ document.addEventListener('click', async ev0 => {
       case 'addEv': case 'addTk': {
         const kind = act === 'addEv' ? 'events' : 'tasks';
         const a = await addFromItem(m, kind, Number(el.dataset.i));
-        if (a) { await patch('emails', m.id, { analysis: a }); if (!(await autoDone(m.id, kind === 'events' ? '일정에 추가했습니다.' : '할 일에 추가했습니다.'))) renderSheet(true); }
+        if (a) { await patch('emails', m.id, { analysis: a }); if (!(await autoDone(m.id, kind === 'events' ? '일정에 추가했습니다.' : tasksOn() ? '할 일에 추가했습니다.' : '마감 일정으로 추가했습니다.'))) renderSheet(true); }
         return;
       }
       case 'addAllEv': case 'addAllTk': {
@@ -7253,6 +7293,7 @@ function mailFmtHtml(s) {
       <label>그 밖의 규칙 (자유롭게)<textarea class="field" id="mfRules" rows="2" placeholder="예: 날짜는 11월 5일(수)처럼 요일까지 · 첨부를 언급할 때는 파일 이름을 적기">${esc(f.rules)}</textarea></label>
     </div>
     <div class="bsec"><b>${ic('hand')} 조교 지시 메일</b>
+      <label class="chk"><input type="checkbox" id="sUseTasks" ${s.useTasks !== false ? 'checked' : ''}> 할 일 기능 쓰기 (끄면 할 일 탭·달력의 할 일이 숨고, 메일에서 찾은 해야 할 일은 언제까지 할지 물어 <b>마감 일정</b>으로 넣습니다)</label>
       <label class="chk"><input type="checkbox" id="sUseDeleg" ${s.useDelegate ? 'checked' : ''}> 메일을 분석할 때 조교 업무 지시도 만들기 (끄면 메일 화면에 답장 초안만 보입니다)</label>
       <label>받는 조교 (이름·호칭)<input class="field" id="sAsst" value="${esc(s.assistant)}" placeholder="예: 김OO 조교"></label>
       <label>첫 인사<input class="field" id="mfDGreet" value="${esc(f.dGreet)}" placeholder="예: {조교}님, 수고 많으십니다."></label>
