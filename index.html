@@ -3404,6 +3404,35 @@ function relayCancel() { const r = UI.relay; UI.relay = null; UI.dlg = null; $('
 // in the Windows program there is no Chrome extension, so 'Gemini 웹 자동' goes through the API there
 const aiAuto = () => S.settings.aiMode === 'gemini' && gasOn();
 // in the Windows program there is no Chrome extension: Gemini web is asked through Chrome (a small page there takes the job from my Apps Script)
+// the Windows program shows Gemini itself in the bottom "Gemini" tab (its own Edge view placed over that tab)
+const hostGemOn = () => typeof window.hostGemAsk === 'function' && S.settings.aiMode !== 'gemini' && S.settings.aiMode !== 'copy';
+const HOSTGEM = {};
+window.__hostGemStatus = (id, t) => { const h = HOSTGEM[id]; if (h) h.status(t); };
+window.__hostGemDone = (id, r) => { const h = HOSTGEM[id]; if (!h) return; delete HOSTGEM[id]; let o = null; try { o = JSON.parse(r); } catch {} h.done(o || { error: 'run', message: '답을 읽지 못했습니다.' }); };
+function hostGemAsk(prompt, title, json, images) {
+  const back = UI.qtab && UI.qtab !== 'gem' ? UI.qtab : 'auto';
+  qTab('gem');
+  return aiProgress(title, setStatus => new Promise((resolve, reject) => {
+    const id = uid();
+    HOSTGEM[id] = { status: t => { setStatus(t); gemDockStatus(t); }, done: r => {
+      if (UI.qtab === 'gem' && !r.error) qTab(back);
+      if (r.error) reject({ code: r.error, message: r.message || 'Gemini 처리 실패' }); else resolve(r.text);
+    } };
+    setStatus('Gemini 새 대화를 여는 중');
+    window.hostGemAsk(id, prompt, !!json, JSON.stringify(images || [])).catch(() => { delete HOSTGEM[id]; reject({ code: 'host', message: 'Gemini 화면을 열지 못했습니다.' }); });
+  }), json, 'Gemini (Gemini 탭)');
+}
+// keep the program's Gemini view exactly over the tab (hidden when the tab is not shown, the screen is locked or a dialog is open)
+function hostGemPlace() {
+  if (typeof window.hostGemPlace !== 'function') return;
+  const box = $('qGemBox'), dpr = window.devicePixelRatio || 1;
+  const vis = box && UI.qtab === 'gem' && !document.body.classList.contains('locked') && !document.body.classList.contains('mini') && !(UI.dlg && UI.dlg !== 'gem') && box.offsetParent !== null;
+  const r = vis ? box.getBoundingClientRect() : { x: 0, y: 0, width: 0, height: 0 };
+  const k = [Math.round(r.x * dpr), Math.round(r.y * dpr), Math.round(r.width * dpr), Math.round(r.height * dpr), vis ? 1 : 0].join(',');
+  if (k === hostGemPlace.k) return; hostGemPlace.k = k;
+  window.hostGemPlace(Math.round(r.x * dpr), Math.round(r.y * dpr), Math.round(r.width * dpr), Math.round(r.height * dpr), !!vis).catch(() => {});
+}
+if (typeof window.hostGemPlace === 'function') { setInterval(hostGemPlace, 300); addEventListener('resize', () => { hostGemPlace.k = ''; hostGemPlace(); }); }
 const hostWebOn = () => typeof window.hostGemini === 'function' && gasOn() && S.settings.aiMode !== 'gemini' && S.settings.aiMode !== 'copy';
 function hostWebAsk(prompt, title, json, images) {
   return aiProgress(title, async setStatus => {
@@ -3564,7 +3593,10 @@ async function aiRun(prompt, opts, json) {
     try { return await bridgeAsk(prompt, opts.title, json, images); }
     catch (e) { if (e && e.code === 'cancelled') throw e; why = 'Gemini 웹 자동 처리 실패: ' + ((e && e.message) || '알 수 없는 오류'); { const v = bridgeVer(); if (/기다리다 시간이|보내지지 않은/.test(why) && !(v[0] > 1 || v[1] > 2 || (v[1] === 2 && (v[2] || 0) >= 5))) why += ' — Gemini 연결 확장을 1.2.5로 올리면 답을 제대로 읽습니다 (설정 → 기본 → AI에서 내려받아 다시 설치).'; } if (e && e.text) { pre = e.text; why += ' Gemini의 답을 아래 칸에 넣어 두었습니다. 고칠 곳이 있으면 고친 뒤 [적용]을 누르세요.'; glog('받은 답(JSON 아님): ' + String(e.text).slice(0, 160)); } }
   } else if (aiWeb() && images.length) why = '그림을 Gemini에 자동으로 넣으려면 Gemini 연결 확장을 1.2 이상으로 바꿔야 합니다.';
-  if (hostWebOn()) {
+  if (hostGemOn()) {
+    try { return await hostGemAsk(prompt, title, json, images); }
+    catch (e) { if (e && e.code === 'cancelled') throw e; why = 'Gemini 탭 처리 실패: ' + ((e && e.message) || ''); }
+  } else if (hostWebOn()) {
     try { return await hostWebAsk(prompt, title, json, images); }
     catch (e) { if (e && e.code === 'cancelled') throw e; why = 'Gemini 웹(크롬) 실패: ' + ((e && e.message) || ''); }
   }
@@ -6864,7 +6896,7 @@ document.addEventListener('click', async ev0 => {
       case 'qTab': qTab(el.dataset.k); return;
       case 'zReset': { document.querySelectorAll('input[data-z]').forEach(i => { i.value = 1; }); fontLive(); return; }
       case 'gemZoom': { let z = gemZoom() + (+el.dataset.d) * 0.1; z = Math.round(Math.max(0.5, Math.min(1, z)) * 10) / 10; try { localStorage.setItem('gemZoom', String(z)); } catch {} applyGemZoom(); toast(`Gemini 글자 크기 ${Math.round(z * 100)}%`); return; }
-      case 'gemNew': { const f = gemDock(true); if (f) f.src = GEM_APP; return; }
+      case 'gemNew': { if (typeof window.hostGemNew === 'function') { window.hostGemNew(); return; } const f = gemDock(true); if (f) f.src = GEM_APP; return; }
       case 'gemTall': { const q = document.querySelector('.quick'); q.classList.toggle('gtall'); el.textContent = q.classList.contains('gtall') ? '작게' : '크게'; if (q.classList.contains('gtall')) q.scrollIntoView({ block: 'nearest' }); return; }
       case 'histUndo': return undoSteps(+el.dataset.n, false);
       case 'histOne': return undoPick([+el.dataset.i]);
@@ -7372,6 +7404,7 @@ function qTab(k) {
 }
 function renderGemPane() {
   const box = $('qGemBox'); if (!box) return;
+  if (typeof window.hostGemPlace === 'function') { if (!box.querySelector('.gemslot')) box.innerHTML = '<div class="gemslot count">Gemini를 여는 중… (처음 한 번은 여기서 구글 로그인을 해 주세요)</div>'; hostGemPlace.k = ''; setTimeout(hostGemPlace, 0); return; }
   if (aiFrame() && aiWeb()) { const f = $('gemFrame') || gemDock(); if (f && !f.getAttribute('src') && UI.qtab === 'gem') f.src = GEM_APP; return; }
   if ($('gemFrame')) return;
   { const bar = document.querySelector('#qGem .qgbar'); if (bar) bar.hidden = isIOS(); }

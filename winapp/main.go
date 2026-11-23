@@ -18,7 +18,7 @@ import (
 const (
 	appTitle = "업무대시보드"
 	appURL   = "https://sclee00.github.io/dept-dashboard/?app=1&host=win"
-	version  = "1.1.1"
+	version  = "1.2.0"
 )
 
 var (
@@ -245,6 +245,11 @@ func main() {
 	wv.Bind("hostAutostart", func(set int) bool { return autostart(set) })
 	wv.Bind("hostWidgetOnMin", func(on bool) bool { widgetOnMin = on; return on })
 	wv.Bind("hostGemini", func(url string) bool { return strings.HasPrefix(url, "https://sclee00.github.io/") && askChrome(url) })
+	wv.Bind("hostGemPlace", func(x, y, w, h int, show bool) bool { return gemPlace(x, y, w, h, show) })
+	wv.Bind("hostGemAsk", func(id, prompt string, wantJSON bool, imagesJSON string) bool {
+		return gemAsk(id, prompt, wantJSON, imagesJSON)
+	})
+	wv.Bind("hostGemNew", func() bool { return gemReload() })
 	wv.Bind("hostMinimize", func() bool { pShowWin.Call(hwnd, 6); return true })
 	wv.Bind("hostOpen", func(url string) bool {
 		if len(url) > 8 && (url[:8] == "https://" || url[:7] == "http://" || url[:7] == "mailto:") {
