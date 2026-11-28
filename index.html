@@ -923,10 +923,11 @@ body.mini .miniview{display:flex;flex-direction:column;gap:.45rem;height:100vh;p
   .app>*:not(.topwrap){order:100}
   .focusbar{order:var(--o-focus,10)}
   .hw[data-ok="next"]{order:var(--o-next,11)} .hw[data-ok="dday"]{order:var(--o-dday,12)} .hw[data-ok="contact"]{order:var(--o-contact,13)} .hw[data-ok="snip"]{order:var(--o-snip,14)}
+  html[data-phone-hide~="focus"] .focusbar,html[data-phone-hide~="next"] .hw[data-ok="next"],html[data-phone-hide~="dday"] .hw[data-ok="dday"],html[data-phone-hide~="contact"] .hw[data-ok="contact"],html[data-phone-hide~="snip"] .hw[data-ok="snip"],html[data-phone-hide~="cal"] [data-sec="cal"],html[data-phone-hide~="rail"] [data-sec="rail"],html[data-phone-hide~="quick"] [data-sec="quick"],html[data-phone-hide~="tools"] [data-sec="tools"]{display:none!important}
   [data-sec="cal"]{order:var(--o-cal,15)} [data-sec="rail"]{order:var(--o-rail,16)} [data-sec="quick"]{order:var(--o-quick,17)} [data-sec="tools"]{order:var(--o-tools,18)}
 }
 .secord{margin:.3rem 0;padding-left:1.4rem;display:flex;flex-direction:column;gap:.25rem}
-.secord li{display:flex;align-items:center;gap:.3rem}.secord li span{flex:1}
+.secord li{display:flex;align-items:center;gap:.3rem}.secord li .chk{flex:1;display:flex;align-items:center;gap:.4rem}.secord li.off span{color:var(--muted);text-decoration:line-through}
 .winbar{position:fixed;top:.6rem;right:.7rem;z-index:50}
 .lockbtn:not([hidden])~.winbar{top:3rem}
 .winbar[hidden]{display:none}
@@ -3807,7 +3808,7 @@ const UNDO_LABEL = {
   delRule: '아이콘 규칙 삭제', skipOcc: '반복 일정 한 번 빼기', edSave: '일정 편집', bdSave: '불가 시간 설정', saveSettings: '설정 변경', imSave: '아이콘 색·이름',
   pushG: '구글에 추가', fEvent: '일정 추가', fBlock: '불가 시간 추가', taskForm: '할 일 추가', importData: '파일 가져오기'
 };
-const UNDO_SKIP = new Set(['secMove', 'secReset', 'widgetCopy', 'zReset', 'snRowAdd', 'snRowDel', 'snipAdd', 'cmdImp', 'gGone', 'cmdIcon', 'cmdIconSet', 'ddayX', 'ddayUnhide', 'ddayDel', 'ctNav', 'ctCopy', 'ctNew', 'ctEdit', 'ctAdd', 'ctSave', 'ctDel', 'ddaySave', 'ddayClear', 'verReload', 'attEvents', 'snipCopy', 'snipEdit', 'ddayEdit', 'lockNow', 'lockSave', 'tip', 'daySel', 'dayMode', 'dayNav', 'dayGo', 'fwdCopy', 'gemCancel', 'scriptCopy', 'scriptSetup', 'scriptTest', 'scriptOn', 'copyReply', 'copyDraft', 'gemEmbed', 'gemDockOpen', 'qTab', 'gemNew', 'gemTall', 'gemZoom', 'histUndo', 'histRedo', 'histOne', 'histGroup', 'histFold', 'stPing', 'pushAllG', 'aiKeySave', 'aiKeyClear', 'aiTest', 'aiMode', 'aiModelSel', 'relayClip', 'stOpen', 'tidyOpen', 'tidyDel', 'tidyTime', 'tidyMerge', 'inboxRun', 'analyzeMail', 'tgShow', 'tgHide', 'phoneLink', 'gDel', 'fltImp', 'fltIcons', 'fltTog', 'fltClear', 'fltClose', 'cmdToAI', 'cmdPick', 'cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
+const UNDO_SKIP = new Set(['secShow', 'secMove', 'secReset', 'widgetCopy', 'zReset', 'snRowAdd', 'snRowDel', 'snipAdd', 'cmdImp', 'gGone', 'cmdIcon', 'cmdIconSet', 'ddayX', 'ddayUnhide', 'ddayDel', 'ctNav', 'ctCopy', 'ctNew', 'ctEdit', 'ctAdd', 'ctSave', 'ctDel', 'ddaySave', 'ddayClear', 'verReload', 'attEvents', 'snipCopy', 'snipEdit', 'ddayEdit', 'lockNow', 'lockSave', 'tip', 'daySel', 'dayMode', 'dayNav', 'dayGo', 'fwdCopy', 'gemCancel', 'scriptCopy', 'scriptSetup', 'scriptTest', 'scriptOn', 'copyReply', 'copyDraft', 'gemEmbed', 'gemDockOpen', 'qTab', 'gemNew', 'gemTall', 'gemZoom', 'histUndo', 'histRedo', 'histOne', 'histGroup', 'histFold', 'stPing', 'pushAllG', 'aiKeySave', 'aiKeyClear', 'aiTest', 'aiMode', 'aiModelSel', 'relayClip', 'stOpen', 'tidyOpen', 'tidyDel', 'tidyTime', 'tidyMerge', 'inboxRun', 'analyzeMail', 'tgShow', 'tgHide', 'phoneLink', 'gDel', 'fltImp', 'fltIcons', 'fltTog', 'fltClear', 'fltClose', 'cmdToAI', 'cmdPick', 'cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
 function undoSnap() {
   const o = { settings: JSON.parse(JSON.stringify(S.settings)) };
   for (const c of COLS) o[c] = JSON.parse(JSON.stringify(S[c]));
@@ -4677,13 +4678,15 @@ function secOrder() {
 }
 function applySecOrder() {
   const r = document.documentElement.style; secOrder().forEach((k, i) => r.setProperty('--o-' + k, String(10 + i)));
+  document.documentElement.dataset.phoneHide = (Array.isArray(LAY.secHide) ? LAY.secHide : []).join(' ');
 }
+const secHidden = k => Array.isArray(LAY.secHide) && LAY.secHide.includes(k);
 function secOrderHtml() {
   const ord = secOrder(), name = k => (SEC_DEF.find(x => x[0] === k) || [k, k])[1];
   return `<div class="bsec"><b>${ic('list')} 휴대폰 화면 순서</b>
-    <span class="count">아이폰처럼 좁은 화면에서 위에서부터 보이는 순서입니다. 날짜·숫자 칸은 항상 맨 위에 있습니다. 이 기기에만 저장됩니다.</span>
-    <ol class="secord">${ord.map((k, i) => `<li><span>${esc(name(k))}</span><button type="button" class="btn small" data-act="secMove" data-k="${k}" data-d="-1" ${i ? '' : 'disabled'} aria-label="${esc(name(k))} 위로">▲</button><button type="button" class="btn small" data-act="secMove" data-k="${k}" data-d="1" ${i < ord.length - 1 ? '' : 'disabled'} aria-label="${esc(name(k))} 아래로">▼</button></li>`).join('')}</ol>
-    <div class="row"><button class="btn small" type="button" data-act="secReset">처음 순서로</button></div></div>`;
+    <span class="count">아이폰처럼 좁은 화면에서 위에서부터 보이는 순서입니다. 체크를 풀면 그 칸은 숨깁니다. 날짜·숫자 칸은 항상 맨 위에 있습니다. 이 기기에만 저장됩니다.</span>
+    <ol class="secord">${ord.map((k, i) => `<li class="${secHidden(k) ? 'off' : ''}"><label class="chk"><input type="checkbox" data-act="secShow" data-k="${k}" ${secHidden(k) ? '' : 'checked'} aria-label="${esc(name(k))} 보이기"><span>${esc(name(k))}</span></label><button type="button" class="btn small" data-act="secMove" data-k="${k}" data-d="-1" ${i ? '' : 'disabled'} aria-label="${esc(name(k))} 위로">▲</button><button type="button" class="btn small" data-act="secMove" data-k="${k}" data-d="1" ${i < ord.length - 1 ? '' : 'disabled'} aria-label="${esc(name(k))} 아래로">▼</button></li>`).join('')}</ol>
+    <div class="row"><button class="btn small" type="button" data-act="secReset">처음 순서로 (모두 보이기)</button></div></div>`;
 }
 /* ---------- resizable panels (per PC, kept in this browser) ---------- */
 let LAY = {}; try { LAY = JSON.parse(localStorage.getItem('dashLayout') || '{}') || {}; } catch {}
@@ -6978,7 +6981,8 @@ document.addEventListener('click', async ev0 => {
       case 'gemDockOpen': if (UI.qtab === 'gem') qTab('auto'); else gemDock(true); return;
       case 'qTab': qTab(el.dataset.k); return;
       case 'secMove': { const o = secOrder(), i = o.indexOf(el.dataset.k), j = i + Number(el.dataset.d); if (i < 0 || j < 0 || j >= o.length) return; [o[i], o[j]] = [o[j], o[i]]; LAY.secOrder = o; saveLayout(); applySecOrder(); $('secOrdBox').innerHTML = secOrderHtml(); const b = document.querySelector(`[data-act="secMove"][data-k="${el.dataset.k}"][data-d="${el.dataset.d}"]`); if (b && !b.disabled) b.focus(); return; }
-      case 'secReset': { delete LAY.secOrder; saveLayout(); applySecOrder(); $('secOrdBox').innerHTML = secOrderHtml(); return; }
+      case 'secShow': { const h = new Set(Array.isArray(LAY.secHide) ? LAY.secHide : []); if (el.checked) h.delete(el.dataset.k); else h.add(el.dataset.k); LAY.secHide = [...h]; saveLayout(); applySecOrder(); $('secOrdBox').innerHTML = secOrderHtml(); return; }
+      case 'secReset': { delete LAY.secHide; delete LAY.secOrder; saveLayout(); applySecOrder(); $('secOrdBox').innerHTML = secOrderHtml(); return; }
       case 'zReset': { document.querySelectorAll('input[data-z]').forEach(i => { i.value = 1; }); fontLive(); return; }
       case 'gemZoom': { let z = gemZoom() + (+el.dataset.d) * 0.1; z = Math.round(Math.max(0.5, Math.min(1, z)) * 10) / 10; try { localStorage.setItem('gemZoom', String(z)); } catch {} applyGemZoom(); toast(`Gemini 글자 크기 ${Math.round(z * 100)}%`); return; }
       case 'gemNew': { if (typeof window.hostGemNew === 'function') { window.hostGemNew(); return; } const f = gemDock(true); if (f) f.src = GEM_APP; return; }
