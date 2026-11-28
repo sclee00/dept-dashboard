@@ -916,6 +916,9 @@ body.mini .miniview{display:flex;flex-direction:column;gap:.45rem;height:100vh;p
 @media (display-mode: window-controls-overlay){body.mini .miniview{padding-top:calc(env(titlebar-area-height,0px) + .2rem)}}
 .dlask{display:inline-flex;align-items:center;gap:.35rem;font-size:.82rem;color:var(--muted)}
 .dlask.need{color:var(--warn,#e0a03c);font-weight:600}.dlask.need input{border-color:var(--warn,#e0a03c);box-shadow:0 0 0 2px rgb(224 160 60 / .25)}
+@media (pointer:coarse){[data-ok]{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}}
+.reo-lift{transform:scale(1.04);box-shadow:0 8px 24px rgb(0 0 0 / .5)!important;outline:2px solid var(--accent);z-index:5;position:relative;transition:transform .12s}
+body.reo-on{touch-action:none;overscroll-behavior:none}
 .winbar{position:fixed;top:.6rem;right:.7rem;z-index:50}
 .lockbtn:not([hidden])~.winbar{top:3rem}
 .winbar[hidden]{display:none}
@@ -959,6 +962,7 @@ button.hw{cursor:pointer}button.hw:hover{border-color:var(--accent)}
 .snchip{display:inline-flex;align-items:center;gap:.25rem;border:1px solid var(--line);background:var(--surface-2);color:var(--ink);border-radius:999px;padding:.1rem .5rem;font:inherit;font-size:.76rem;cursor:pointer;white-space:nowrap}
 .snchip .ic{width:.75rem;height:.75rem;opacity:.6}.snchip:hover{border-color:var(--accent)}.snchip.done{border-color:var(--green,#4caf7a);color:var(--green,#4caf7a)}
 @media (max-width:1099px){.hwidgets{flex-wrap:wrap;justify-content:flex-start;padding-right:0;width:100%}.hw{max-width:none;flex:1 1 14rem}}
+@media (max-width:700px){.hwidgets>.hw{flex:1 1 100%;width:100%;max-width:none;box-sizing:border-box}}
 .cmdpick{accent-color:var(--accent);width:1rem;height:1rem;margin-right:.2rem;flex:none}
 .cmdrow.off{opacity:.45}.cmdrow.off b{text-decoration:line-through}
 .cmdpickall{gap:.6rem;align-items:center}
@@ -1984,25 +1988,26 @@ function renderWidgets() {
   // D-day dates that have passed are dropped from the list
   { const t = todayStr(), cur = lst('ddayPins'); if ((S.lists && S.lists.ddayPins || Array.isArray(S.settings.ddayPins)) && cur.some(d => d && isDate(d.date) && d.date < t)) lstSet('ddayPins', cur.filter(d => !(d && isDate(d.date) && d.date < t))); }
   const ne = nextEvent(), nm = new Date().getHours() * 60 + new Date().getMinutes();
-  let nx = `<div class="hw nexthw"><span class="hwl">${ic('clock')}다음 일정</span><span class="hwv">없음</span></div>`;
+  let nx = `<div class="hw nexthw" data-ok="next"><span class="hwl">${ic('clock')}다음 일정</span><span class="hwv">없음</span></div>`;
   if (ne) {
     const left = ne.now ? `진행 중 · ${durTxt(ne.e - nm)} 남음` : ne.day === todayStr() ? `${durTxt(ne.s - nm)} 후` : diff(ne.day) === 1 ? `내일 ${fromMin(ne.s)}` : `${parse(ne.day).getMonth() + 1}/${parse(ne.day).getDate()}(${WD[parse(ne.day).getDay()]}) ${fromMin(ne.s)}`;
     const soon = !ne.now && ne.day === todayStr() && ne.s - nm <= 15;
-    nx = `<button type="button" class="hw nexthw ${ne.now ? 'live' : ''} ${soon ? 'soon' : ''}" data-act="ipOpen" data-kind="${ne.kind}" data-id="${esc(ne.id)}" title="${esc(ne.title)}${ne.place ? ' · ' + esc(ne.place) : ''}">
+    nx = `<button type="button" data-ok="next" class="hw nexthw ${ne.now ? 'live' : ''} ${soon ? 'soon' : ''}" data-act="ipOpen" data-kind="${ne.kind}" data-id="${esc(ne.id)}" title="${esc(ne.title)}${ne.place ? ' · ' + esc(ne.place) : ''}">
       <span class="hwl">${ic('clock')}${ne.now ? '지금' : '다음 일정'} · <b>${esc(left)}</b></span><span class="hwv">${ne.day === todayStr() ? `<em>${fromMin(ne.s)}</em> ` : ''}${esc(ne.title)}</span></button>`;
   }
   const dl = ddayList(), hasPin = dl.some(x => x.pin);
   const ddRow = x => { const n = diff(x.date); return `<button type="button" class="ddrow" ${x.pin ? 'data-act="pickDay" data-day="' + x.date + '"' : `data-act="ipOpen" data-kind="${x.kind}" data-id="${esc(x.id)}"`} title="${esc(x.title)} · ${fmtShort(x.date)}"><b class="${n < 0 ? '' : n <= 3 ? 'hot' : n <= 7 ? 'warm' : ''}">${n === 0 ? 'D-day' : n < 0 ? 'D+' + -n : 'D-' + n}</b><span>${esc(x.title)}</span></button>`; };
   const ddRowX = x => `<div class="ddwrap">${ddRow(x)}<button type="button" class="ddx" data-act="ddayX" data-date="${x.date}" data-title="${esc(x.title)}" data-pin="${x.pin ? 1 : ''}" title="${x.pin ? 'D-day에서 빼기' : '이 일정은 D-day에 안 보이기 (다음 중요 일정이 나옴)'}" aria-label="${esc(x.title)} D-day에서 빼기">✕</button></div>`;
-  const dd = `<div class="hw ddhw"><span class="hwl">${ic('flag')}D-day <button type="button" class="hwedit" data-act="ddayEdit" title="내가 지정하는 D-day 고르기" aria-label="D-day 지정">${ic('pen')}</button></span><div class="ddlist">${dl.map(ddRowX).join('')}<button type="button" class="ddrow add" data-act="ddayEdit"><b>＋</b><span>D-day ${hasPin ? '더 ' : ''}추가하기</span></button></div></div>`;
+  const dd = `<div class="hw ddhw" data-ok="dday"><span class="hwl">${ic('flag')}D-day <button type="button" class="hwedit" data-act="ddayEdit" title="내가 지정하는 D-day 고르기" aria-label="D-day 지정">${ic('pen')}</button></span><div class="ddlist">${dl.map(ddRowX).join('')}<button type="button" class="ddrow add" data-act="ddayEdit"><b>＋</b><span>D-day ${hasPin ? '더 ' : ''}추가하기</span></button></div></div>`;
   const sn = lst('snippets');
-  const sp = `<div class="hw snhw"><span class="hwl">${ic('copy')}상용구 <button type="button" class="hwedit" data-act="snipEdit" title="상용구 편집" aria-label="상용구 편집">${ic('pen')}</button><button type="button" class="hwedit" data-act="snipAdd" title="상용구 하나 더 추가" aria-label="상용구 추가">${ic('plus')}</button></span><div class="snlist">${sn.length ? sn.map((x, i) => `<button type="button" class="snchip" data-act="snipCopy" data-i="${i}" title="${esc(x.text)}">${esc(x.label || x.text)}${ic('copy')}</button>`).join('') : ''}</div></div>`;
+  const sp = `<div class="hw snhw" data-ok="snip"><span class="hwl">${ic('copy')}상용구 <button type="button" class="hwedit" data-act="snipEdit" title="상용구 편집" aria-label="상용구 편집">${ic('pen')}</button><button type="button" class="hwedit" data-act="snipAdd" title="상용구 하나 더 추가" aria-label="상용구 추가">${ic('plus')}</button></span><div class="snlist">${sn.length ? sn.map((x, i) => `<button type="button" class="snchip" data-act="snipCopy" data-i="${i}" title="${esc(x.text)}">${esc(x.label || x.text)}${ic('copy')}</button>`).join('') : ''}</div></div>`;
   const cl = contactsAll(); if (UI.ctIdx == null || UI.ctIdx >= cl.length) UI.ctIdx = 0;
   const c = cl[UI.ctIdx];
   const cp = (v, label) => v ? `<button type="button" class="ctcopy" data-act="ctCopy" data-v="${esc(v)}" title="${label} 복사">${esc(v)}${ic('copy')}</button>` : '';
-  const ct = `<div class="hw cthw"><span class="hwl">${ic('user')}연락처${cl.length ? ` <span class="mono">${UI.ctIdx + 1}/${cl.length}</span>` : ''}<span class="ctnav">${cl.length > 1 ? `<button type="button" class="hwedit" data-act="ctNav" data-d="-1" aria-label="이전 연락처">‹</button><button type="button" class="hwedit" data-act="ctNav" data-d="1" aria-label="다음 연락처">›</button>` : ''}${c ? `<button type="button" class="hwedit" data-act="ctEdit" title="이 연락처 고치기" aria-label="연락처 고치기">${ic('pen')}</button>` : ''}<button type="button" class="hwedit" data-act="ctNew" title="연락처 직접 추가" aria-label="연락처 추가">＋</button></span></span>
+  const ct = `<div class="hw cthw" data-ok="contact"><span class="hwl">${ic('user')}연락처${cl.length ? ` <span class="mono">${UI.ctIdx + 1}/${cl.length}</span>` : ''}<span class="ctnav">${cl.length > 1 ? `<button type="button" class="hwedit" data-act="ctNav" data-d="-1" aria-label="이전 연락처">‹</button><button type="button" class="hwedit" data-act="ctNav" data-d="1" aria-label="다음 연락처">›</button>` : ''}${c ? `<button type="button" class="hwedit" data-act="ctEdit" title="이 연락처 고치기" aria-label="연락처 고치기">${ic('pen')}</button>` : ''}<button type="button" class="hwedit" data-act="ctNew" title="연락처 직접 추가" aria-label="연락처 추가">＋</button></span></span>
     ${c ? `<span class="hwv">${esc(c.name)}${c.title || c.org ? ` <small>${esc([c.title, c.org].filter(Boolean).join(' · '))}</small>` : ''}</span><span class="ctlines">${cp(c.phone, '전화번호')}${cp(c.email, '이메일')}</span>` : `<span class="count">아직 없음 ${tip('메일을 분석하면 서명의 연락처를 확인 후 추가할 수 있습니다. ＋로 직접 넣어도 됩니다.')}</span>`}</div>`;
   box.innerHTML = nx + dd + ct + sp;
+  applyOrder(box, 'hw');
   renderMini(nx, dl, ddRow);
 }
 // widget view: only today's date, the next event and the D-days, in a small window
@@ -4631,6 +4636,7 @@ function fontLive() {
 }
 
 /* ---------- drag to reorder the top buttons and number cards ---------- */
+const okKey = box => box.id === 'stats' ? 'stats' : box.id === 'hwidgets' ? 'hw' : 'tools';
 function applyOrder(box, key) {
   const ord = (LAY.order || {})[key]; if (!box || !Array.isArray(ord)) return;
   const items = [...box.querySelectorAll(':scope > [data-ok]')], rank = k => { const i = ord.indexOf(k); return i < 0 ? 999 : i; };
@@ -4639,7 +4645,7 @@ function applyOrder(box, key) {
 let reo = null;
 document.addEventListener('dragstart', e => {
   const el = e.target.closest && e.target.closest('[data-ok]'); if (!el) return;
-  const box = el.parentElement; reo = { el, box, key: box.id === 'stats' ? 'stats' : 'tools' };
+  const box = el.parentElement; reo = { el, box, key: okKey(box) };
   try { e.dataTransfer.setData('text/plain', 'reorder'); e.dataTransfer.effectAllowed = 'move'; } catch {}
   el.classList.add('reo-drag');
 });
@@ -4654,6 +4660,50 @@ document.addEventListener('dragend', () => {
   LAY.order = { ...(LAY.order || {}), [reo.key]: [...reo.box.querySelectorAll(':scope > [data-ok]')].map(x => x.dataset.ok) };
   saveLayout(); reo = null;
 });
+
+/* ---------- on a phone: press and hold a card or button, then drag it to a new place ---------- */
+(() => {
+  let t = null, st = null, drag = null, swallow = false;
+  const cancel = () => { clearTimeout(t); t = null; st = null; };
+  document.addEventListener('pointerdown', e => {
+    if (e.pointerType !== 'touch') return;
+    const el = e.target.closest && e.target.closest('[data-ok]'); if (!el || !el.parentElement) return;
+    st = { el, x: e.clientX, y: e.clientY, id: e.pointerId };
+    t = setTimeout(() => {
+      if (!st) return;
+      const box = st.el.parentElement, kids = [...box.querySelectorAll(':scope > [data-ok]')];
+      // stacked (one per row) or side by side?
+      const vert = kids.length > 1 ? Math.abs(kids[1].getBoundingClientRect().top - kids[0].getBoundingClientRect().top) > 4 && Math.abs(kids[1].getBoundingClientRect().left - kids[0].getBoundingClientRect().left) < 4 : true;
+      drag = { el: st.el, box, vert, key: okKey(box) };
+      st.el.classList.add('reo-drag', 'reo-lift');
+      document.body.classList.add('reo-on');
+      try { navigator.vibrate && navigator.vibrate(15); } catch {}
+      st = null;
+    }, 450);
+  }, true);
+  document.addEventListener('pointermove', e => {
+    if (st && Math.hypot(e.clientX - st.x, e.clientY - st.y) > 10) cancel(); // it was a scroll
+    if (!drag) return;
+    const hit = document.elementFromPoint(e.clientX, e.clientY), o = hit && hit.closest && hit.closest('[data-ok]');
+    if (!o || o === drag.el || o.parentElement !== drag.box) return;
+    const r = o.getBoundingClientRect(), after = drag.vert ? e.clientY > r.top + r.height / 2 : e.clientX > r.left + r.width / 2;
+    drag.box.insertBefore(drag.el, after ? o.nextSibling : o);
+  }, true);
+  // while dragging the page must not scroll
+  document.addEventListener('touchmove', e => { if (drag) e.preventDefault(); }, { passive: false, capture: true });
+  const end = () => {
+    cancel(); if (!drag) return;
+    drag.el.classList.remove('reo-drag', 'reo-lift'); document.body.classList.remove('reo-on');
+    LAY.order = { ...(LAY.order || {}), [drag.key]: [...drag.box.querySelectorAll(':scope > [data-ok]')].map(x => x.dataset.ok) };
+    saveLayout(); drag = null; swallow = true; setTimeout(() => { swallow = false; }, 400);
+    toast('순서를 바꿨습니다.');
+  };
+  document.addEventListener('pointerup', end, true);
+  document.addEventListener('pointercancel', end, true);
+  // the tap that ends a drag is not a click on the card
+  document.addEventListener('click', e => { if (swallow) { e.preventDefault(); e.stopPropagation(); swallow = false; } }, true);
+  document.addEventListener('contextmenu', e => { if (e.target.closest && e.target.closest('[data-ok]') && matchMedia('(pointer:coarse)').matches) e.preventDefault(); }, true);
+})();
 
 /* ---------- resizable panels (per PC, kept in this browser) ---------- */
 let LAY = {}; try { LAY = JSON.parse(localStorage.getItem('dashLayout') || '{}') || {}; } catch {}
