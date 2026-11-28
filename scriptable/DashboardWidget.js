@@ -333,9 +333,10 @@ async function build(family) {
   else if (family === "accessoryInline") accInline(w, v);
   else if (family === "accessoryCircular") accCircle(w, v);
   else medium(w, v, data);
-  if (data.stale && !lock) { w.addSpacer(2); txt(w, "연결 안 됨 · 마지막으로 받은 내용", 8, C.dim); }
+  // when the shown data was fetched (iOS decides how often a widget may refresh)
+  if (!lock) { const at = new Date(data.at || Date.now()); w.addSpacer(2); const f = txt(w, (data.stale ? "연결 안 됨 · " : "") + `${pad(at.getHours())}:${pad(at.getMinutes())} 기준`, 8, C.dim); f.rightAlignText(); }
   // refresh: every 15 minutes, and right after the next event starts or ends
-  let at = Date.now() + 15 * 60000;
+  let at = Date.now() + 10 * 60000; // ask for a refresh every 10 minutes (iOS may wait longer)
   const n = v.nowEv || v.next;
   if (n && n.day === v.today) { const t = new Date(); t.setHours(0, 0, 0, 0); const edge = (v.nowEv ? (n.e ?? n.s + 60) : n.s) * 60000 + t.getTime() + 30000; if (edge > Date.now() && edge < at) at = edge; }
   w.refreshAfterDate = new Date(at);
