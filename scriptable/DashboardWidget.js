@@ -228,28 +228,28 @@ function ddLine(st, d, size) {
 }
 function section(st, title, size) { const t = txt(st, title, size || 10, C.muted, true); return t; }
 
-// ---------- layouts: fill the space ----------
-// a list of lines that fills the room left: today's remaining events, then the coming days, then D-days
-function fillLines(v, budget, opts = {}) {
-  const groups = [];
-  const same = (e, day) => opts.skip && e.title === opts.skip.title && e.s === opts.skip.s && (day || e.date) === (opts.skip.day || opts.skip.date);
-  const today = v.todayLeft.filter(e => !same(e, v.today));
-  if (today.length) groups.push({ label: "오늘", items: today.map(e => ({ k: "ev", e })) });
-  const up = v.upcoming.filter(e => !same(e, e.day));
-  if (up.length) groups.push({ label: "다가오는 일정", items: up.map(e => ({ k: "ev", e, day: e.day })) });
-  if (v.dd.length) groups.push({ label: "D-day", items: v.dd.map(d => ({ k: "dd", d })) });
-  // D-days get a fair share when both kinds are there
+// ---------- layouts: today's remaining events + tomorrow, then later days and D-days fill the rest ----------
+function groupsOf(v) {
+  const tm = addDays(v.today, 1);
+  const tomorrow = v.upcoming.filter(e => e.day === tm);
+  const later = v.upcoming.filter(e => e.day !== tm);
+  return {
+    today: v.todayLeft.map(e => ({ k: "ev", e })),
+    tomorrow: tomorrow.map(e => ({ k: "ev", e })),
+    later: later.map(e => ({ k: "ev", e, day: e.day })),
+    dd: v.dd.map(d => ({ k: "dd", d })),
+  };
+}
+// fill `budget` lines from the groups in order; a group that does not fit ends with "외 N개"
+function fill(groups, budget, labels) {
   const out = []; let left = budget;
-  const ddG = groups.find(g => g.label === "D-day"), ddWant = ddG ? Math.min(ddG.items.length, Math.max(1, Math.floor(budget / 4))) : 0;
   for (const g of groups) {
-    const isDD = g === ddG, reserve = isDD ? 0 : (ddG ? ddWant + (opts.labels ? 1 : 0) : 0);
-    let room = left - reserve - (opts.labels ? 1 : 0);
-    if (room <= 0) continue;
-    const take = g.items.slice(0, room);
-    if (!take.length) continue;
-    if (opts.labels) out.push({ k: "label", t: g.label }), left--;
-    // if not all fit, the last line says how many more
-    if (take.length < g.items.length && take.length > 1) { take.pop(); take.push({ k: "more", n: g.items.length - take.length }); }
+    if (left <= (labels ? 1 : 0)) break;
+    const items = g.items.length ? g.items : g.empty ? [{ k: "none", t: g.empty }] : [];
+    if (!items.length) continue;
+    if (labels) { out.push({ k: "label", t: g.label }); left--; }
+    let take = items.slice(0, Math.min(left - (g.reserve || 0) > 0 ? left - (g.reserve || 0) : 1, items.length));
+    if (take.length < items.length && take.length > 1) { take = take.slice(0, -1); take.push({ k: "more", n: items.length - take.length }); }
     out.push(...take); left -= take.length;
   }
   return out;
@@ -260,51 +260,44 @@ function drawLines(st, lines, v, size) {
     else if (l.k === "ev") evLine(st, l.e, v.today, { day: l.day, size });
     else if (l.k === "dd") ddLine(st, l.d, size);
     else if (l.k === "more") txt(st, `외 ${l.n}개`, size - 2, C.dim);
+    else if (l.k === "none") txt(st, l.t, size - 1, C.dim);
   }
-}
-function nextBlock(st, v, sizes) {
-  const n = v.nowEv || v.next;
-  if (!n) { txt(st, "다음 일정 없음", sizes[1] - 2, C.muted); return null; }
-  const r = row(st); txt(r, v.nowEv ? "지금 진행 중" : untilText(v), sizes[0], v.nowEv ? C.ok : C.accent, true);
-  r.addSpacer(4); txt(r, (n.day && n.day !== v.today ? dayShort(n.day, v.today) + " " : "") + ampm(n.s), sizes[0], C.muted);
-  const tr = row(st); tr.spacing = 5; chip(tr, n, sizes[1] - 2); txt(tr, (n.tag ? n.tag.t + " " : "") + n.title, sizes[1], n.imp ? C.hot : C.ink, true, 1);
-  return n;
 }
 function small(w, v) {
   w.setPadding(10, 11, 8, 11); w.spacing = 2;
-  header(w, v, 20); w.addSpacer(3);
-  const n = nextBlock(w, v, [10, 13]);
-  w.addSpacer(3);
-  drawLines(w, fillLines(v, 4, { skip: n }), v, 11);
+  header(w, v, 20); w.addSpacer(2);
+  const g = groupsOf(v);
+  drawLines(w, fill([
+    { label: "오늘", items: g.today, empty: "오늘 남은 일정 없음", reserve: g.tomorrow.length ? 2 : 0 },
+    { label: "내일", items: g.tomorrow },
+    { label: "D-day", items: g.dd },
+  ], 7, true), v, 11);
   w.addSpacer();
 }
 function medium(w, v, data) {
-  w.setPadding(10, 12, 8, 12);
-  const top = row(w); top.topAlignContent();
-  const left = col(top); left.size = new Size(122, 0); left.spacing = 2;
-  header(left, v, 22); left.addSpacer(4);
-  const n = nextBlock(left, v, [10, 13]);
-  left.addSpacer();
-  if (data.mails) txt(left, `처리 중 메일 ${data.mails}`, 10, C.warn, true);
-  top.addSpacer(8);
-  const right = col(top); right.spacing = 2;
-  drawLines(right, fillLines(v, 8, { labels: true, skip: n }), v, 11);
-  right.addSpacer();
+  w.setPadding(10, 12, 8, 12); w.spacing = 2;
+  const h = header(w, v, 20);
+  if (data.mails) txt(h, `메일 ${data.mails}`, 10, C.warn, true);
+  w.addSpacer(2);
+  const g = groupsOf(v), cols = row(w); cols.topAlignContent();
+  const a = col(cols); a.spacing = 2; cols.addSpacer(10); const b = col(cols); b.spacing = 2;
+  drawLines(a, fill([{ label: "오늘", items: g.today, empty: "남은 일정 없음" }, { label: "D-day", items: g.today.length > 4 ? [] : g.dd }], 7, true), v, 11);
+  drawLines(b, fill([{ label: "내일", items: g.tomorrow, empty: "일정 없음" }, { label: "그다음", items: g.later }], 7, true), v, 11);
+  a.addSpacer(); b.addSpacer();
 }
 function large(w, v, data, extra) {
   w.setPadding(12, 14, 10, 14); w.spacing = 2;
   const h = header(w, v, 26);
   if (data.mails) txt(h, `메일 ${data.mails}`, 11, C.warn, true);
-  w.addSpacer(5);
-  const n = v.nowEv || v.next;
-  if (n) {
-    const card = w.addStack(); card.layoutVertically(); card.backgroundColor = C.card; card.cornerRadius = 10; card.setPadding(6, 10, 6, 10); card.spacing = 1;
-    const r = row(card); txt(r, v.nowEv ? "지금 진행 중" : "다음 일정", 10, v.nowEv ? C.ok : C.accent, true); r.addSpacer(); if (!v.nowEv) txt(r, untilText(v), 10, C.accent, true);
-    const tr = row(card); tr.spacing = 6; chip(tr, n, 14); txt(tr, (n.tag ? n.tag.t + " " : "") + n.title, 15, n.imp ? C.hot : C.ink, true, 1);
-    txt(card, (n.day && n.day !== v.today ? dayShort(n.day, v.today) + " " : "") + ampm(n.s) + (n.e != null ? " – " + hm(n.e) : ""), 11, C.muted);
-    w.addSpacer(4);
-  }
-  drawLines(w, fillLines(v, extra ? 30 : (n ? 14 : 17), { labels: true, skip: n && { ...n, day: n.day || v.today } }), v, 12);
+  w.addSpacer(4);
+  const g = groupsOf(v);
+  const ddN = Math.min(g.dd.length, extra ? 6 : 3);
+  drawLines(w, fill([
+    { label: "오늘 남은 일정", items: g.today, empty: "남은 일정 없음", reserve: ddN ? ddN + 1 : 0 },
+    { label: "내일", items: g.tomorrow, empty: "일정 없음", reserve: ddN ? ddN + 1 : 0 },
+    { label: "그다음", items: g.later, reserve: ddN ? ddN + 1 : 0 },
+    { label: "D-day", items: g.dd },
+  ], extra ? 32 : 18, true), v, 12);
   w.addSpacer();
 }
 // lock screen
