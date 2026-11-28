@@ -187,7 +187,7 @@ const dayShort = (s, today) => { const n = dayDiff(today, s), d = parseD(s); ret
 // ---------- drawing helpers ----------
 function txt(st, s, size, color, bold, lines) {
   const t = st.addText(s); t.font = bold ? Font.boldSystemFont(size) : Font.systemFont(size); t.textColor = color || C.ink;
-  if (lines) t.lineLimit = lines; t.minimumScaleFactor = 0.75; return t;
+  if (lines) t.lineLimit = lines; t.minimumScaleFactor = 0.92; return t; // never shrink much: fewer lines instead
 }
 function row(st) { const r = st.addStack(); r.layoutHorizontally(); r.centerAlignContent(); return r; }
 function col(st) { const c = st.addStack(); c.layoutVertically(); return c; }
@@ -256,22 +256,27 @@ function fill(groups, budget, labels) {
 }
 function drawLines(st, lines, v, size) {
   for (const l of lines) {
-    if (l.k === "label") { st.addSpacer(2); section(st, l.t, size - 2); }
+    if (l.k === "label") { st.addSpacer(1); section(st, l.t, Math.max(10, size - 3)); }
     else if (l.k === "ev") evLine(st, l.e, v.today, { day: l.day, size });
     else if (l.k === "dd") ddLine(st, l.d, size);
     else if (l.k === "more") txt(st, `외 ${l.n}개`, size - 2, C.dim);
     else if (l.k === "none") txt(st, l.t, size - 1, C.dim);
   }
 }
+// text size: from the widget's Parameter (a number, e.g. 16) or a readable default per size;
+// the number of lines follows from it, so the text never has to be squeezed
+const PARAM_FS = (() => { const n = parseFloat(String(args.widgetParameter || "").replace(/[^\d.]/g, "")); return n >= 10 && n <= 24 ? n : 0; })();
+const fsFor = fam => PARAM_FS || { small: 14, medium: 14, large: 15, extraLarge: 15 }[fam] || 14;
+const linesFor = (room, fs) => Math.max(2, Math.floor(room / (fs * 1.32 + 2)));
 function small(w, v) {
   w.setPadding(10, 11, 8, 11); w.spacing = 2;
   header(w, v, 20); w.addSpacer(2);
-  const g = groupsOf(v);
+  const g = groupsOf(v), fs = fsFor("small");
   drawLines(w, fill([
-    { label: "오늘", items: g.today, empty: "오늘 남은 일정 없음", reserve: g.tomorrow.length ? 2 : 0 },
+    { label: "오늘", items: g.today, empty: "남은 일정 없음", reserve: g.tomorrow.length ? 2 : 0 },
     { label: "내일", items: g.tomorrow },
     { label: "D-day", items: g.dd },
-  ], 7, true), v, 11);
+  ], linesFor(112, fs), true), v, fs);
   w.addSpacer();
 }
 function medium(w, v, data) {
@@ -281,8 +286,9 @@ function medium(w, v, data) {
   w.addSpacer(2);
   const g = groupsOf(v), cols = row(w); cols.topAlignContent();
   const a = col(cols); a.spacing = 2; cols.addSpacer(10); const b = col(cols); b.spacing = 2;
-  drawLines(a, fill([{ label: "오늘", items: g.today, empty: "남은 일정 없음" }, { label: "D-day", items: g.today.length > 4 ? [] : g.dd }], 7, true), v, 11);
-  drawLines(b, fill([{ label: "내일", items: g.tomorrow, empty: "일정 없음" }, { label: "그다음", items: g.later }], 7, true), v, 11);
+  const fs = fsFor("medium"), n = linesFor(112, fs);
+  drawLines(a, fill([{ label: "오늘", items: g.today, empty: "남은 일정 없음" }, { label: "D-day", items: g.dd }], n, true), v, fs);
+  drawLines(b, fill([{ label: "내일", items: g.tomorrow, empty: "일정 없음" }, { label: "그다음", items: g.later }], n, true), v, fs);
   a.addSpacer(); b.addSpacer();
 }
 function large(w, v, data, extra) {
@@ -291,13 +297,14 @@ function large(w, v, data, extra) {
   if (data.mails) txt(h, `메일 ${data.mails}`, 11, C.warn, true);
   w.addSpacer(4);
   const g = groupsOf(v);
-  const ddN = Math.min(g.dd.length, extra ? 6 : 3);
+  const fs = fsFor(extra ? "extraLarge" : "large"), n = linesFor(extra ? 610 : 300, fs);
+  const ddN = Math.min(g.dd.length, extra ? 6 : n > 12 ? 3 : 2);
   drawLines(w, fill([
     { label: "오늘 남은 일정", items: g.today, empty: "남은 일정 없음", reserve: ddN ? ddN + 1 : 0 },
     { label: "내일", items: g.tomorrow, empty: "일정 없음", reserve: ddN ? ddN + 1 : 0 },
     { label: "그다음", items: g.later, reserve: ddN ? ddN + 1 : 0 },
     { label: "D-day", items: g.dd },
-  ], extra ? 32 : 18, true), v, 12);
+  ], n, true), v, fs);
   w.addSpacer();
 }
 // lock screen
