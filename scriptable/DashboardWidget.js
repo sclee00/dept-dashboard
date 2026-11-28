@@ -169,7 +169,7 @@ function views(data) {
   }
   const nowEv = todayAll.find(e => !allDay(e) && e.s <= nowM && (e.e != null ? e.e : e.s + 60) > nowM);
   const upcoming = [];
-  for (let i = 1; i <= 7; i++) { const d = addDays(today, i); for (const e of on(d).sort((a, b) => (a.s ?? -1) - (b.s ?? -1))) if (e.date === d || i === 1) upcoming.push({ ...e, day: d }); }
+  for (let i = 1; i <= DAYS_AHEAD; i++) { const d = addDays(today, i); for (const e of on(d).sort((a, b) => (a.s ?? -1) - (b.s ?? -1))) if (e.date === d || i === 1) upcoming.push({ ...e, day: d }); }
   const dd = data.ddays.map(x => ({ ...x, n: dayDiff(today, x.date) }));
   return { now, today, nowM, todayAll, todayLeft, next, nowEv, upcoming, dd };
 }
@@ -228,65 +228,83 @@ function ddLine(st, d, size) {
 }
 function section(st, title, size) { const t = txt(st, title, size || 10, C.muted, true); return t; }
 
-// ---------- layouts ----------
-function small(w, v) {
-  w.setPadding(12, 12, 12, 12);
-  header(w, v, 20); w.addSpacer(6);
+// ---------- layouts: fill the space ----------
+// a list of lines that fills the room left: today's remaining events, then the coming days, then D-days
+function fillLines(v, budget, opts = {}) {
+  const groups = [];
+  const same = (e, day) => opts.skip && e.title === opts.skip.title && e.s === opts.skip.s && (day || e.date) === (opts.skip.day || opts.skip.date);
+  const today = v.todayLeft.filter(e => !same(e, v.today));
+  if (today.length) groups.push({ label: "오늘", items: today.map(e => ({ k: "ev", e })) });
+  const up = v.upcoming.filter(e => !same(e, e.day));
+  if (up.length) groups.push({ label: "다가오는 일정", items: up.map(e => ({ k: "ev", e, day: e.day })) });
+  if (v.dd.length) groups.push({ label: "D-day", items: v.dd.map(d => ({ k: "dd", d })) });
+  // D-days get a fair share when both kinds are there
+  const out = []; let left = budget;
+  const ddG = groups.find(g => g.label === "D-day"), ddWant = ddG ? Math.min(ddG.items.length, Math.max(1, Math.floor(budget / 4))) : 0;
+  for (const g of groups) {
+    const isDD = g === ddG, reserve = isDD ? 0 : (ddG ? ddWant + (opts.labels ? 1 : 0) : 0);
+    let room = left - reserve - (opts.labels ? 1 : 0);
+    if (room <= 0) continue;
+    const take = g.items.slice(0, room);
+    if (!take.length) continue;
+    if (opts.labels) out.push({ k: "label", t: g.label }), left--;
+    // if not all fit, the last line says how many more
+    if (take.length < g.items.length && take.length > 1) { take.pop(); take.push({ k: "more", n: g.items.length - take.length }); }
+    out.push(...take); left -= take.length;
+  }
+  return out;
+}
+function drawLines(st, lines, v, size) {
+  for (const l of lines) {
+    if (l.k === "label") { st.addSpacer(2); section(st, l.t, size - 2); }
+    else if (l.k === "ev") evLine(st, l.e, v.today, { day: l.day, size });
+    else if (l.k === "dd") ddLine(st, l.d, size);
+    else if (l.k === "more") txt(st, `외 ${l.n}개`, size - 2, C.dim);
+  }
+}
+function nextBlock(st, v, sizes) {
   const n = v.nowEv || v.next;
-  if (n) {
-    txt(w, v.nowEv ? "지금" : untilText(v), 11, v.nowEv ? C.ok : C.accent, true);
-    const tr = row(w); tr.spacing = 5; chip(tr, n, 12); txt(tr, (n.tag ? n.tag.t + " " : "") + n.title, 14, n.imp ? C.hot : C.ink, true, 2);
-    txt(w, (n.day && n.day !== v.today ? dayShort(n.day, v.today) + " " : "") + ampm(n.s), 11, C.muted);
-  } else txt(w, "앞으로 2주 일정 없음", 12, C.muted);
+  if (!n) { txt(st, "다음 일정 없음", sizes[1] - 2, C.muted); return null; }
+  const r = row(st); txt(r, v.nowEv ? "지금 진행 중" : untilText(v), sizes[0], v.nowEv ? C.ok : C.accent, true);
+  r.addSpacer(4); txt(r, (n.day && n.day !== v.today ? dayShort(n.day, v.today) + " " : "") + ampm(n.s), sizes[0], C.muted);
+  const tr = row(st); tr.spacing = 5; chip(tr, n, sizes[1] - 2); txt(tr, (n.tag ? n.tag.t + " " : "") + n.title, sizes[1], n.imp ? C.hot : C.ink, true, 1);
+  return n;
+}
+function small(w, v) {
+  w.setPadding(10, 11, 8, 11); w.spacing = 2;
+  header(w, v, 20); w.addSpacer(3);
+  const n = nextBlock(w, v, [10, 13]);
+  w.addSpacer(3);
+  drawLines(w, fillLines(v, 4, { skip: n }), v, 11);
   w.addSpacer();
-  if (v.dd[0]) ddLine(w, v.dd[0], 12);
 }
 function medium(w, v, data) {
-  w.setPadding(12, 14, 12, 14);
-  const top = row(w); top.addSpacer(0);
-  const left = col(top); left.size = new Size(118, 0);
-  header(left, v, 22); left.addSpacer(6);
-  const n = v.nowEv || v.next;
-  if (n) {
-    txt(left, v.nowEv ? "지금 진행 중" : "다음 · " + untilText(v), 10, v.nowEv ? C.ok : C.accent, true);
-    const tr = row(left); tr.spacing = 5; chip(tr, n, 12); txt(tr, (n.tag ? n.tag.t + " " : "") + n.title, 13, n.imp ? C.hot : C.ink, true, 2);
-    txt(left, (n.day && n.day !== v.today ? dayShort(n.day, v.today) + " " : "") + ampm(n.s), 10, C.muted);
-  } else txt(left, "다음 일정 없음", 11, C.muted);
+  w.setPadding(10, 12, 8, 12);
+  const top = row(w); top.topAlignContent();
+  const left = col(top); left.size = new Size(122, 0); left.spacing = 2;
+  header(left, v, 22); left.addSpacer(4);
+  const n = nextBlock(left, v, [10, 13]);
   left.addSpacer();
   if (data.mails) txt(left, `처리 중 메일 ${data.mails}`, 10, C.warn, true);
-  top.addSpacer(10);
-  const right = col(top); right.spacing = 3;
-  section(right, `오늘 남은 일정 ${v.todayLeft.length}`);
-  const rows = v.todayLeft.slice(0, v.dd.length ? 3 : 5);
-  if (rows.length) rows.forEach(e => evLine(right, e, v.today)); else txt(right, "오늘 남은 일정이 없습니다", 11, C.dim);
-  if (v.todayLeft.length > rows.length) txt(right, `외 ${v.todayLeft.length - rows.length}개`, 9, C.dim);
-  if (v.dd.length) { right.addSpacer(4); section(right, "D-day"); v.dd.slice(0, 2).forEach(d => ddLine(right, d, 11)); }
+  top.addSpacer(8);
+  const right = col(top); right.spacing = 2;
+  drawLines(right, fillLines(v, 8, { labels: true, skip: n }), v, 11);
   right.addSpacer();
 }
 function large(w, v, data, extra) {
-  w.setPadding(14, 16, 14, 16);
+  w.setPadding(12, 14, 10, 14); w.spacing = 2;
   const h = header(w, v, 26);
   if (data.mails) txt(h, `메일 ${data.mails}`, 11, C.warn, true);
-  w.addSpacer(8);
+  w.addSpacer(5);
   const n = v.nowEv || v.next;
   if (n) {
-    const card = w.addStack(); card.layoutVertically(); card.backgroundColor = C.card; card.cornerRadius = 10; card.setPadding(8, 10, 8, 10); card.spacing = 2;
+    const card = w.addStack(); card.layoutVertically(); card.backgroundColor = C.card; card.cornerRadius = 10; card.setPadding(6, 10, 6, 10); card.spacing = 1;
     const r = row(card); txt(r, v.nowEv ? "지금 진행 중" : "다음 일정", 10, v.nowEv ? C.ok : C.accent, true); r.addSpacer(); if (!v.nowEv) txt(r, untilText(v), 10, C.accent, true);
     const tr = row(card); tr.spacing = 6; chip(tr, n, 14); txt(tr, (n.tag ? n.tag.t + " " : "") + n.title, 15, n.imp ? C.hot : C.ink, true, 1);
     txt(card, (n.day && n.day !== v.today ? dayShort(n.day, v.today) + " " : "") + ampm(n.s) + (n.e != null ? " – " + hm(n.e) : ""), 11, C.muted);
-    w.addSpacer(8);
+    w.addSpacer(4);
   }
-  const k = extra ? 2 : 1;
-  section(w, `오늘 일정 ${v.todayAll.length}`, 11); w.addSpacer(3);
-  const tl = v.todayAll.slice(0, 5 * k);
-  if (tl.length) tl.forEach(e => { evLine(w, e, v.today, { past: !v.todayLeft.includes(e), size: 13 }); w.addSpacer(2); });
-  else txt(w, "오늘 일정이 없습니다", 12, C.dim);
-  w.addSpacer(8);
-  section(w, "다가오는 일정", 11); w.addSpacer(3);
-  const up = v.upcoming.slice(0, 5 * k);
-  if (up.length) up.forEach(e => { evLine(w, e, v.today, { day: e.day, size: 12 }); w.addSpacer(2); });
-  else txt(w, "일주일 안에 일정이 없습니다", 12, C.dim);
-  if (v.dd.length) { w.addSpacer(8); section(w, "D-day", 11); w.addSpacer(3); v.dd.slice(0, 4 * k).forEach(d => { ddLine(w, d, 12); w.addSpacer(2); }); }
+  drawLines(w, fillLines(v, extra ? 30 : (n ? 14 : 17), { labels: true, skip: n && { ...n, day: n.day || v.today } }), v, 12);
   w.addSpacer();
 }
 // lock screen
