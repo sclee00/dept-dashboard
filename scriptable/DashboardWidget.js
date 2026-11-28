@@ -4,12 +4,49 @@
 // 연결: "대시보드AI" 스크립트로 이미 연결했다면 그대로 씁니다. 아니면 이 스크립트를 앱에서 한 번 실행해 연결 링크를 붙여넣으세요.
 
 const DASH_URL = "https://sclee00.github.io/dept-dashboard/";
+// 위젯 편집 → Parameter에 "앱"이라고 쓰면, 누를 때 사파리 대신 홈 화면에 추가한 대시보드 앱으로 엽니다 (iOS 16.4 이상)
+const PARAM = String(args.widgetParameter || "").trim();
+const OPEN_URL = /^(앱|app|webapp)$/i.test(PARAM) ? "webapp://sclee00.github.io/dept-dashboard/" : DASH_URL;
 const DAYS_AHEAD = 14;
+// the dashboard's own colours
 const C = {
-  bg: new Color("#06080B"), card: new Color("#11161D"), ink: new Color("#E9EDF2"), muted: new Color("#8C97A6"),
-  dim: new Color("#5C6673"), accent: new Color("#7AA2F7"), hot: new Color("#FF6B6B"), warn: new Color("#F0B44C"),
-  ok: new Color("#56C08A"), line: new Color("#222A35"),
+  bg: new Color("#06080B"), card: new Color("#0E1218"), card2: new Color("#151B24"), ink: new Color("#E9EDF3"), muted: new Color("#8D99AB"),
+  dim: new Color("#5A6474"), accent: new Color("#7FA2FF"), hot: new Color("#FF8B8B"), warn: new Color("#F3BF5E"),
+  ok: new Color("#6FD4A2"), line: new Color("#242C38"),
 };
+// the dashboard's icons: same words → same picture and colour group (as SF Symbols)
+const KC = { meet: "#B99EF6", acad: "#7FA2FF", event: "#58D1CA", due: "#FF8B8B", g: "#7DB6D4", p: "#6FD4A2", adm: "#F3BF5E" };
+const ICONS = {
+  개인: ["person.fill", "p"], interview: ["person.crop.rectangle", "meet"], hire: ["person.badge.plus", "meet"], users: ["person.3.fill", "meet"], chat: ["bubble.left.and.bubble.right.fill", "meet"],
+  회의: ["person.2.fill", "meet"], video: ["video.fill", "meet"], phone: ["phone.fill", "meet"],
+  lecture: ["person.and.background.dotted", "acad"], mic: ["mic.fill", "acad"], paper: ["doc.richtext", "acad"], exam: ["checklist", "acad"], grade: ["chart.bar.fill", "acad"],
+  학사: ["graduationcap.fill", "acad"], door: ["door.left.hand.open", "acad"], book: ["book.fill", "acad"], flask: ["flask.fill", "acad"], medal: ["medal.fill", "acad"],
+  plane: ["airplane", "event"], train: ["tram.fill", "event"], car: ["car.fill", "event"], 행사: ["sparkles", "event"],
+  hospital: ["cross.case.fill", "p"], cake: ["birthday.cake.fill", "p"], food: ["fork.knife", "p"], sun: ["sun.max.fill", "p"], home: ["house.fill", "p"],
+  sword: ["figure.fencing", "p"], dumbbell: ["dumbbell.fill", "p"], fish: ["fish.fill", "p"],
+  won: ["wonsign.circle.fill", "adm"], pen: ["signature", "adm"], shield: ["shield.fill", "adm"], doc: ["doc.text.fill", "adm"], gavel: ["building.columns.fill", "adm"],
+  vote: ["checkmark.seal.fill", "adm"], server: ["server.rack", "adm"], 마감: ["alarm.fill", "due"], gcal: ["calendar", "g"], 할일: ["checklist", "acad"],
+};
+const ICON_RULES = [
+  [/면접|인터뷰|interview/i, "interview"], [/채용|임용|공채|공개\s*발표|초빙/, "hire"], [/위원회|심의|협의회|운영위|총회|이사회|평의원/, "gavel"],
+  [/줌|zoom|온라인|화상|웨비나|webinar|teams/i, "video"], [/특강|강의|수업|강연|lecture|class/i, "lecture"],
+  [/학회|세미나|컨퍼런스|conference|심포지엄|워크숍|workshop|포럼|colloquium|발표/i, "mic"], [/논문|원고|저널|journal|심사|리뷰|review|게재/i, "paper"],
+  [/시험|중간고사|기말고사|퀴즈|평가/, "exam"], [/성적/, "grade"], [/졸업|학위|디펜스|defense/i, "학사"], [/입학|입시|수시|정시|모집|admission/i, "door"],
+  [/장학|포상|수상|시상/, "medal"], [/보험|세금|납부|만기|은행|연말정산/, "shield"], [/예산|정산|구매|비용|결제|회계|견적|발주|지출/, "won"], [/결재|서명|날인|승인/, "pen"],
+  [/출장|항공|비행|공항|해외|flight/i, "plane"], [/ktx|srt|기차|열차|예매/i, "train"], [/운전|차량|자동차|주차/, "car"], [/병원|진료|검진|치과|의원/, "hospital"],
+  [/생일|축하|기념일|결혼|웨딩/, "cake"], [/식사|점심|저녁|만찬|회식|오찬|조찬|커피|티타임/, "food"], [/휴가|휴무|연가|방학|휴일|공휴일|연휴/, "sun"],
+  [/검도|본국검|검법|무술/, "sword"], [/운동|헬스|체육|골프|등산|마라톤/, "dumbbell"], [/낚시/, "fish"], [/상담|면담|멘토링/, "chat"],
+  [/학생|동문|신입생|재학생|대학원생/, "users"], [/제출|보고서|보고|서류|공문|신청|등록|양식/, "doc"], [/전화|통화/, "phone"], [/연구|실험|과제|프로젝트|r&d|국책/i, "flask"],
+  [/교육|연수|훈련|오리엔테이션|설명회/, "book"], [/서버|시스템|점검|전산|홈페이지|네트워크/, "server"], [/투표|선거/, "vote"], [/어머니|아버지|부모|가족|이사|집안/, "home"],
+  [/회의|미팅|meeting|협의|논의/i, "회의"], [/행사|축제|전시|개막|기념식/, "행사"], [/마감|deadline|기한/i, "마감"],
+];
+let USER_RULES = [];
+function iconFor(text, fallback) {
+  const t = String(text || "");
+  for (const r of USER_RULES) if (r && r.w && t.includes(r.w) && ICONS[r.icon]) return r.icon;
+  for (const [re, k] of ICON_RULES) if (re.test(t)) return k;
+  return fallback;
+}
 const WD = ["일", "월", "화", "수", "목", "금", "토"];
 const pad = n => String(n).padStart(2, "0");
 const ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -60,7 +97,11 @@ async function loadData() {
   const D = JSON.parse(j.data), st = D.settings || {};
   const cals = Array.isArray(st.gCals) && st.gCals.length ? st.gCals : ["primary"];
   const tags = st.calTags || {};
+  USER_RULES = Array.isArray(st.iconRules) ? st.iconRules : [];
   const items = [];
+  // my marks on Google events (중요, my own icon) — keyed by calendar and event id
+  const marks = {};
+  for (const m of D.marks || []) { if (m && /^g:/.test(m.id || "")) marks[String(m.id).slice(2)] = m; } // "g:<event id>:<date>"
   // my own events (the ones made in the dashboard)
   const gIds = new Set();
   for (const e of D.events || []) {
@@ -68,7 +109,8 @@ async function loadData() {
     if (e.googleId && e.googleId !== "pushed") gIds.add(e.googleId);
     const end = e.endDate && e.endDate > e.date ? e.endDate : e.date;
     if (end < today || e.date > until) continue;
-    items.push({ title: e.title || "(제목 없음)", date: e.date, endDate: end, s: toMin(e.time), e: toMin(e.endTime), imp: e.imp === "high", kind: e.kind || "", tag: null });
+    const icon = e.icon && ICONS[e.icon] ? e.icon : e.kind === "마감" ? "마감" : iconFor(e.title, e.kind && ICONS[e.kind] ? e.kind : "학사");
+    items.push({ title: e.title || "(제목 없음)", date: e.date, endDate: end, s: toMin(e.time), e: toMin(e.endTime), imp: e.imp === "high", kind: e.kind || "", icon, tag: null });
   }
   // Google Calendar
   for (const cal of cals) {
@@ -89,7 +131,8 @@ async function loadData() {
           o = { date: ymd(a), endDate: bd > ymd(a) ? (bm === 0 ? addDays(bd, -1) : bd) : ymd(a), s: a.getHours() * 60 + a.getMinutes(), e: bd > ymd(a) ? null : bm };
           if (o.endDate > o.date) o.s = null; // shown as a span
         }
-        items.push({ title: x.summary || "(제목 없음)", ...o, imp: false, kind: "", tag: tg });
+        const mk = marks[x.id + ":" + o.date];
+        items.push({ title: x.summary || "(제목 없음)", ...o, imp: !!(mk && mk.imp === "high"), kind: "", icon: mk && mk.icon && ICONS[mk.icon] ? mk.icon : iconFor(x.summary, "gcal"), tag: tg });
       }
     } catch (e) {}
   }
@@ -152,20 +195,32 @@ function txt(st, s, size, color, bold, lines) {
 function row(st) { const r = st.addStack(); r.layoutHorizontally(); r.centerAlignContent(); return r; }
 function col(st) { const c = st.addStack(); c.layoutVertically(); return c; }
 function header(w, v, size) {
-  const h = row(w);
-  txt(h, `${v.now.getMonth() + 1}월 ${v.now.getDate()}일`, size, C.ink, true);
-  h.addSpacer(4); txt(h, WD[v.now.getDay()] + "요일", size - 2, C.muted);
+  const h = row(w); h.bottomAlignContent();
+  const d = txt(h, `${v.now.getMonth() + 1}월 ${v.now.getDate()}일`, size, C.ink, true); d.font = Font.heavySystemFont(size);
+  h.addSpacer(5); txt(h, WD[v.now.getDay()] + "요일", Math.round(size * 0.62), C.muted, true);
   h.addSpacer();
   return h;
 }
+// the little icon chip of the dashboard: tinted square, red frame for 중요
+function chip(st, e, size) {
+  const [sym, grp] = ICONS[e.icon] || ICONS.gcal;
+  const col = new Color(KC[grp] || KC.acad);
+  const box = st.addStack(); box.size = new Size(size + 6, size + 6); box.cornerRadius = 5; box.centerAlignContent();
+  box.backgroundColor = new Color(KC[grp] || KC.acad, 0.16);
+  if (e.imp) { box.borderColor = C.hot; box.borderWidth = 1.5; }
+  const sf = SFSymbol.named(sym) || SFSymbol.named("calendar");
+  sf.applyFont(Font.systemFont(size));
+  const im = box.addImage(sf.image); im.imageSize = new Size(size, size); im.tintColor = col;
+  return box;
+}
 function evLine(st, e, today, opts = {}) {
   const r = row(st); r.spacing = 5;
-  const dot = r.addStack(); dot.size = new Size(4, opts.size ? opts.size + 2 : 13); dot.cornerRadius = 2;
-  dot.backgroundColor = e.imp ? C.hot : e.tag ? new Color(e.tag.c) : C.accent;
+  chip(r, e, (opts.size || 12) - 1);
   const t = e.s == null ? (e.endDate > e.date ? "기간" : "종일") : h24(e.s);
   const tt = txt(r, (opts.day ? dayShort(opts.day, today) + " " : "") + t, (opts.size || 12) - 1, opts.past ? C.dim : C.muted);
   tt.font = Font.mediumMonospacedSystemFont((opts.size || 12) - 1);
-  txt(r, (e.tag ? e.tag.t + " " : "") + e.title, opts.size || 12, opts.past ? C.dim : C.ink, !!e.imp, 1);
+  if (e.tag) txt(r, e.tag.t, (opts.size || 12) - 1, opts.past ? C.dim : new Color(e.tag.c), true);
+  txt(r, e.title, opts.size || 12, opts.past ? C.dim : e.imp ? C.hot : C.ink, !!e.imp, 1);
   return r;
 }
 function ddLine(st, d, size) {
@@ -179,11 +234,11 @@ function section(st, title, size) { const t = txt(st, title, size || 10, C.muted
 // ---------- layouts ----------
 function small(w, v) {
   w.setPadding(12, 12, 12, 12);
-  header(w, v, 14); w.addSpacer(6);
+  header(w, v, 20); w.addSpacer(6);
   const n = v.nowEv || v.next;
   if (n) {
     txt(w, v.nowEv ? "지금" : untilText(v), 11, v.nowEv ? C.ok : C.accent, true);
-    txt(w, (n.tag ? n.tag.t + " " : "") + n.title, 14, C.ink, true, 2);
+    const tr = row(w); tr.spacing = 5; chip(tr, n, 12); txt(tr, (n.tag ? n.tag.t + " " : "") + n.title, 14, n.imp ? C.hot : C.ink, true, 2);
     txt(w, (n.day && n.day !== v.today ? dayShort(n.day, v.today) + " " : "") + ampm(n.s), 11, C.muted);
   } else txt(w, "앞으로 2주 일정 없음", 12, C.muted);
   w.addSpacer();
@@ -193,11 +248,11 @@ function medium(w, v, data) {
   w.setPadding(12, 14, 12, 14);
   const top = row(w); top.addSpacer(0);
   const left = col(top); left.size = new Size(118, 0);
-  header(left, v, 15); left.addSpacer(6);
+  header(left, v, 22); left.addSpacer(6);
   const n = v.nowEv || v.next;
   if (n) {
     txt(left, v.nowEv ? "지금 진행 중" : "다음 · " + untilText(v), 10, v.nowEv ? C.ok : C.accent, true);
-    txt(left, (n.tag ? n.tag.t + " " : "") + n.title, 13, C.ink, true, 2);
+    const tr = row(left); tr.spacing = 5; chip(tr, n, 12); txt(tr, (n.tag ? n.tag.t + " " : "") + n.title, 13, n.imp ? C.hot : C.ink, true, 2);
     txt(left, (n.day && n.day !== v.today ? dayShort(n.day, v.today) + " " : "") + ampm(n.s), 10, C.muted);
   } else txt(left, "다음 일정 없음", 11, C.muted);
   left.addSpacer();
@@ -213,14 +268,14 @@ function medium(w, v, data) {
 }
 function large(w, v, data, extra) {
   w.setPadding(14, 16, 14, 16);
-  const h = header(w, v, 17);
+  const h = header(w, v, 26);
   if (data.mails) txt(h, `메일 ${data.mails}`, 11, C.warn, true);
   w.addSpacer(8);
   const n = v.nowEv || v.next;
   if (n) {
     const card = w.addStack(); card.layoutVertically(); card.backgroundColor = C.card; card.cornerRadius = 10; card.setPadding(8, 10, 8, 10); card.spacing = 2;
     const r = row(card); txt(r, v.nowEv ? "지금 진행 중" : "다음 일정", 10, v.nowEv ? C.ok : C.accent, true); r.addSpacer(); if (!v.nowEv) txt(r, untilText(v), 10, C.accent, true);
-    txt(card, (n.tag ? n.tag.t + " " : "") + n.title, 15, C.ink, true, 1);
+    const tr = row(card); tr.spacing = 6; chip(tr, n, 14); txt(tr, (n.tag ? n.tag.t + " " : "") + n.title, 15, n.imp ? C.hot : C.ink, true, 1);
     txt(card, (n.day && n.day !== v.today ? dayShort(n.day, v.today) + " " : "") + ampm(n.s) + (n.e != null ? " – " + hm(n.e) : ""), 11, C.muted);
     w.addSpacer(8);
   }
@@ -260,7 +315,7 @@ function accCircle(w, v) {
 
 // ---------- build ----------
 async function build(family) {
-  const w = new ListWidget(); w.url = DASH_URL;
+  const w = new ListWidget(); w.url = OPEN_URL;
   const lock = /^accessory/.test(family);
   if (!lock) { w.backgroundColor = C.bg; }
   const data = await getData();
