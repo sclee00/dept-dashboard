@@ -3645,6 +3645,15 @@ function scriptableHtml() {
     </ol>
     <label class="chk"><input type="checkbox" data-act="scriptOn" ${scriptableOn() ? 'checked' : ''}> 이 기기에서 "AI로 처리"를 Scriptable로 하기</label>
     <span class="count">스크립트 원본: <a href="${esc(code)}" target="_blank" rel="noopener">DashboardAI.js</a> · Gemini 화면을 다루는 부분은 매번 최신으로 받아 씁니다.</span>
+  </div>
+  <div class="bsec"><b>${ic('cal')} 아이폰 홈 화면 위젯</b>
+    <span class="count">오늘 날짜·다음 일정·오늘 남은 일정·다가오는 일정·D-day·처리 중 메일을 위젯 크기에 맞게 보여 줍니다. 잠금 화면 위젯도 됩니다.</span>
+    <ol class="count" style="margin:.2rem 0 .2rem 1.1rem;padding:0;line-height:1.7">
+      <li><button class="btn small" type="button" data-act="widgetCopy">${ic('copy')}위젯 스크립트 복사</button> → Scriptable 앱에서 <b>+</b> → 붙여넣기 → 이름을 <b>대시보드위젯</b>으로 저장</li>
+      <li>위 "Scriptable 연결"을 이미 했다면 그대로 연결됩니다. 아니면 Scriptable에서 이 스크립트를 한 번 실행해 연결 링크를 붙여넣으세요.</li>
+      <li>홈 화면 빈 곳을 길게 눌러 왼쪽 위 <b>＋</b> → <b>Scriptable</b> → 크기 고르기 → <b>위젯 추가</b></li>
+      <li>추가된 위젯을 길게 눌러 <b>위젯 편집</b> → Script: <b>대시보드위젯</b>, When Interacting: <b>Open URL</b>(누르면 대시보드가 열림)</li>
+    </ol>
   </div>`;
 }
 function aiSettingsHtml(s) {
@@ -3785,7 +3794,7 @@ const UNDO_LABEL = {
   delRule: '아이콘 규칙 삭제', skipOcc: '반복 일정 한 번 빼기', edSave: '일정 편집', bdSave: '불가 시간 설정', saveSettings: '설정 변경', imSave: '아이콘 색·이름',
   pushG: '구글에 추가', fEvent: '일정 추가', fBlock: '불가 시간 추가', taskForm: '할 일 추가', importData: '파일 가져오기'
 };
-const UNDO_SKIP = new Set(['zReset', 'snRowAdd', 'snRowDel', 'snipAdd', 'cmdImp', 'gGone', 'cmdIcon', 'cmdIconSet', 'ddayX', 'ddayUnhide', 'ddayDel', 'ctNav', 'ctCopy', 'ctNew', 'ctEdit', 'ctAdd', 'ctSave', 'ctDel', 'ddaySave', 'ddayClear', 'verReload', 'attEvents', 'snipCopy', 'snipEdit', 'ddayEdit', 'lockNow', 'lockSave', 'tip', 'daySel', 'dayMode', 'dayNav', 'dayGo', 'fwdCopy', 'gemCancel', 'scriptCopy', 'scriptSetup', 'scriptTest', 'scriptOn', 'copyReply', 'copyDraft', 'gemEmbed', 'gemDockOpen', 'qTab', 'gemNew', 'gemTall', 'gemZoom', 'histUndo', 'histRedo', 'histOne', 'histGroup', 'histFold', 'stPing', 'pushAllG', 'aiKeySave', 'aiKeyClear', 'aiTest', 'aiMode', 'aiModelSel', 'relayClip', 'stOpen', 'tidyOpen', 'tidyDel', 'tidyTime', 'tidyMerge', 'inboxRun', 'analyzeMail', 'tgShow', 'tgHide', 'phoneLink', 'gDel', 'fltImp', 'fltIcons', 'fltTog', 'fltClear', 'fltClose', 'cmdToAI', 'cmdPick', 'cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
+const UNDO_SKIP = new Set(['widgetCopy', 'zReset', 'snRowAdd', 'snRowDel', 'snipAdd', 'cmdImp', 'gGone', 'cmdIcon', 'cmdIconSet', 'ddayX', 'ddayUnhide', 'ddayDel', 'ctNav', 'ctCopy', 'ctNew', 'ctEdit', 'ctAdd', 'ctSave', 'ctDel', 'ddaySave', 'ddayClear', 'verReload', 'attEvents', 'snipCopy', 'snipEdit', 'ddayEdit', 'lockNow', 'lockSave', 'tip', 'daySel', 'dayMode', 'dayNav', 'dayGo', 'fwdCopy', 'gemCancel', 'scriptCopy', 'scriptSetup', 'scriptTest', 'scriptOn', 'copyReply', 'copyDraft', 'gemEmbed', 'gemDockOpen', 'qTab', 'gemNew', 'gemTall', 'gemZoom', 'histUndo', 'histRedo', 'histOne', 'histGroup', 'histFold', 'stPing', 'pushAllG', 'aiKeySave', 'aiKeyClear', 'aiTest', 'aiMode', 'aiModelSel', 'relayClip', 'stOpen', 'tidyOpen', 'tidyDel', 'tidyTime', 'tidyMerge', 'inboxRun', 'analyzeMail', 'tgShow', 'tgHide', 'phoneLink', 'gDel', 'fltImp', 'fltIcons', 'fltTog', 'fltClear', 'fltClose', 'cmdToAI', 'cmdPick', 'cellMode', 'memoT', 'memoFile', 'memoOpenF', 'qaDur', 'qaShift', 'qaType', 'qaImp', 'qaCancel', 'qaSave', 'copyConnect', 'setTab', 'wcAdd', 'wcDel', 'relayAlt', 'sheetView', 'showRest', 'dlgTab', 'evAbsent', 'fxRecommend', 'fxClear', 'attPick', 'attRemove', 'attOpen', 'attAddMail', 'toChat', 'chatCopy', 'chatJson', 'undo', 'redo', 'closeDlg', 'noop', 'settings', 'sync', 'gchip', 'relayCopy', 'relayCancel', 'cmdCancel']);
 function undoSnap() {
   const o = { settings: JSON.parse(JSON.stringify(S.settings)) };
   for (const c of COLS) o[c] = JSON.parse(JSON.stringify(S[c]));
@@ -6922,6 +6931,11 @@ document.addEventListener('click', async ev0 => {
       case 'relayApply': return relayApply();
       case 'aiMode': if (el.value === 'gemini' && !S.settings.aiKeySet) toast('먼저 Gemini API 키를 넣고 "키 저장·확인"을 눌러 주세요.'); if (el.value === 'web' && !bridgeOn()) toast('먼저 Gemini 연결 확장 프로그램을 설치해 주세요.'); await saveSettings({ ...S.settings, aiMode: ['web', 'gemini'].includes(el.value) ? el.value : 'copy' }); if (UI.dlg === 'settings') openSettings(); return;
       case 'gemCancel': return UI.gemCancel && UI.gemCancel();
+      case 'widgetCopy': {
+        try { const t = await (await fetch('scriptable/DashboardWidget.js?t=' + Date.now(), { cache: 'no-store' })).text(); await navigator.clipboard.writeText(t); toast('위젯 스크립트를 복사했습니다. Scriptable에서 + 를 눌러 붙여넣고 이름을 "대시보드위젯"으로 저장하세요.'); }
+        catch { window.open('scriptable/DashboardWidget.js', '_blank'); toast('복사가 막혀 스크립트를 새 창에 열었습니다. 전체 선택해서 복사하세요.'); }
+        return;
+      }
       case 'scriptCopy': {
         try { const t = await (await fetch('scriptable/DashboardAI.js?t=' + Date.now(), { cache: 'no-store' })).text(); await navigator.clipboard.writeText(t); toast('스크립트를 복사했습니다. Scriptable에서 + 를 눌러 붙여넣고 이름을 "' + SCRIPTABLE_NAME + '"로 저장하세요.'); }
         catch { window.open('scriptable/DashboardAI.js', '_blank'); toast('복사가 막혀 스크립트를 새 창에 열었습니다. 전체 선택해서 복사하세요.'); }
