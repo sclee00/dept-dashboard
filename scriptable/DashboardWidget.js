@@ -4,7 +4,6 @@
 // 연결: "대시보드AI" 스크립트로 이미 연결했다면 그대로 씁니다. 아니면 이 스크립트를 앱에서 한 번 실행해 연결 링크를 붙여넣으세요.
 
 const DASH_URL = "https://sclee00.github.io/dept-dashboard/";
-const OPEN_URL = DASH_URL; // iOS has no way to open a home-screen web app from a widget, so a tap opens Safari
 const DAYS_AHEAD = 14;
 // the dashboard's own colours
 const C = {
@@ -313,7 +312,9 @@ function accCircle(w, v) {
 
 // ---------- build ----------
 async function build(family) {
-  const w = new ListWidget(); w.url = OPEN_URL;
+  const w = new ListWidget();
+  // a tap runs this script again inside Scriptable and shows the big view (no Safari)
+  w.url = URLScheme.forRunningScript() + "?big=1";
   const lock = /^accessory/.test(family);
   if (!lock) { w.backgroundColor = C.bg; }
   const data = await getData();
@@ -341,14 +342,58 @@ async function build(family) {
   return w;
 }
 
+// ---------- the big view (when the widget is tapped) ----------
+async function bigView() {
+  const data = await getData();
+  const t = new UITable(); t.showSeparators = false;
+  const add = (cells, h, bg) => { const r = new UITableRow(); r.height = h || 34; r.backgroundColor = bg || C.bg; cells.forEach(c => r.addCell(c)); t.addRow(r); return r; };
+  const cellT = (s, size, color, bold, w) => { const c = UITableCell.text(s); c.titleFont = bold ? Font.boldSystemFont(size) : Font.systemFont(size); c.titleColor = color || C.ink; if (w) c.widthWeight = w; return c; };
+  if (!data || data.error) { add([cellT(!data ? "연결이 필요합니다." : "불러오지 못했습니다: " + data.error, 15, C.muted)], 60); await t.present(true); return; }
+  const v = views(data);
+  add([cellT(`${v.now.getMonth() + 1}월 ${v.now.getDate()}일 ${WD[v.now.getDay()]}요일`, 28, C.ink, true)], 56);
+  if (data.mails) add([cellT(`처리 중 메일 ${data.mails}`, 14, C.warn, true)], 26);
+  if (data.stale) add([cellT("연결 안 됨 · 마지막으로 받은 내용", 12, C.dim)], 22);
+  const n = v.nowEv || v.next;
+  if (n) {
+    add([cellT(v.nowEv ? "지금 진행 중" : "다음 일정 · " + untilText(v), 13, v.nowEv ? C.ok : C.accent, true)], 26, C.card);
+    add([cellT((n.tag ? n.tag.t + " " : "") + n.title, 19, n.imp ? C.hot : C.ink, true)], 34, C.card);
+    add([cellT((n.day && n.day !== v.today ? dayShort(n.day, v.today) + " " : "") + ampm(n.s) + (n.e != null ? " – " + hm(n.e) : ""), 14, C.muted)], 28, C.card);
+  }
+  const evRow = (e, past, day) => {
+    const time = e.s == null ? (e.endDate > e.date ? "기간" : "종일") : h24(e.s) + (e.e != null ? "–" + h24(e.e) : "");
+    const [sym, grp] = ICONS[e.icon] || ICONS.gcal;
+    const sf = SFSymbol.named(sym) || SFSymbol.named("calendar"); sf.applyFont(Font.systemFont(15));
+    const ic = UITableCell.image(sf.image); ic.widthWeight = 8;
+    const tm = cellT((day ? dayShort(day, v.today) + " " : "") + time, 14, past ? C.dim : C.muted, false, 30);
+    const ti = cellT((e.tag ? e.tag.t + " " : "") + e.title, 16, past ? C.dim : e.imp ? C.hot : C.ink, !!e.imp, 62);
+    add([ic, tm, ti], 36);
+  };
+  add([cellT(`오늘 일정 ${v.todayAll.length}`, 13, C.muted, true)], 34);
+  if (v.todayAll.length) v.todayAll.forEach(e => evRow(e, !v.todayLeft.includes(e)));
+  else add([cellT("오늘 일정이 없습니다", 15, C.dim)]);
+  // the next two weeks, day by day
+  for (let i = 1; i <= DAYS_AHEAD; i++) {
+    const d = addDays(v.today, i), list = data.events.filter(e => e.date <= d && e.endDate >= d).sort((a, b) => (a.s ?? -1) - (b.s ?? -1));
+    if (!list.length) continue;
+    add([cellT(dayShort(d, v.today), 13, i === 1 ? C.accent : C.muted, true)], 32);
+    list.forEach(e => evRow(e, false));
+  }
+  if (v.dd.length) {
+    add([cellT("D-day", 13, C.muted, true)], 34);
+    v.dd.forEach(d => add([cellT(ddLabel(d.n), 15, ddColor(d.n), true, 25), cellT(d.title, 16, C.ink, false, 60), cellT(dayShort(d.date, v.today), 13, C.muted, false, 30)], 34));
+  }
+  await t.present(true);
+}
+
 const family = config.widgetFamily || "large";
-const widget = await build(family);
-if (config.runsInWidget) Script.setWidget(widget);
+if (config.runsInWidget) Script.setWidget(await build(family));
+else if ((args.queryParameters || {}).big) await bigView();
 else {
   // running in the app: show a preview of every size
   const a = new Alert(); a.title = "미리 보기"; a.message = "어느 크기로 볼까요?";
-  ["작게", "중간", "크게", "잠금 화면"].forEach(x => a.addAction(x)); a.addCancelAction("닫기");
+  ["작게", "중간", "크게", "잠금 화면", "눌렀을 때 화면"].forEach(x => a.addAction(x)); a.addCancelAction("닫기");
   const i = await a.present();
+  if (i === 4) await bigView();
   if (i === 0) await (await build("small")).presentSmall();
   if (i === 1) await (await build("medium")).presentMedium();
   if (i === 2) await (await build("large")).presentLarge();
