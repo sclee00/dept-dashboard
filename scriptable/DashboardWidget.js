@@ -4,9 +4,7 @@
 // 연결: "대시보드AI" 스크립트로 이미 연결했다면 그대로 씁니다. 아니면 이 스크립트를 앱에서 한 번 실행해 연결 링크를 붙여넣으세요.
 
 const DASH_URL = "https://sclee00.github.io/dept-dashboard/";
-// 위젯 편집 → Parameter에 "앱"이라고 쓰면, 누를 때 사파리 대신 홈 화면에 추가한 대시보드 앱으로 엽니다 (iOS 16.4 이상)
-const PARAM = String(args.widgetParameter || "").trim();
-const OPEN_URL = /^(앱|app|webapp)$/i.test(PARAM) ? "webapp://sclee00.github.io/dept-dashboard/" : DASH_URL;
+const OPEN_URL = DASH_URL; // iOS has no way to open a home-screen web app from a widget, so a tap opens Safari
 const DAYS_AHEAD = 14;
 // the dashboard's own colours
 const C = {
