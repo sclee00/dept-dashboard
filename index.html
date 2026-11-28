@@ -958,6 +958,9 @@ button.hw{cursor:pointer}button.hw:hover{border-color:var(--accent)}
 .hwl{display:flex;align-items:center;gap:.3rem;font-size:.72rem;color:var(--muted);white-space:nowrap}
 .hwl .ic{width:.85rem;height:.85rem}.hwl b{color:var(--ink);font-weight:700}
 .hwv{font-size:.9rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.hwv em{font-style:normal;color:var(--accent);font-family:var(--mono,monospace);font-size:.82rem}
+.nxsep{display:block;font-size:.68rem;color:var(--muted);font-weight:600;margin:.25rem 0 .05rem;border-top:1px dashed var(--line);padding-top:.2rem}
+.nxrow b{min-width:2.9rem;color:var(--muted)}.nxrow.live b{color:var(--green,#4caf7a)}.nxrow.imp span{color:var(--red);font-weight:600}
+.nexthw .ddlist{display:flex;flex-direction:column;gap:.1rem;min-height:0;overflow:auto}
 .nexthw.soon{border-color:var(--amber)}.nexthw.soon .hwl b{color:var(--amber)}
 .nexthw.live{border-color:var(--green,#4caf7a)}.nexthw.live .hwl b{color:var(--green,#4caf7a)}
 .hwedit{margin-left:auto;border:0;background:none;color:var(--muted);padding:0 .1rem;cursor:pointer;display:grid;place-items:center}.hwedit:hover{color:var(--accent)}
@@ -1997,13 +2000,15 @@ function renderWidgets() {
   // D-day dates that have passed are dropped from the list
   { const t = todayStr(), cur = lst('ddayPins'); if ((S.lists && S.lists.ddayPins || Array.isArray(S.settings.ddayPins)) && cur.some(d => d && isDate(d.date) && d.date < t)) lstSet('ddayPins', cur.filter(d => !(d && isDate(d.date) && d.date < t))); }
   const ne = nextEvent(), nm = new Date().getHours() * 60 + new Date().getMinutes();
-  let nx = `<div class="hw nexthw" data-ok="next"><span class="hwl">${ic('clock')}다음 일정</span><span class="hwv">없음</span></div>`;
-  if (ne) {
-    const left = ne.now ? `진행 중 · ${durTxt(ne.e - nm)} 남음` : ne.day === todayStr() ? `${durTxt(ne.s - nm)} 후` : diff(ne.day) === 1 ? `내일 ${fromMin(ne.s)}` : `${parse(ne.day).getMonth() + 1}/${parse(ne.day).getDate()}(${WD[parse(ne.day).getDay()]}) ${fromMin(ne.s)}`;
-    const soon = !ne.now && ne.day === todayStr() && ne.s - nm <= 15;
-    nx = `<button type="button" data-ok="next" class="hw nexthw ${ne.now ? 'live' : ''} ${soon ? 'soon' : ''}" data-act="ipOpen" data-kind="${ne.kind}" data-id="${esc(ne.id)}" title="${esc(ne.title)}${ne.place ? ' · ' + esc(ne.place) : ''}">
-      <span class="hwl">${ic('clock')}${ne.now ? '지금' : '다음 일정'} · <b>${esc(left)}</b></span><span class="hwv">${ne.day === todayStr() ? `<em>${fromMin(ne.s)}</em> ` : ''}${esc(ne.title)}</span></button>`;
-  }
+  // 오늘 남은 일정 + 내일 일정 (what is on now stays on top until it ends)
+  const tmr = addDays(todayStr(), 1), soonL = upcoming(1).filter(x => x.date <= tmr);
+  if (ne && ne.now && ne.day === todayStr()) soonL.unshift({ date: ne.day, s: ne.s, title: ne.title, kind: ne.kind, id: ne.id, now: true, e: ne.e });
+  const srow = x => `<button type="button" class="ddrow nxrow ${x.now ? 'live' : ''} ${x.imp ? 'imp' : ''}" data-act="ipOpen" data-kind="${x.kind}" data-id="${esc(x.id)}" title="${esc(x.title)}"><b>${x.now ? '지금' : x.s < 0 ? '종일' : fromMin(x.s)}</b><span>${esc(x.title)}</span>${x.now ? `<i>${durTxt(x.e - nm)} 남음</i>` : ''}</button>`;
+  const tL = soonL.filter(x => x.date === todayStr()), mL = soonL.filter(x => x.date === tmr);
+  const soon = ne && !ne.now && ne.day === todayStr() && ne.s - nm <= 15;
+  let nx = `<div class="hw nexthw ${ne && ne.now ? 'live' : ''} ${soon ? 'soon' : ''}" data-ok="next"><span class="hwl">${ic('clock')}오늘 남은 일정${ne && ne.day === todayStr() && !ne.now ? ` · <b>${durTxt(ne.s - nm)} 후</b>` : ''}</span>
+    <div class="ddlist">${tL.length ? tL.map(srow).join('') : '<span class="ddrow none">남은 일정 없음</span>'}
+    <span class="nxsep">내일 ${parse(tmr).getMonth() + 1}/${parse(tmr).getDate()}(${WD[parse(tmr).getDay()]})</span>${mL.length ? mL.map(srow).join('') : '<span class="ddrow none">일정 없음</span>'}</div></div>`;
   const dl = ddayList(), hasPin = dl.some(x => x.pin);
   const ddRow = x => { const n = diff(x.date); return `<button type="button" class="ddrow" ${x.pin ? 'data-act="pickDay" data-day="' + x.date + '"' : `data-act="ipOpen" data-kind="${x.kind}" data-id="${esc(x.id)}"`} title="${esc(x.title)} · ${fmtShort(x.date)}"><b class="${n < 0 ? '' : n <= 3 ? 'hot' : n <= 7 ? 'warm' : ''}">${n === 0 ? 'D-day' : n < 0 ? 'D+' + -n : 'D-' + n}</b><span>${esc(x.title)}</span></button>`; };
   const ddRowX = x => `<div class="ddwrap">${ddRow(x)}<button type="button" class="ddx" data-act="ddayX" data-date="${x.date}" data-title="${esc(x.title)}" data-pin="${x.pin ? 1 : ''}" title="${x.pin ? 'D-day에서 빼기' : '이 일정은 D-day에 안 보이기 (다음 중요 일정이 나옴)'}" aria-label="${esc(x.title)} D-day에서 빼기">✕</button></div>`;
