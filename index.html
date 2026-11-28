@@ -919,6 +919,17 @@ body.mini .miniview{display:flex;flex-direction:column;gap:.45rem;height:100vh;p
 @media (pointer:coarse){[data-ok]{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}}
 .reo-lift{transform:scale(1.04);box-shadow:0 8px 24px rgb(0 0 0 / .5)!important;outline:2px solid var(--accent);z-index:5;position:relative;transition:transform .12s}
 body.reo-on{touch-action:none;overscroll-behavior:none}
+/* phone: the big parts (calendar, schedule list, 자동 처리, buttons) can be put in any order with their ⠿ handle */
+.sechandle{display:none}
+@media (max-width:700px){
+  .board,.qrow{display:contents}
+  .board>.gutter,.qrow>.gutter{display:none!important}
+  .app>*:not(.topwrap){order:100}
+  [data-sec]{position:relative;order:var(--sec-o,50)}
+  .sechandle{display:grid;place-items:center;position:absolute;top:-.55rem;right:.8rem;z-index:6;width:2.2rem;height:1.25rem;border-radius:999px;border:1px solid var(--line);background:var(--surface-2);color:var(--muted);font-size:.8rem;line-height:1;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;padding:0;cursor:grab}
+  [data-sec].sec-lift{outline:2px solid var(--accent);box-shadow:0 10px 30px rgb(0 0 0 / .55)}
+  [data-sec].sec-lift>.sechandle{color:var(--accent);border-color:var(--accent)}
+}
 .winbar{position:fixed;top:.6rem;right:.7rem;z-index:50}
 .lockbtn:not([hidden])~.winbar{top:3rem}
 .winbar[hidden]{display:none}
@@ -1065,7 +1076,7 @@ button.hw{cursor:pointer}button.hw:hover{border-color:var(--accent)}
   </div>
 
   <main class="board">
-    <section class="calwrap" aria-labelledby="monthLabel">
+    <section class="calwrap" data-sec="cal" aria-labelledby="monthLabel"><button type="button" class="sechandle" data-sechandle aria-label="끌어서 순서 바꾸기" title="끌어서 순서 바꾸기">⠿</button>
       <div class="calnav">
         <button class="iconbtn" data-act="prevMonth" type="button" aria-label="이전 달">‹</button>
         <h2 id="monthLabel"></h2>
@@ -1082,7 +1093,7 @@ button.hw{cursor:pointer}button.hw:hover{border-color:var(--accent)}
     </section>
     <div class="gutter v" data-split="board" role="separator" aria-orientation="vertical" tabindex="0" title="끌어서 너비 조절 · 두 번 누르면 원래대로"></div>
 
-    <aside class="rail" id="rail">
+    <aside class="rail" id="rail" data-sec="rail"><button type="button" class="sechandle" data-sechandle aria-label="끌어서 순서 바꾸기" title="끌어서 순서 바꾸기">⠿</button>
       <div class="railtabs" role="tablist" aria-label="상세 보기">
         <button class="rtab" role="tab" id="tab-day" type="button" data-act="rail" data-r="day" aria-controls="pane-day"></button>
         <button class="rtab" role="tab" id="tab-mail" type="button" data-act="rail" data-r="mail" aria-controls="pane-mail"></button>
@@ -1126,7 +1137,7 @@ button.hw{cursor:pointer}button.hw:hover{border-color:var(--accent)}
 
   <div class="gutter h" data-split="quick" role="separator" aria-orientation="horizontal" tabindex="0" title="끌어서 높이 조절 · 두 번 누르면 원래대로"></div>
   <div class="qrow">
-  <section class="quick" aria-label="메일 붙여넣기">
+  <section class="quick" data-sec="quick" aria-label="메일 붙여넣기"><button type="button" class="sechandle" data-sechandle aria-label="끌어서 순서 바꾸기" title="끌어서 순서 바꾸기">⠿</button>
     <div class="qhead qtabs" role="tablist" aria-label="자동 처리 탭">
       <button type="button" role="tab" class="qtab" data-act="qTab" data-k="auto" title="메일을 붙여넣으면 요약·일정·할 일·답장·조교 지시를 만들고, 짧게 명령하면 바로 실행합니다"><span data-ic="inbox"></span>자동 처리</button>
       <button type="button" role="tab" class="qtab" data-act="qTab" data-k="gem"><span data-ic="spark"></span>Gemini</button>
@@ -1158,7 +1169,7 @@ button.hw{cursor:pointer}button.hw:hover{border-color:var(--accent)}
     <div class="qpane" data-qp="hist" id="qHist"></div>
   </section>
   <div class="gutter v" data-split="qrow" role="separator" aria-orientation="vertical" tabindex="0" title="끌어서 자동 처리·버튼 너비 조절 · 두 번 누르면 원래대로"></div>
-      <div class="tools toolgrid" aria-label="도구">
+      <div class="tools toolgrid" data-sec="tools" aria-label="도구"><button type="button" class="sechandle" data-sechandle aria-label="끌어서 순서 바꾸기" title="끌어서 순서 바꾸기">⠿</button>
         <button class="gchip" id="syncchip" type="button" data-act="sync" data-ok="sync" draggable="true"><span data-ic="drive"></span><span>저장 위치 확인 중</span></button>
         <button class="gchip" id="gchip" type="button" data-act="gchip" data-ok="gchip" draggable="true"><span data-ic="gcal"></span><span>구글 로그인</span></button>
         <button class="iconbtn" id="undoBtn" data-act="undo" data-ok="undo" draggable="true" type="button" disabled title="되돌릴 것이 없습니다"><span data-ic="undo"></span><span class="ul">되돌리기</span></button>
@@ -4705,6 +4716,39 @@ document.addEventListener('dragend', () => {
   document.addEventListener('contextmenu', e => { if (e.target.closest && e.target.closest('[data-ok]') && matchMedia('(pointer:coarse)').matches) e.preventDefault(); }, true);
 })();
 
+/* ---------- phone: reorder the big parts with their ⠿ handle ---------- */
+const SEC_DEF = ['cal', 'rail', 'quick', 'tools'];
+function applySecOrder() {
+  const o = Array.isArray(LAY.secOrder) ? LAY.secOrder.filter(k => SEC_DEF.includes(k)) : [];
+  const ord = [...o, ...SEC_DEF.filter(k => !o.includes(k))];
+  document.querySelectorAll('[data-sec]').forEach(el => el.style.setProperty('--sec-o', String(10 + ord.indexOf(el.dataset.sec))));
+}
+(() => {
+  let drag = null;
+  document.addEventListener('pointerdown', e => {
+    const h = e.target.closest && e.target.closest('[data-sechandle]'); if (!h) return;
+    e.preventDefault(); e.stopPropagation();
+    const sec = h.closest('[data-sec]'); drag = { sec, id: e.pointerId };
+    sec.classList.add('sec-lift'); document.body.classList.add('reo-on');
+    try { h.setPointerCapture(e.pointerId); } catch {}
+    try { navigator.vibrate && navigator.vibrate(12); } catch {}
+  }, true);
+  document.addEventListener('pointermove', e => {
+    if (!drag) return; e.preventDefault();
+    const secs = [...document.querySelectorAll('[data-sec]')].sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top);
+    const cur = secs.map(x => x.dataset.sec), me = drag.sec.dataset.sec;
+    // where the finger is, among the other parts
+    const others = secs.filter(x => x !== drag.sec); let idx = others.length;
+    for (let i = 0; i < others.length; i++) { const r = others[i].getBoundingClientRect(); if (e.clientY < r.top + r.height / 2) { idx = i; break; } }
+    const next = others.map(x => x.dataset.sec); next.splice(idx, 0, me);
+    if (next.join() !== cur.join()) { LAY.secOrder = next; applySecOrder(); }
+    // keep the finger's part in view near the top and bottom edges
+    if (e.clientY < 60) scrollBy(0, -12); else if (e.clientY > innerHeight - 60) scrollBy(0, 12);
+  }, true);
+  const end = () => { if (!drag) return; drag.sec.classList.remove('sec-lift'); document.body.classList.remove('reo-on'); drag = null; saveLayout(); toast('순서를 바꿨습니다.'); };
+  document.addEventListener('pointerup', end, true); document.addEventListener('pointercancel', end, true);
+})();
+
 /* ---------- resizable panels (per PC, kept in this browser) ---------- */
 let LAY = {}; try { LAY = JSON.parse(localStorage.getItem('dashLayout') || '{}') || {}; } catch {}
 function applyLayout() {
@@ -7448,6 +7492,7 @@ setInterval(() => { renderHeader(); if (UI.selDay === todayStr()) renderDay(fals
 
 /* ---------- boot ---------- */
 applyOrder(document.querySelector('.tools'), 'tools');
+applySecOrder();
 loadLocal();
 applyLock();
 histViews();
